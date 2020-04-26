@@ -1,0 +1,16 @@
+# no .a or .o files
+*.[oa]
+# no tmp files
+*~
+# no swp files
+*.swp
+# ignore all files in the exec/ directory
+exec/
+# ignore all files in the tmp/ directory
+tmp/
+# ignore all files in the obj/ directory
+obj/
+# ignore the data folder
+backend/service/data
+# ignore the build folder
+backend/service/build

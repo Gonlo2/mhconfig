@@ -1,0 +1,31 @@
+workflows:
+  third_party:
+  - prepare
+
+  third_party_only_install:
+  - prepare_fast
+
+  build:
+  - build_src
+
+tasks:
+  prepare: !docker
+    image: cpp-builder
+    commands:
+    - /source/prepare.sh
+
+  prepare_fast: !docker
+    image: cpp-builder
+    commands:
+    - [/source/prepare.sh, --only-install]
+
+  build_src: !docker
+    image: cpp-builder
+    commands:
+    - [cd, "/source"]
+    - [protoc, "-I=src/", "--grpc_out=src/", "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin", "src/mhconfig/proto/mhconfig.proto"]
+    - [protoc, "-I=src/", "--cpp_out=src/", "src/mhconfig/proto/mhconfig.proto"]
+    - [cd, "build"]
+    - [cp, "/source/CMakeLists.txt", .]
+    - [cmake, -DCMAKE_BUILD_TYPE=Debug, ..]
+    - [make, -j8]

@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package mhconfig.proto;
+
+service MHConfig {
+  rpc Get(GetRequest) returns (GetResponse) {}
+  rpc Update(UpdateRequest) returns (UpdateResponse) {}
+  rpc RunGC(RunGCRequest) returns (RunGCResponse) {}
+}
+
+
+message GetRequest {
+  string root_path = 1;
+  repeated string overrides = 2;
+  uint32 version = 3;
+  repeated string key = 4;
+}
+
+message GetResponse {
+  uint64 namespace_id = 1;
+  uint32 version = 2;
+  repeated Element elements = 3;
+}
+
+
+message UpdateRequest {
+  string root_path = 1;
+  repeated string relative_paths = 2;
+}
+
+message UpdateResponse {
+  uint64 namespace_id = 1;
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+  }
+  Status status = 2;
+  uint32 version = 3;
+}
+
+
+message RunGCRequest {
+  enum Type {
+    CACHE_GENERATION_0 = 0;
+    CACHE_GENERATION_1 = 1;
+    CACHE_GENERATION_2 = 2;
+    DEAD_POINTERS = 3;
+    NAMESPACES = 4;
+    VERSIONS = 5;
+  }
+  Type type = 1;
+  uint32 max_live_in_seconds = 2;
+}
+
+message RunGCResponse {
+}
+
+
+message Element {
+  enum NodeType {
+    SCALAR_NODE = 0;
+    MAP_NODE = 1;
+    SEQUENCE_NODE = 2;
+    NULL_NODE = 3;
+    UNDEFINED_NODE = 4;
+  }
+  NodeType type = 1;
+  uint32 sibling_offset = 2;
+  uint32 size = 3;
+  string key = 4;
+  string value = 5;
+}
+
+// SCALAR
+//   Element{type: SCALAR_NODE, value: XXX, sibling_offset: 0}
+// MAP
+//   Element{type: MAP_NODE, size: 2, sibling_offset: 0}
+//     Element{type: SEQUENCE_NODE, key: XXX, size: 1, sibling_offset: 2}
+//       Element{type: SEQUENCE_NODE, size: 0, sibling_offset: 0}
+//     Element{type: NULL_NODE, key: YYY, sibling_offset: 0}
+// SEQUENCE
+//   Element{type: SEQUENCE_NODE, size: 1, sibling_offset: 0}
+//     Element{type: SEQUENCE_NODE, size: 1, sibling_offset: 0}
+//       Element{type: MAP_NODE, size: 0, sibling_offset: 0}
+// NULL
+//   Element{type: NULL_NODE, sibling_offset: 0}
+// UNDEFINED
+//   Element{type: UNDEFINED_NODE, sibling_offset: 0}
