@@ -21,8 +21,11 @@ public:
   SetupCommand(const std::string& path);
   virtual ~SetupCommand();
 
+  std::string name() const override;
+
   bool execute(
-    Queue<scheduler::command::CommandRef>& scheduler_queue
+    Queue<scheduler::command::CommandRef>& scheduler_queue,
+    Metrics& metrics
   ) override;
 
 private:

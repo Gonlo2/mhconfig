@@ -6,8 +6,8 @@
 #include "jmutils/container/queue.h"
 
 #include "mhconfig/api/service.h"
-//#include "mhconfig/worker/scheduler.h"
-//#include "mhconfig/worker/builder.h"
+#include "mhconfig/scheduler/mod.h"
+#include "mhconfig/worker/mod.h"
 //#include "mhconfig/worker/common.h"
 
 #include "spdlog/spdlog.h"
@@ -35,19 +35,22 @@ namespace mhconfig
       if (running_) return false;
 
       metrics_.init();
-//
-//      workers_.reserve(2);
-//      workers_.emplace_back(scheduler_queue_, worker_queue_, 8, metrics_);
-//
-//      for (auto& w : workers_) w.start();
-//
-//      scheduler_ = std::make_unique<worker::Scheduler>(
-//        scheduler_queue_,
-//        worker_queue_,
-//        metrics_
-//      );
-//      scheduler_->start();
-//
+
+      scheduler_ = std::make_unique<mhconfig::scheduler::Scheduler>(
+        scheduler_queue_,
+        worker_queue_,
+        metrics_
+      );
+      scheduler_->start();
+
+      worker_ = std::make_unique<mhconfig::worker::Worker>(
+        worker_queue_,
+        8,
+        scheduler_queue_,
+        metrics_
+      );
+      worker_->start();
+
 //      service_ = std::make_unique<api::Service>(
 //        server_address_,
 //        scheduler_queue_,
@@ -55,8 +58,8 @@ namespace mhconfig
 //      );
 //      service_->start();
 //
-//      gc_thread_ = std::make_unique<std::thread>(&MHConfig::run_gc, this);
-//
+      //gc_thread_ = std::make_unique<std::thread>(&MHConfig::run_gc, this);
+
       running_ = true;
       return true;
     }
@@ -66,7 +69,8 @@ namespace mhconfig
 
       //gc_thread_->join();
       //service_->join();
-      //scheduler_->join();
+      worker_->join();
+      scheduler_->join();
       //for (auto& w : workers_) w.join();
 
       return true;
@@ -81,7 +85,8 @@ namespace mhconfig
     Queue<mhconfig::worker::command::CommandRef> worker_queue_;
 
     //std::vector<worker::Builder> workers_;
-    //std::unique_ptr<worker::Scheduler> scheduler_;
+    std::unique_ptr<mhconfig::scheduler::Scheduler> scheduler_;
+    std::unique_ptr<mhconfig::worker::Worker> worker_;
     //std::unique_ptr<api::Service> service_;
     //std::unique_ptr<std::thread> gc_thread_;
 

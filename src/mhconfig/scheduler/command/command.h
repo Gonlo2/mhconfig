@@ -6,6 +6,7 @@
 #include "jmutils/container/queue.h"
 #include "mhconfig/ds/config_namespace.h"
 #include "mhconfig/worker/command/command.h"
+#include "mhconfig/metrics.h"
 
 namespace mhconfig
 {
@@ -87,8 +88,11 @@ public:
   Command();
   virtual ~Command();
 
+  virtual std::string name() const = 0;
+
   virtual bool execute(
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
+    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
+    Metrics& metrics
   ) = 0;
 
 private:

@@ -77,7 +77,7 @@ private:
 
       try {
         spdlog::debug("Received a {} command", command->name());
-        bool ok = static_cast<Parent>(this)->process_command(command);
+        bool ok = static_cast<Parent*>(this)->process_command(command);
         if (!ok) {
           spdlog::error("Can't process a {} command", command->name());
         }
@@ -96,7 +96,7 @@ private:
 
       auto end_time = jmutils::time::monotonic_now();
 
-      static_cast<Parent>(this)->loop_stats(command, start_time, end_time);
+      static_cast<Parent*>(this)->loop_stats(command, start_time, end_time);
     }
 
     spdlog::debug("Finished the worker");
