@@ -51,13 +51,13 @@ namespace mhconfig
       );
       worker_->start();
 
-//      service_ = std::make_unique<api::Service>(
-//        server_address_,
-//        scheduler_queue_,
-//        metrics_
-//      );
-//      service_->start();
-//
+      service_ = std::make_unique<api::Service>(
+        server_address_,
+        scheduler_queue_,
+        metrics_
+      );
+      service_->start();
+
       //gc_thread_ = std::make_unique<std::thread>(&MHConfig::run_gc, this);
 
       running_ = true;
@@ -68,7 +68,7 @@ namespace mhconfig
       if (!running_) return false;
 
       //gc_thread_->join();
-      //service_->join();
+      service_->join();
       worker_->join();
       scheduler_->join();
       //for (auto& w : workers_) w.join();
@@ -87,7 +87,7 @@ namespace mhconfig
     //std::vector<worker::Builder> workers_;
     std::unique_ptr<mhconfig::scheduler::Scheduler> scheduler_;
     std::unique_ptr<mhconfig::worker::Worker> worker_;
-    //std::unique_ptr<api::Service> service_;
+    std::unique_ptr<api::Service> service_;
     //std::unique_ptr<std::thread> gc_thread_;
 
     volatile bool running_{false};

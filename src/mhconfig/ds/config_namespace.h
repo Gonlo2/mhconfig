@@ -30,8 +30,7 @@ struct raw_config_t {
 enum MergedConfigStatus {
   UNDEFINED,
   BUILDING,
-  OK,
-  REMOVED
+  OK
 };
 
 struct merged_config_t {

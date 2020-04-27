@@ -78,11 +78,8 @@ void GetRequest::request() {
   overrides_ = to_vector(request_.overrides());
   key_ = to_vector(request_.key());
 
-  //command::command_t command;
-  //command.type = command::CommandType::API;
-  //command.api_request = this;
-
-  //scheduler_queue_.push(command);
+  auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand<GetRequest*>>(this);
+  scheduler_queue_.push(api_get_command);
 }
 
 void GetRequest::finish() {

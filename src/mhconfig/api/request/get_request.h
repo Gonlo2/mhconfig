@@ -4,6 +4,7 @@
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/scheduler/command/api_get_command.h"
 //#include "mhconfig/api/config/merged_config.h"
 //#include "mhconfig/worker/common.h"
 
