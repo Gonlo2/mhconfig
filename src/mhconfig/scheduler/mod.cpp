@@ -35,7 +35,7 @@ void Scheduler::run() {
   while (true) {
     auto command = scheduler_queue_.pop();
 
-    auto start_time = std::chrono::high_resolution_clock::now();
+    auto start_time = jmutils::time::monotonic_now_sec();
 
     try {
       spdlog::debug("Received a {} command", command->name());
@@ -47,9 +47,12 @@ void Scheduler::run() {
       spdlog::error("Some unknown error take place processing a {} command", command->name());
     }
 
-    auto end_time = std::chrono::high_resolution_clock::now();
+    auto end_time = jmutils::time::monotonic_now_sec();
 
-    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
+    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      end_time - start_time
+    ).count();
+
     metrics_.scheduler_duration(command->name(), duration_ns);
   }
 }
@@ -57,33 +60,38 @@ void Scheduler::run() {
 bool Scheduler::process_command(
   mhconfig::scheduler::command::CommandRef command
 ) {
-  if (command->has_namespace_path()) {
-    auto result = get_or_build_namespace(command);
-    switch (result.first) {
-      case ConfigNamespaceState::OK:
-        return command->execute_on_namespace(
-          result.second,
-          worker_queue_
-        );
-      case ConfigNamespaceState::BUILDING:
-        return true;
-      case ConfigNamespaceState::ERROR:
-        return command->on_get_namespace_error(worker_queue_);
-    }
-  } else if (command->has_namespace_id()) {
-    auto search = config_namespace_by_id_.find(command->namespace_id());
-    if (search == config_namespace_by_id_.end()) {
-      return command->on_get_namespace_error(worker_queue_);
+  switch (command->command_requirement()) {
+    case mhconfig::scheduler::command::CommandRequirement::NAMESPACE_BY_PATH: {
+      auto result = get_or_build_namespace(command);
+      switch (result.first) {
+        case ConfigNamespaceState::OK:
+          return command->execute_on_namespace(
+            result.second,
+            worker_queue_
+          );
+        case ConfigNamespaceState::BUILDING:
+          return true;
+        case ConfigNamespaceState::ERROR:
+          return command->on_get_namespace_error(worker_queue_);
+      }
+
+      return false;
     }
 
-    return command->execute_on_namespace(
-      search->second,
-      worker_queue_
-    );
-  } else {
-    return command->execute(
-      worker_queue_
-    );
+    case mhconfig::scheduler::command::CommandRequirement::NAMESPACE_BY_ID: {
+      auto search = config_namespace_by_id_.find(command->namespace_id());
+      if (search == config_namespace_by_id_.end()) {
+        return command->on_get_namespace_error(worker_queue_);
+      }
+
+      return command->execute_on_namespace(
+        search->second,
+        worker_queue_
+      );
+    }
+
+    case mhconfig::scheduler::command::CommandRequirement::NONE:
+      return command->execute(worker_queue_);
   }
 
   return false;

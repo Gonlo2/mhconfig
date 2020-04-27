@@ -16,6 +16,12 @@ namespace command
 
 using jmutils::container::Queue;
 
+enum CommandRequirement {
+  NONE,
+  NAMESPACE_BY_PATH,
+  NAMESPACE_BY_ID
+};
+
 class Command
 {
 public:
@@ -24,10 +30,9 @@ public:
 
   virtual std::string name() const = 0;
 
-  virtual bool has_namespace_path() const = 0;
-  virtual std::string namespace_path() const = 0;
+  virtual CommandRequirement command_requirement() const = 0;
 
-  virtual bool has_namespace_id() const = 0;
+  virtual const std::string& namespace_path() const = 0;
   virtual uint64_t namespace_id() const = 0;
 
   virtual bool execute_on_namespace(

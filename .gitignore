@@ -10,7 +10,8 @@ exec/
 tmp/
 # ignore all files in the obj/ directory
 obj/
-# ignore the data folder
-backend/service/data
 # ignore the build folder
-backend/service/build
+build/
+# ignore the grpc/protobuf sources
+*.pb.h
+*.pb.cc

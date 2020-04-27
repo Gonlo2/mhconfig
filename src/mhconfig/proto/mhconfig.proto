@@ -13,7 +13,8 @@ message GetRequest {
   string root_path = 1;
   repeated string overrides = 2;
   uint32 version = 3;
-  repeated string key = 4;
+  string document = 4;
+  repeated string key = 5;
 }
 
 message GetResponse {
