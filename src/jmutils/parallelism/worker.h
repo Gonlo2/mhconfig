@@ -7,13 +7,14 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 
 #include "jmutils/container/queue.h"
+#include "jmutils/time.h"
 
 namespace jmutils
 {
 namespace parallelism
 {
 
-template <typename Command>
+template <typename Parent, typename Command>
 class Worker
 {
 public:
@@ -31,8 +32,7 @@ public:
   Worker(const Worker& o) = delete;
 
   Worker(Worker&& o)
-    : logger_(o.logger_),
-    input_queue_(o.input_queue_),
+    : input_queue_(o.input_queue_),
     num_threads_(o.num_threads_),
     threads_(std::move(o.threads_))
   {
@@ -43,16 +43,8 @@ public:
 
     threads_.reserve(num_threads_);
     for (size_t i = num_threads_; i; --i) {
-      logger_->debug(
-        "Starting the thread {} of {} worker with the queue {}",
-        i,
-        worker_name(),
-        (uint64_t) &input_queue_
-      );
-
-      threads_.push_back(
-        std::make_unique<std::thread>(&Worker::run, this)
-      );
+      spdlog::debug("Starting the thread {}", i);
+      threads_.push_back(std::make_unique<std::thread>(&Worker::run, this));
     }
 
     return true;
@@ -63,14 +55,6 @@ public:
   }
 
 protected:
-  enum ProcessResult {
-    OK,
-    MISSING,
-    ERROR
-  };
-
-  std::shared_ptr<spdlog::logger> logger_{spdlog::get("console")};
-
   virtual bool pre_start() {
     return true;
   }
@@ -81,92 +65,46 @@ private:
 
   std::vector<std::unique_ptr<std::thread>> threads_;
 
-  virtual const std::string worker_name() const = 0;
-
   void run() {
-    logger_->debug(
-      "Started a {} worker with the queue {}",
-      worker_name(),
-      (uint64_t) &input_queue_
-    );
+    spdlog::debug("Started the worker");
 
     while (true) {
-      logger_->debug(
-        "A {} worker is waiting for a command",
-        worker_name()
-      );
+      spdlog::debug("The worker is waiting for a command");
       auto command = input_queue_.pop();
 
+      auto start_time = jmutils::time::monotonic_now();
+
       try {
-        logger_->debug(
-          "A {} worker received a {} command",
-          worker_name(),
-          to_string(command.type)
-        );
-
-        ProcessResult process_result = worker_process(command);
-        switch (process_result) {
-          case ProcessResult::OK:
-            logger_->debug(
-              "A {} worker process correctly a {} command",
-              worker_name(),
-              to_string(command.type)
-            );
-            break;
-
-          case ProcessResult::MISSING:
-            logger_->warn(
-              "A {} worker can't process a {} command",
-              worker_name(),
-              to_string(command.type)
-            );
-            break;
-
-          case ProcessResult::ERROR:
-            logger_->error(
-              "A {} worker fail to process a {} command",
-              worker_name(),
-              to_string(command.type)
-            );
-            break;
-
-          default:
-            logger_->warn(
-              "A {} worker return a unknown command result for a {} command",
-              worker_name(),
-              to_string(command.type)
-            );
+        spdlog::debug("Received a {} command", command->name());
+        bool ok = static_cast<Parent>(this)->process_command(command);
+        if (!ok) {
+          spdlog::error("Can't process a {} command", command->name());
         }
       } catch (const std::exception &e) {
-        logger_->error(
-          "Some error take place processing the {} worker command {}: {}",
-          worker_name(),
-          to_string(command.type),
+        spdlog::error(
+          "Some error take place processing the command {}: {}",
+          command->name(),
           e.what()
         );
       } catch (...) {
-        logger_->error(
-          "Some unknown error take place processing the {} worker command {}",
-          worker_name(),
-          to_string(command.type)
+        spdlog::error(
+          "Some unknown error take place processing the command {}",
+          command->name()
         );
       }
+
+      auto end_time = jmutils::time::monotonic_now();
+
+      static_cast<Parent>(this)->loop_stats(command, start_time, end_time);
     }
 
-    logger_->debug(
-      "Finished a {} worker with the queue {}",
-      worker_name(),
-      (uint64_t) &input_queue_
-    );
+    spdlog::debug("Finished the worker");
   }
-
-  virtual ProcessResult worker_process(const Command& command) = 0;
 
 };
 
 }
 /* parallelism */
 } /* jmutils */
-
 
 #endif /* ifndef JMUTILS__PARALLELISM__WORKER_H */

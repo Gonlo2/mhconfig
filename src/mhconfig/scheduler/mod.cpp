@@ -35,7 +35,7 @@ void Scheduler::run() {
   while (true) {
     auto command = scheduler_queue_.pop();
 
-    auto start_time = jmutils::time::monotonic_now_sec();
+    auto start_time = jmutils::time::monotonic_now();
 
     try {
       spdlog::debug("Received a {} command", command->name());
@@ -47,7 +47,7 @@ void Scheduler::run() {
       spdlog::error("Some unknown error take place processing a {} command", command->name());
     }
 
-    auto end_time = jmutils::time::monotonic_now_sec();
+    auto end_time = jmutils::time::monotonic_now();
 
     double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
       end_time - start_time
@@ -60,8 +60,25 @@ void Scheduler::run() {
 bool Scheduler::process_command(
   mhconfig::scheduler::command::CommandRef command
 ) {
-  switch (command->command_requirement()) {
-    case mhconfig::scheduler::command::CommandRequirement::NAMESPACE_BY_PATH: {
+  switch (command->command_type()) {
+    case mhconfig::scheduler::command::CommandType::ADD_NAMESPACE: {
+      auto inserted_value = namespace_by_id_.emplace(
+        command->namespace_id(),
+        command->config_namespace()
+      );
+      assert(inserted_value.second);
+
+      namespace_by_path_[command->namespace_path()] = command->config_namespace();
+
+      auto search = commands_waiting_for_namespace_by_path_.find(command->namespace_path());
+
+      scheduler_queue_.push_all(search->second);
+      commands_waiting_for_namespace_by_path_.erase(search);
+
+      return true;
+    }
+
+    case mhconfig::scheduler::command::CommandType::GET_NAMESPACE_BY_PATH: {
       auto result = get_or_build_namespace(command);
       switch (result.first) {
         case ConfigNamespaceState::OK:
@@ -78,9 +95,9 @@ bool Scheduler::process_command(
       return false;
     }
 
-    case mhconfig::scheduler::command::CommandRequirement::NAMESPACE_BY_ID: {
-      auto search = config_namespace_by_id_.find(command->namespace_id());
-      if (search == config_namespace_by_id_.end()) {
+    case mhconfig::scheduler::command::CommandType::GET_NAMESPACE_BY_ID: {
+      auto search = namespace_by_id_.find(command->namespace_id());
+      if (search == namespace_by_id_.end()) {
         return command->on_get_namespace_error(worker_queue_);
       }
 
@@ -90,7 +107,7 @@ bool Scheduler::process_command(
       );
     }
 
-    case mhconfig::scheduler::command::CommandRequirement::NONE:
+    case mhconfig::scheduler::command::CommandType::GENERIC:
       return command->execute(worker_queue_);
   }
 
@@ -101,8 +118,8 @@ std::pair<Scheduler::ConfigNamespaceState, std::shared_ptr<config_namespace_t>> 
   mhconfig::scheduler::command::CommandRef command
 ) {
   // First we search for the namespace
-  auto search = config_namespace_by_root_path_.find(command->namespace_path());
-  if (search == config_namespace_by_root_path_.end()) {
+  auto search = namespace_by_path_.find(command->namespace_path());
+  if (search == namespace_by_path_.end()) {
     // If it isn't present we check if some another command ask for it
     auto search_commands_waiting = commands_waiting_for_namespace_by_path_.find(
       command->namespace_path()

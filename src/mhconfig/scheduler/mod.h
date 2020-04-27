@@ -55,12 +55,12 @@ private:
   std::unordered_map<
     std::string,
     std::shared_ptr<config_namespace_t>
-  > config_namespace_by_root_path_;
+  > namespace_by_path_;
 
   std::unordered_map<
     uint64_t,
     std::shared_ptr<config_namespace_t>
-  > config_namespace_by_id_;
+  > namespace_by_id_;
 
   std::unordered_map<
     std::string,

@@ -58,7 +58,7 @@ public:
     return result;
   }
 
-  void push(const T item) {
+  void push(T item) {
     std::unique_lock<std::mutex> mlock(mutex_);
     queue_.push(item);
     mlock.unlock();
@@ -66,11 +66,13 @@ public:
   }
 
   template <typename Container>
-  void push(const Container items) {
+  void push_all(Container items) {
     std::unique_lock<std::mutex> mlock(mutex_);
     for (const auto& x : items) queue_.push(x);
     mlock.unlock();
-    for (const auto& x : items) cond_.notify_one();
+    for (size_t i = 0; i < items.size(); ++i) {
+      cond_.notify_one();
+    }
   }
 
 protected:
