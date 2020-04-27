@@ -24,8 +24,8 @@ public:
 
   virtual std::string name() const = 0;
 
-  virtual bool has_namespace_name() const = 0;
-  virtual std::string namespace_name() const = 0;
+  virtual bool has_namespace_path() const = 0;
+  virtual std::string namespace_path() const = 0;
 
   virtual bool has_namespace_id() const = 0;
   virtual uint64_t namespace_id() const = 0;

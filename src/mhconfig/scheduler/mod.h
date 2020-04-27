@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "jmutils/container/queue.h"
+#include "jmutils/time.h"
 //#include "jmutils/metrics/scope_duration.h"
 #include "string_pool/pool.h"
 //#include "mhconfig/worker/common.h"
@@ -64,7 +65,7 @@ private:
   std::unordered_map<
     std::string,
     std::vector<mhconfig::scheduler::command::CommandRef>
-  > commands_waiting_for_config_namespace_by_root_path_;
+  > commands_waiting_for_namespace_by_path_;
 
   void run();
 

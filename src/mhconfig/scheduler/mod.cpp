@@ -57,7 +57,7 @@ void Scheduler::run() {
 bool Scheduler::process_command(
   mhconfig::scheduler::command::CommandRef command
 ) {
-  if (command->has_namespace_name()) {
+  if (command->has_namespace_path()) {
     auto result = get_or_build_namespace(command);
     switch (result.first) {
       case ConfigNamespaceState::OK:
@@ -71,9 +71,7 @@ bool Scheduler::process_command(
         return command->on_get_namespace_error(worker_queue_);
     }
   } else if (command->has_namespace_id()) {
-    auto search = config_namespace_by_id_.find(
-      command->namespace_id()
-    );
+    auto search = config_namespace_by_id_.find(command->namespace_id());
     if (search == config_namespace_by_id_.end()) {
       return command->on_get_namespace_error(worker_queue_);
     }
@@ -94,43 +92,46 @@ bool Scheduler::process_command(
 std::pair<Scheduler::ConfigNamespaceState, std::shared_ptr<config_namespace_t>> Scheduler::get_or_build_namespace(
   mhconfig::scheduler::command::CommandRef command
 ) {
-  return std::make_pair(ConfigNamespaceState::ERROR, nullptr);
+  // First we search for the namespace
+  auto search = config_namespace_by_root_path_.find(command->namespace_path());
+  if (search == config_namespace_by_root_path_.end()) {
+    // If it isn't present we check if some another command ask for it
+    auto search_commands_waiting = commands_waiting_for_namespace_by_path_.find(
+      command->namespace_path()
+    );
 
-//
-//  auto search_config_namespace = config_namespace_by_root_path_.find(root_path);
-//  if (search_config_namespace == config_namespace_by_root_path_.end()) {
-//    auto search_commands_waiting = commands_waiting_for_config_namespace_by_root_path_
-//      .find(root_path);
-//
-//    if (search_commands_waiting == commands_waiting_for_config_namespace_by_root_path_.end()) {
-//      command::command_t setup_command;
-//      setup_command.type = command::CommandType::SETUP_REQUEST;
-//      setup_command.setup_request = std::make_shared<command::setup::request_t>();
-//      setup_command.setup_request->root_path = root_path;
-//
-//      worker_queue_.push(setup_command);
-//
-//      commands_waiting_for_config_namespace_by_root_path_[root_path].push_back(command);
-//    } else {
-//      search_commands_waiting->second.push_back(command);
-//    }
-//
-//    return std::make_pair(ConfigNamespaceState::BUILDING, nullptr);
-//  }
-//
-//  if (search_config_namespace->second == nullptr || !search_config_namespace->second->ok) {
-//    return std::make_pair(ConfigNamespaceState::ERROR, nullptr);
-//  }
-//
-//  search_config_namespace
-//    ->second
-//    ->last_access_timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-//      std::chrono::system_clock::now().time_since_epoch()
-//    ).count();
-//
-//  return std::make_pair(ConfigNamespaceState::OK, search_config_namespace->second);
-//
+    if (search_commands_waiting == commands_waiting_for_namespace_by_path_.end()) {
+      // And if this is the first we create the namespace is some worker
+      //TODO 
+      //command::command_t setup_command;
+      //setup_command.type = command::CommandType::SETUP_REQUEST;
+      //setup_command.setup_request = std::make_shared<command::setup::request_t>();
+      //setup_command.setup_request->root_path = root_path;
+
+      //worker_queue_.push(setup_command);
+
+      commands_waiting_for_namespace_by_path_[command->namespace_path()].push_back(command);
+    } else {
+      // In other case we wait for the namespace
+      search_commands_waiting->second.push_back(command);
+    }
+
+    // In this case we need to wait
+    return std::make_pair(ConfigNamespaceState::BUILDING, nullptr);
+  }
+
+  // If some namespace is present we check if it's well formed
+  if (search->second == nullptr || !search->second->ok) {
+    return std::make_pair(ConfigNamespaceState::ERROR, nullptr);
+  }
+
+  // If we are here then we have the namespace and before return it
+  // we update the last access timestamp
+  search->second->last_access_timestamp = jmutils::time::monotonic_now_sec();
+
+  return std::make_pair(ConfigNamespaceState::OK, search->second);
 }
+
 //
 //bool Scheduler::send_api_get_response(
 //  get_request::GetRequest* get_request,
