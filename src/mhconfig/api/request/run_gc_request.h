@@ -3,7 +3,7 @@
 
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
-#include "mhconfig/worker/common.h"
+#include "mhconfig/scheduler/command/command.h"
 
 namespace mhconfig
 {
@@ -15,7 +15,7 @@ namespace run_gc_request
 {
 
 using jmutils::container::Queue;
-using namespace mhconfig::worker;
+using namespace mhconfig::scheduler::command;
 
 class RunGCRequest : public Request
 {
@@ -24,7 +24,7 @@ public:
       mhconfig::proto::MHConfig::AsyncService* service,
       grpc::ServerCompletionQueue* cq_,
       Metrics& metrics,
-      Queue<command::command_t>& scheduler_queue
+      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
   );
   virtual ~RunGCRequest();
 
@@ -36,7 +36,7 @@ public:
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::RunGCResponse> responder_;
-  Queue<command::command_t>& scheduler_queue_;
+  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   mhconfig::proto::RunGCRequest request_;
   mhconfig::proto::RunGCResponse response_;

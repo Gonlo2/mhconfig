@@ -14,7 +14,7 @@ GetRequest::GetRequest(
     mhconfig::proto::MHConfig::AsyncService* service,
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
-    Queue<command::command_t>& scheduler_queue
+    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
 ) : Request(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
@@ -59,7 +59,7 @@ void GetRequest::set_version(uint32_t version) {
 
 void GetRequest::set_element(mhconfig::ElementRef element) {
   response_.clear_elements();
-  mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
+  //mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
 }
 
 mhconfig::proto::GetResponse& GetRequest::response() {
@@ -78,11 +78,11 @@ void GetRequest::request() {
   overrides_ = to_vector(request_.overrides());
   key_ = to_vector(request_.key());
 
-  command::command_t command;
-  command.type = command::CommandType::API;
-  command.api_request = this;
+  //command::command_t command;
+  //command.type = command::CommandType::API;
+  //command.api_request = this;
 
-  scheduler_queue_.push(command);
+  //scheduler_queue_.push(command);
 }
 
 void GetRequest::finish() {

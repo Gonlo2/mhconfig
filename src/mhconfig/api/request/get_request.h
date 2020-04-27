@@ -3,8 +3,9 @@
 
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
-#include "mhconfig/api/config/merged_config.h"
-#include "mhconfig/worker/common.h"
+#include "mhconfig/scheduler/command/command.h"
+//#include "mhconfig/api/config/merged_config.h"
+//#include "mhconfig/worker/common.h"
 
 namespace mhconfig
 {
@@ -16,7 +17,6 @@ namespace get_request
 {
 
 using jmutils::container::Queue;
-using namespace mhconfig::worker;
 
 
 class GetRequest : public Request
@@ -26,7 +26,7 @@ public:
       mhconfig::proto::MHConfig::AsyncService* service,
       grpc::ServerCompletionQueue* cq_,
       Metrics& metrics,
-      Queue<command::command_t>& scheduler_queue
+      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
   );
   virtual ~GetRequest();
 
@@ -49,7 +49,7 @@ public:
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::GetResponse> responder_;
-  Queue<command::command_t>& scheduler_queue_;
+  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   mhconfig::proto::GetRequest request_;
   mhconfig::proto::GetResponse response_;

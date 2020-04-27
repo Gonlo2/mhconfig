@@ -22,7 +22,7 @@ namespace request
   }
 
   void Request::proceed() {
-    logger_->debug("Received gRPC event {} in {} status", name(), status());
+    spdlog::debug("Received gRPC event {} in {} status", name(), status());
 
     if (status_ == Status::CREATE) {
       status_ = Status::PROCESS;

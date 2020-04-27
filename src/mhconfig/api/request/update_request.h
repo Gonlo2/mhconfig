@@ -3,7 +3,8 @@
 
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
-#include "mhconfig/worker/common.h"
+#include "mhconfig/scheduler/command/command.h"
+//#include "mhconfig/worker/common.h"
 
 namespace mhconfig
 {
@@ -15,7 +16,7 @@ namespace update_request
 {
 
 using jmutils::container::Queue;
-using namespace mhconfig::worker;
+using namespace mhconfig::scheduler::command;
 
 enum Status {
   OK,
@@ -29,7 +30,7 @@ public:
       mhconfig::proto::MHConfig::AsyncService* service,
       grpc::ServerCompletionQueue* cq_,
       Metrics& metrics,
-      Queue<command::command_t>& scheduler_queue
+      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
   );
   virtual ~UpdateRequest();
 
@@ -48,7 +49,7 @@ public:
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;
-  Queue<command::command_t>& scheduler_queue_;
+  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   mhconfig::proto::UpdateRequest request_;
   mhconfig::proto::UpdateResponse response_;

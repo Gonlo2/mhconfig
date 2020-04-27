@@ -14,7 +14,8 @@
 #include <grpcpp/security/server_credentials.h>
 
 #include "jmutils/container/queue.h"
-#include "mhconfig/worker/common.h"
+//#include "mhconfig/worker/common.h"
+#include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 
 #include "mhconfig/api/request/request.h"
@@ -32,14 +33,14 @@ namespace api
 {
 
 using jmutils::container::Queue;
-using namespace mhconfig::worker;
+//using namespace mhconfig::worker;
 
 class Service final
 {
 public:
   Service(
     const std::string& server_address,
-    Queue<command::command_t>& scheduler_queue,
+    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
     Metrics& metrics
   );
 
@@ -53,7 +54,7 @@ private:
   size_t num_threads_{4};
 
   std::string server_address_;
-  Queue<command::command_t>& scheduler_queue_;
+  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   std::vector<std::unique_ptr<std::thread>> threads_;
 

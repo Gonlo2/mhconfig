@@ -47,8 +47,6 @@ public:
   void proceed();
 
 protected:
-  std::shared_ptr<spdlog::logger> logger_{spdlog::get("console")};
-
   mhconfig::proto::MHConfig::AsyncService* service_;
   grpc::ServerCompletionQueue* cq_;
   grpc::ServerContext ctx_;

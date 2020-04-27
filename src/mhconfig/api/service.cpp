@@ -8,7 +8,7 @@ namespace api
 
 Service::Service(
   const std::string& server_address,
-  Queue<command::command_t>& scheduler_queue,
+  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) :
   server_address_(server_address),

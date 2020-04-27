@@ -14,7 +14,7 @@ UpdateRequest::UpdateRequest(
     mhconfig::proto::MHConfig::AsyncService* service,
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
-    Queue<command::command_t>& scheduler_queue
+    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
 ) : Request(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
@@ -68,11 +68,11 @@ void UpdateRequest::subscribe() {
 void UpdateRequest::request() {
   relative_paths_ = to_vector(request_.relative_paths());
 
-  command::command_t command;
-  command.type = command::CommandType::API;
-  command.api_request = this;
+  //command::command_t command;
+  //command.type = command::CommandType::API;
+  //command.api_request = this;
 
-  scheduler_queue_.push(command);
+  //scheduler_queue_.push(command);
 }
 
 void UpdateRequest::finish() {
