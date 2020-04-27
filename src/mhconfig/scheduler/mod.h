@@ -24,6 +24,7 @@ namespace scheduler
 
 using jmutils::container::Queue;
 using namespace mhconfig::api::request;
+using namespace mhconfig::ds::config_namespace;
 
 class Scheduler : public jmutils::parallelism::Worker<Scheduler, command::CommandRef>
 {

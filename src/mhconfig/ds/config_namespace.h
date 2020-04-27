@@ -18,6 +18,10 @@
 
 namespace mhconfig
 {
+namespace ds
+{
+namespace config_namespace
+{
 
 const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 
@@ -58,11 +62,33 @@ struct merged_config_metadata_t {
   > merged_config_by_document;
 };
 
-struct wait_built_t {
-  bool is_main;
-  std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
-  //mhconfig::scheduler::command::CommandRef command;
-};
+namespace build {
+  struct build_element_t {
+    mhconfig::ElementRef config;
+
+    std::string name;
+    std::string overrides_key;
+
+    std::unordered_map<
+      std::string,
+      std::shared_ptr<raw_config_t>
+    > raw_config_by_override;
+  };
+
+  struct built_element_t {
+    std::string overrides_key;
+    mhconfig::ElementRef config;
+  };
+
+  struct wait_built_t {
+    bool is_main;
+    std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
+
+    void* request;
+    uint32_t specific_version;
+    std::vector<build_element_t> elements_to_build;
+  };
+}
 
 struct config_namespace_t {
   bool ok;
@@ -90,12 +116,14 @@ struct config_namespace_t {
 
   std::unordered_map<
     std::string,
-    std::vector<std::shared_ptr<wait_built_t>>
+    std::vector<std::shared_ptr<build::wait_built_t>>
   > wait_builts_by_key;
 
   std::list<std::pair<uint64_t, uint32_t>> stored_versions_by_deprecation_timestamp;
 };
 
+} /* config_namespace */
+} /* ds */
 } /* mhconfig */
 
 #endif

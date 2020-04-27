@@ -29,6 +29,7 @@ namespace command
 {
 
 using jmutils::container::Queue;
+using namespace mhconfig::ds::config_namespace;
 
 static const std::string EMPTY_STRING{""};
 

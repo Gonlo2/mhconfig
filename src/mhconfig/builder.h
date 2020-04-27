@@ -13,6 +13,8 @@ namespace mhconfig
 namespace builder
 {
 
+using namespace mhconfig::ds::config_namespace;
+
 const static std::string TAG_FORMAT{"!format"};
 const static std::string TAG_SREF{"!sref"};
 const static std::string TAG_REF{"!ref"};
