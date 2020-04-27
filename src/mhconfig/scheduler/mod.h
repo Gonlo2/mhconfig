@@ -6,14 +6,14 @@
 
 #include "jmutils/container/queue.h"
 #include "jmutils/time.h"
-//#include "jmutils/metrics/scope_duration.h"
+#include "jmutils/parallelism/worker.h"
 #include "string_pool/pool.h"
-//#include "mhconfig/worker/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/api/config/merged_config.h"
 #include "mhconfig/api/config/basic_merged_config.h"
 #include "mhconfig/api/config/optimized_merged_config.h"
+#include "mhconfig/worker/command/setup_command.h"
 #include "mhconfig/metrics.h"
 
 namespace mhconfig
@@ -24,19 +24,16 @@ namespace scheduler
 using jmutils::container::Queue;
 using namespace mhconfig::api::request;
 
-class Scheduler
+class Scheduler : public jmutils::parallelism::Worker<Scheduler, command::CommandRef>
 {
 public:
   Scheduler(
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
+    Queue<command::CommandRef>& scheduler_queue,
     Queue<mhconfig::worker::command::CommandRef>& worker_queue,
     Metrics& metrics
   );
 
   virtual ~Scheduler();
-
-  bool start();
-  void join();
 
 private:
   enum ConfigNamespaceState {
@@ -45,36 +42,28 @@ private:
     ERROR
   };
 
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
   Queue<mhconfig::worker::command::CommandRef>& worker_queue_;
-
-  std::unique_ptr<std::thread> thread_;
 
   Metrics& metrics_;
 
-  std::unordered_map<
-    std::string,
-    std::shared_ptr<config_namespace_t>
-  > namespace_by_path_;
+  std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path_;
+  std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id_;
 
-  std::unordered_map<
-    uint64_t,
-    std::shared_ptr<config_namespace_t>
-  > namespace_by_id_;
+  std::unordered_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path_;
 
-  std::unordered_map<
-    std::string,
-    std::vector<mhconfig::scheduler::command::CommandRef>
-  > commands_waiting_for_namespace_by_path_;
 
-  void run();
+  void loop_stats(
+    command::CommandRef command,
+    jmutils::time::MonotonicTimePoint start_time,
+    jmutils::time::MonotonicTimePoint end_time
+  );
 
   bool process_command(
-    mhconfig::scheduler::command::CommandRef command
+    command::CommandRef command
   );
 
   std::pair<ConfigNamespaceState, std::shared_ptr<config_namespace_t>> get_or_build_namespace(
-    mhconfig::scheduler::command::CommandRef command
+    command::CommandRef command
   );
 //
 //  void get_affected_documents(

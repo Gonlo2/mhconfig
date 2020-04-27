@@ -18,7 +18,7 @@ namespace command
 class SetupCommand : public Command
 {
 public:
-  SetupCommand(std::string path);
+  SetupCommand(const std::string& path);
   virtual ~SetupCommand();
 
   bool execute(

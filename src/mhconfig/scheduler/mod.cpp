@@ -6,11 +6,11 @@ namespace scheduler
 {
 
 Scheduler::Scheduler(
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
+  Queue<command::CommandRef>& scheduler_queue,
   Queue<mhconfig::worker::command::CommandRef>& worker_queue,
   Metrics& metrics
 ) :
-  scheduler_queue_(scheduler_queue),
+  jmutils::parallelism::Worker<Scheduler, command::CommandRef>(scheduler_queue, 1),
   worker_queue_(worker_queue),
   metrics_(metrics)
 {
@@ -19,49 +19,23 @@ Scheduler::Scheduler(
 Scheduler::~Scheduler() {
 }
 
-bool Scheduler::start() {
-  if (thread_ != nullptr) return false;
-  thread_ = std::make_unique<std::thread>(&Scheduler::run, this);
-  return true;
-}
+void Scheduler::loop_stats(
+  command::CommandRef command,
+  jmutils::time::MonotonicTimePoint start_time,
+  jmutils::time::MonotonicTimePoint end_time
+) {
+  double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    end_time - start_time
+  ).count();
 
-void Scheduler::join() {
-  if (thread_ != nullptr) {
-    thread_->join();
-  }
-}
-
-void Scheduler::run() {
-  while (true) {
-    auto command = scheduler_queue_.pop();
-
-    auto start_time = jmutils::time::monotonic_now();
-
-    try {
-      spdlog::debug("Received a {} command", command->name());
-      bool ok = process_command(command);
-      if (!ok) {
-        spdlog::error("Can't process a {} command", command->name());
-      }
-    } catch(...) {
-      spdlog::error("Some unknown error take place processing a {} command", command->name());
-    }
-
-    auto end_time = jmutils::time::monotonic_now();
-
-    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      end_time - start_time
-    ).count();
-
-    metrics_.scheduler_duration(command->name(), duration_ns);
-  }
+  metrics_.scheduler_duration(command->name(), duration_ns);
 }
 
 bool Scheduler::process_command(
-  mhconfig::scheduler::command::CommandRef command
+  command::CommandRef command
 ) {
   switch (command->command_type()) {
-    case mhconfig::scheduler::command::CommandType::ADD_NAMESPACE: {
+    case command::CommandType::ADD_NAMESPACE: {
       auto inserted_value = namespace_by_id_.emplace(
         command->namespace_id(),
         command->config_namespace()
@@ -72,13 +46,13 @@ bool Scheduler::process_command(
 
       auto search = commands_waiting_for_namespace_by_path_.find(command->namespace_path());
 
-      scheduler_queue_.push_all(search->second);
+      input_queue_.push_all(search->second);
       commands_waiting_for_namespace_by_path_.erase(search);
 
       return true;
     }
 
-    case mhconfig::scheduler::command::CommandType::GET_NAMESPACE_BY_PATH: {
+    case command::CommandType::GET_NAMESPACE_BY_PATH: {
       auto result = get_or_build_namespace(command);
       switch (result.first) {
         case ConfigNamespaceState::OK:
@@ -95,7 +69,7 @@ bool Scheduler::process_command(
       return false;
     }
 
-    case mhconfig::scheduler::command::CommandType::GET_NAMESPACE_BY_ID: {
+    case command::CommandType::GET_NAMESPACE_BY_ID: {
       auto search = namespace_by_id_.find(command->namespace_id());
       if (search == namespace_by_id_.end()) {
         return command->on_get_namespace_error(worker_queue_);
@@ -107,7 +81,7 @@ bool Scheduler::process_command(
       );
     }
 
-    case mhconfig::scheduler::command::CommandType::GENERIC:
+    case command::CommandType::GENERIC:
       return command->execute(worker_queue_);
   }
 
@@ -115,7 +89,7 @@ bool Scheduler::process_command(
 }
 
 std::pair<Scheduler::ConfigNamespaceState, std::shared_ptr<config_namespace_t>> Scheduler::get_or_build_namespace(
-  mhconfig::scheduler::command::CommandRef command
+  command::CommandRef command
 ) {
   // First we search for the namespace
   auto search = namespace_by_path_.find(command->namespace_path());
@@ -126,14 +100,10 @@ std::pair<Scheduler::ConfigNamespaceState, std::shared_ptr<config_namespace_t>> 
     );
 
     if (search_commands_waiting == commands_waiting_for_namespace_by_path_.end()) {
-      // And if this is the first we create the namespace is some worker
-      //TODO 
-      //command::command_t setup_command;
-      //setup_command.type = command::CommandType::SETUP_REQUEST;
-      //setup_command.setup_request = std::make_shared<command::setup::request_t>();
-      //setup_command.setup_request->root_path = root_path;
-
-      //worker_queue_.push(setup_command);
+      auto setup_command = std::make_shared<::mhconfig::worker::command::SetupCommand>(
+        command->namespace_path()
+      );
+      worker_queue_.push(setup_command);
 
       commands_waiting_for_namespace_by_path_[command->namespace_path()].push_back(command);
     } else {

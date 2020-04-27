@@ -11,7 +11,7 @@ namespace time
     ).count();
   };
 
-  std::chrono::time_point<std::chrono::steady_clock> monotonic_now() {
+  MonotonicTimePoint monotonic_now() {
     return std::chrono::steady_clock::now();
   };
 

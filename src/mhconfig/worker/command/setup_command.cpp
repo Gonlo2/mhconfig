@@ -7,7 +7,7 @@ namespace worker
 namespace command
 {
 
-SetupCommand::SetupCommand(std::string path)
+SetupCommand::SetupCommand(const std::string& path)
   : Command(), path_(path)
 {
 }

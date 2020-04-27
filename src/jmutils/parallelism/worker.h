@@ -55,12 +55,13 @@ public:
   }
 
 protected:
+  jmutils::container::Queue<Command>& input_queue_;
+
   virtual bool pre_start() {
     return true;
   }
 
 private:
-  jmutils::container::Queue<Command>& input_queue_;
   size_t num_threads_;
 
   std::vector<std::unique_ptr<std::thread>> threads_;

@@ -8,8 +8,10 @@ namespace jmutils
 namespace time
 {
 
+  typedef std::chrono::time_point<std::chrono::steady_clock> MonotonicTimePoint;
+
   uint64_t monotonic_now_sec();
-  std::chrono::time_point<std::chrono::steady_clock> monotonic_now();
+  MonotonicTimePoint monotonic_now();
 
 } /* time */
 } /* jmutils */
