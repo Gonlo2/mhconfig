@@ -57,10 +57,6 @@ void GetRequestImpl::set_element(mhconfig::ElementRef element) {
   //mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
 }
 
-void GetRequestImpl::reply() {
-  return internal_reply();
-}
-
 Request* GetRequestImpl::clone() {
   return new GetRequestImpl(service_, cq_, metrics_, scheduler_queue_);
 }

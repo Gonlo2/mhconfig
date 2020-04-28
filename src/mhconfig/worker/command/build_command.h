@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#include "mhconfig/scheduler/command/set_documents_command.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/builder.h"

@@ -43,6 +43,7 @@ public:
   virtual void subscribe() = 0;
 
   void proceed();
+  void reply();
 
 protected:
   mhconfig::proto::MHConfig::AsyncService* service_;
@@ -50,8 +51,6 @@ protected:
   grpc::ServerContext ctx_;
 
   Metrics& metrics_;
-
-  void internal_reply();
 
   virtual void request() = 0;
   virtual void finish() = 0;

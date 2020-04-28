@@ -96,6 +96,20 @@ ElementRef make_element(
     std::unordered_set<std::string> &reference_to
 );
 
+// Get logic
+
+std::shared_ptr<merged_config_t> get_or_build_merged_config(
+  std::shared_ptr<config_namespace_t> config_namespace,
+  const std::string& document,
+  const std::string& overrides_key
+);
+
+std::shared_ptr<merged_config_t> get_merged_config(
+  std::shared_ptr<config_namespace_t> config_namespace,
+  const std::string& document,
+  const std::string& overrides_key
+);
+
 
 } /* builder */
 } /* mhconfig */

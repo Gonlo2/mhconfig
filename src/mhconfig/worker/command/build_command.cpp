@@ -30,13 +30,12 @@ bool BuildCommand::execute(
   Queue<scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) {
-  std::unordered_map<
-    std::string,
-    build::built_element_t
-  > built_elements_by_document;
+  std::unordered_map<std::string, build::built_element_t> built_elements_by_document;
 
   std::unordered_map<std::string, ElementRef> ref_elements_by_document;
   for (auto& build_element : wait_build_->elements_to_build) {
+    spdlog::debug("Building the document '{}'", build_element.name);
+
     size_t override_id = 0;
     ElementRef config = build_element.config;
 
@@ -77,10 +76,13 @@ bool BuildCommand::execute(
     ref_elements_by_document[build_element.name] = config;
   }
 
-  //scheduler_queue_.push(command);
+  auto set_documents_command = std::make_shared<::mhconfig::scheduler::command::SetDocumentsCommand>(
+    namespace_id_,
+    wait_build_,
+    built_elements_by_document
+  );
+  scheduler_queue.push(set_documents_command);
 
-  //auto add_namespace_command = std::make_shared<scheduler::command::AddNamespaceCommand>(config_namespace);
-  //scheduler_queue.push(add_namespace_command);
   return true;
 }
 

@@ -44,8 +44,6 @@ public:
   void set_version(uint32_t version) override;
   void set_element(mhconfig::ElementRef element) override;
 
-  void reply() override;
-
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::GetResponse> responder_;
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;

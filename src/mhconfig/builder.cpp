@@ -624,5 +624,82 @@ ElementRef make_element(
   return UNDEFINED_ELEMENT;
 }
 
+// Get logic
+
+std::shared_ptr<merged_config_t> get_or_build_merged_config(
+  std::shared_ptr<config_namespace_t> config_namespace,
+  const std::string& document,
+  const std::string& overrides_key
+) {
+  auto merged_config = get_merged_config(
+    config_namespace,
+    document,
+    overrides_key
+  );
+  if (merged_config == nullptr) {
+    std::shared_ptr<merged_config_metadata_t> merged_config_metadata = nullptr;
+    {
+      auto search = config_namespace->merged_config_metadata_by_overrides_key
+        .find(overrides_key);
+
+      if (search == config_namespace->merged_config_metadata_by_overrides_key.end()) {
+        merged_config_metadata = std::make_shared<merged_config_metadata_t>();
+        config_namespace->merged_config_metadata_by_overrides_key[overrides_key] = merged_config_metadata;
+      } else {
+        merged_config_metadata = search->second;
+      }
+    }
+
+    merged_config = std::make_shared<merged_config_t>();
+    merged_config_metadata->merged_config_by_document[document] = merged_config;
+    config_namespace->merged_config_by_gc_generation[0].push_back(merged_config);
+  }
+
+  return merged_config;
+}
+
+std::shared_ptr<merged_config_t> get_merged_config(
+  std::shared_ptr<config_namespace_t> config_namespace,
+  const std::string& document,
+  const std::string& overrides_key
+) {
+  std::shared_ptr<merged_config_metadata_t> merged_config_metadata = nullptr;
+  // First we search if exists cached some mergd config using the overrides_key
+  {
+    auto search = config_namespace
+      ->merged_config_metadata_by_overrides_key
+      .find(overrides_key);
+
+    if (search == config_namespace->merged_config_metadata_by_overrides_key.end()) {
+      return nullptr;
+    }
+
+    merged_config_metadata = search->second;
+    assert(merged_config_metadata != nullptr);
+  }
+
+  // If the override is cached we search the document
+  auto search = merged_config_metadata
+    ->merged_config_by_document
+    .find(document);
+
+  if (search == merged_config_metadata->merged_config_by_document.end()) {
+    return nullptr;
+  }
+
+  // We use a weak pointer to free the merged config so it's
+  // possible that the obtained pointer is empty
+  if (auto merged_config = search->second.lock()) {
+    return merged_config;
+  }
+
+  // If the pointer is invalidated we drop the item to avoid
+  // do this check in a future, I'm to lazy ;)
+  merged_config_metadata->merged_config_by_document.erase(search);
+
+  return nullptr;
+}
+
+
 } /* builder */
 } /* mhconfig */
