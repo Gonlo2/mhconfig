@@ -56,7 +56,7 @@ void Service::subscribe_requests() {
   );
   get_request->subscribe();
 
-  auto update_request = new request::update_request::UpdateRequest(
+  auto update_request = new request::UpdateRequestImpl(
     &service_,
     cq_.get(),
     metrics_,

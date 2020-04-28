@@ -469,7 +469,6 @@ public:
     return (version == 0) ? config_namespace->current_version : version;
   }
 
-
   bool on_get_namespace_error(
     Queue<worker::command::CommandRef>& worker_queue
   ) override {

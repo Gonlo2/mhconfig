@@ -1,10 +1,10 @@
 #ifndef MHCONFIG__API__REQUEST__UPDATE_REQUEST_H
 #define MHCONFIG__API__REQUEST__UPDATE_REQUEST_H
 
-#include "jmutils/container/queue.h"
+#include <string>
+#include <vector>
+
 #include "mhconfig/api/request/request.h"
-#include "mhconfig/scheduler/command/command.h"
-//#include "mhconfig/worker/common.h"
 
 namespace mhconfig
 {
@@ -15,51 +15,37 @@ namespace request
 namespace update_request
 {
 
-using jmutils::container::Queue;
-using namespace mhconfig::scheduler::command;
-
 enum Status {
   OK,
   ERROR
 };
 
+} /* update_request */
+
+
 class UpdateRequest : public Request
 {
 public:
   UpdateRequest(
-      mhconfig::proto::MHConfig::AsyncService* service,
-      grpc::ServerCompletionQueue* cq_,
-      Metrics& metrics,
-      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-  );
-  virtual ~UpdateRequest();
+    mhconfig::proto::MHConfig::AsyncService* service,
+    grpc::ServerCompletionQueue* cq_,
+    Metrics& metrics
+  )
+    : Request(service, cq_, metrics)
+  {
+  };
 
-  const std::string name() const override;
+  virtual ~UpdateRequest() {
+  };
 
-  Request* clone() override;
-  void subscribe() override;
+  virtual const std::string& root_path() const = 0;
+  virtual const std::vector<std::string>& relative_paths() const = 0;
 
-  const std::string& root_path() const;
-  const std::vector<std::string>& relative_paths() const;
-
-  void set_namespace_id(uint64_t namespace_id);
-  void set_status(update_request::Status status);
-  void set_version(uint32_t version);
-
-protected:
-  grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
-
-  mhconfig::proto::UpdateRequest request_;
-  mhconfig::proto::UpdateResponse response_;
-
-  std::vector<std::string> relative_paths_;
-
-  void request() override;
-  void finish() override;
+  virtual void set_namespace_id(uint64_t namespace_id) = 0;
+  virtual void set_status(update_request::Status status) = 0;
+  virtual void set_version(uint32_t version) = 0;
 };
 
-} /* update_request */
 } /* request */
 } /* api */
 } /* mhconfig */
