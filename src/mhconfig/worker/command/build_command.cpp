@@ -30,8 +30,6 @@ bool BuildCommand::execute(
   Queue<scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) {
-  auto get_request = (::mhconfig::api::request::get_request::GetRequest*) wait_build_->request;
-
   std::unordered_map<
     std::string,
     build::built_element_t
@@ -43,18 +41,18 @@ bool BuildCommand::execute(
     ElementRef config = build_element.config;
 
     if (config == nullptr) {
-      while ((override_id < get_request->overrides().size()) && (config == nullptr)) {
+      while ((override_id < wait_build_->request->overrides().size()) && (config == nullptr)) {
         auto search = build_element.raw_config_by_override
-          .find(get_request->overrides()[override_id]);
+          .find(wait_build_->request->overrides()[override_id]);
         if (search != build_element.raw_config_by_override.end()) {
           config = search->second->value;
         }
         ++override_id;
       }
 
-      while (override_id < get_request->overrides().size()) {
+      while (override_id < wait_build_->request->overrides().size()) {
         auto search = build_element.raw_config_by_override
-          .find(get_request->overrides()[override_id]);
+          .find(wait_build_->request->overrides()[override_id]);
         if (search != build_element.raw_config_by_override.end()) {
           config = mhconfig::builder::override_with(
             config,

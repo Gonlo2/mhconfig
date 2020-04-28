@@ -48,7 +48,7 @@ void Service::join() {
 }
 
 void Service::subscribe_requests() {
-  auto get_request = new request::get_request::GetRequest(
+  auto get_request = new request::GetRequestImpl(
     &service_,
     cq_.get(),
     metrics_,

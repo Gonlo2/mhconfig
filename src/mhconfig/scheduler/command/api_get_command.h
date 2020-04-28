@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "mhconfig/api/request/get_request.h"
 #include "mhconfig/worker/command/build_command.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "jmutils/time.h"
@@ -14,12 +15,11 @@ namespace scheduler
 namespace command
 {
 
-template <typename T>
 class ApiGetCommand : public Command
 {
 public:
   ApiGetCommand(
-    T get_request
+    ::mhconfig::api::request::GetRequest* get_request
   ) : Command(),
       get_request_(get_request)
   {
@@ -438,7 +438,7 @@ public:
     auto wait_built = std::make_shared<build::wait_built_t>();
 
     wait_built->is_main = documents_in_order.size() == 1;
-    wait_built->request = (void*) get_request_;
+    wait_built->request = get_request_;
     wait_built->elements_to_build.resize(documents_in_order.size());
     wait_built->specific_version = get_specific_version(
       config_namespace,
@@ -744,13 +744,11 @@ public:
   bool on_get_namespace_error(
     Queue<worker::command::CommandRef>& worker_queue
   ) override {
+    //TODO
   }
 
-
-
-
 private:
-  T get_request_;
+  ::mhconfig::api::request::GetRequest* get_request_;
 };
 
 } /* command */

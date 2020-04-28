@@ -10,7 +10,7 @@
 
 #include "string_pool/pool.h"
 
-//#include "mhconfig/api/request/request.h"
+#include "mhconfig/api/request/get_request.h"
 //#include "mhconfig/api/config/merged_config.h"
 //#include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/element.h"
@@ -84,7 +84,7 @@ namespace build {
     bool is_main;
     std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
 
-    void* request;
+    ::mhconfig::api::request::GetRequest* request;
     uint32_t specific_version;
     std::vector<build_element_t> elements_to_build;
   };

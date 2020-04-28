@@ -35,7 +35,6 @@ public:
   virtual ~UpdateRequest();
 
   const std::string name() const override;
-  const uint32_t id() const override;
 
   Request* clone() override;
   void subscribe() override;

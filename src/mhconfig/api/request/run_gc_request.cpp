@@ -27,10 +27,6 @@ const std::string RunGCRequest::name() const {
   return "RUN_GC";
 }
 
-const uint32_t RunGCRequest::id() const {
-  return 2;
-}
-
 Request* RunGCRequest::clone() {
   return new RunGCRequest(service_, cq_, metrics_, scheduler_queue_);
 }
@@ -41,7 +37,7 @@ void RunGCRequest::subscribe() {
 
 void RunGCRequest::request() {
   notify_scheduler_if_possible();
-  reply();
+  internal_reply();
 }
 
 void RunGCRequest::notify_scheduler_if_possible() {

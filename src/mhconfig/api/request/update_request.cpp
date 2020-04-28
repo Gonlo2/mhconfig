@@ -28,10 +28,6 @@ const std::string UpdateRequest::name() const {
   return "UPDATE";
 }
 
-const uint32_t UpdateRequest::id() const {
-  return 1;
-}
-
 const std::string& UpdateRequest::root_path() const {
   return request_.root_path();
 }

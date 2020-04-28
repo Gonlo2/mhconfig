@@ -38,8 +38,6 @@ public:
   virtual ~Request();
 
   virtual const std::string name() const = 0;
-  virtual const uint32_t id() const = 0;
-  void reply();
 
   virtual Request* clone() = 0;
   virtual void subscribe() = 0;
@@ -52,6 +50,8 @@ protected:
   grpc::ServerContext ctx_;
 
   Metrics& metrics_;
+
+  void internal_reply();
 
   virtual void request() = 0;
   virtual void finish() = 0;
