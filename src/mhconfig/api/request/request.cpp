@@ -47,7 +47,7 @@ namespace request
     }
   }
 
-  void Request::base_reply() {
+  void Request::reply() {
     assert(status_ == Status::PROCESS);
     status_ = Status::FINISH;
     finish();

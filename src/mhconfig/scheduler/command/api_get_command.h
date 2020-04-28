@@ -6,6 +6,7 @@
 #include "mhconfig/builder.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/worker/command/build_command.h"
+#include "mhconfig/worker/command/api_reply_command.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "jmutils/time.h"
 
@@ -62,7 +63,7 @@ public:
       );
 
       get_request_->set_element(UNDEFINED_ELEMENT);
-      return send_api_response();
+      return send_api_response(worker_queue);
     }
 
     // If the document exists and the user asked for a version
@@ -76,7 +77,7 @@ public:
       spdlog::trace("The asked version {} don't exists", get_request_->version());
 
       get_request_->set_element(UNDEFINED_ELEMENT);
-      return send_api_response();
+      return send_api_response(worker_queue);
     }
 
     // If we are here it's possible obtain the asked document so first of all we check
@@ -99,6 +100,7 @@ public:
       merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
 
       //return send_api_response(merged_config->api_merged_config);
+      return send_api_get_response(worker_queue);  //FIXME
       return false;
     }
 
@@ -112,232 +114,28 @@ public:
   }
 
   bool send_api_response(
-    //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
+    Queue<worker::command::CommandRef>& worker_queue
   ) {
-//
-//    command::command_t command;
-//    command.type = command::CommandType::API_GET;
-//    command.api_request = get_request;
-//    command.api_merged_config = api_merged_config;
-//
-//    worker_queue_.push(command);
-//
+    auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
+      (::mhconfig::api::request::Request*) get_request_
+    );
+    worker_queue.push(api_reply_command);
+
     return true;
   }
 
-  //bool process_command_type_update_response(
-    //const std::shared_ptr<command::update::response_t> update_response,
-    //std::shared_ptr<config_namespace_t> config_namespace
-  //) {
-//    auto update_api_request = (update_request::UpdateRequest*) update_response->api_request;
-//    update_api_request->set_namespace_id(config_namespace->id);
-//
-//    if (update_response->status != command::update::ResponseStatus::OK) {
-//      switch (update_response->status) {
-//        case command::update::ResponseStatus::OK:
-//        case command::update::ResponseStatus::ERROR:
-//          update_api_request->set_status(update_request::Status::ERROR);
-//      }
-//      return send_api_response(update_api_request);
-//    }
-//
-//    spdlog::debug(
-//      "Increasing the current version {} of the namespace with ID {}",
-//      config_namespace->current_version,
-//      config_namespace->id
-//    );
-//    ++(config_namespace->current_version);
-//
-//    uint64_t timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-//      std::chrono::system_clock::now().time_since_epoch()
-//    ).count();
-//
-//    config_namespace->stored_versions_by_deprecation_timestamp.back().first = timestamp;
-//    config_namespace->stored_versions_by_deprecation_timestamp.emplace_back(
-//      0,
-//      config_namespace->current_version
-//    );
-//
-//
-//    spdlog::debug("Decreasing the referenced_by counter of the previous raw config");
-//    for (auto& item : update_response->items) {
-//      auto document_metadata_search = config_namespace->document_metadata_by_document
-//        .find(item.document);
-//
-//      if (document_metadata_search != config_namespace->document_metadata_by_document.end()) {
-//        auto raw_config = get_raw_config(
-//          document_metadata_search->second,
-//          item.override_,
-//          0
-//        );
-//
-//        if (raw_config != nullptr) {
-//          for (const auto& reference_to : raw_config->reference_to) {
-//            auto& referenced_by = config_namespace
-//              ->document_metadata_by_document[reference_to]
-//              ->referenced_by;
-//
-//            spdlog::debug(
-//              "Decreasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
-//              item.document,
-//              reference_to,
-//              referenced_by[item.document].v,
-//              item.override_
-//            );
-//
-//            if (referenced_by[item.document].v-- <= 1) {
-//              referenced_by.erase(item.document);
-//            }
-//          }
-//        }
-//      }
-//    }
-//
-//    spdlog::debug("Updating the id of the affected documents");
-//    std::unordered_map<std::string, std::unordered_set<std::string>> updated_documents_by_override;
-//    for (auto& item : update_response->items) {
-//      updated_documents_by_override[item.override_].insert(item.document);
-//    }
-//
-//    for (auto& updated_documents_it : updated_documents_by_override) {
-//      std::unordered_set<std::string> affected_documents;
-//      for (const auto& document : updated_documents_it.second) {
-//        get_affected_documents(config_namespace, document, affected_documents);
-//      }
-//      for (const auto& document : updated_documents_it.second) {
-//        affected_documents.erase(document);
-//      }
-//
-//      for (const auto document : affected_documents) {
-//        auto document_metadata = config_namespace
-//          ->document_metadata_by_document[document];
-//
-//        auto raw_config = get_raw_config(
-//          document_metadata,
-//          updated_documents_it.first,
-//          0
-//        );
-//
-//        if (raw_config != nullptr) {
-//          spdlog::debug(
-//            "Updating affected raw config id (document: '{}', override: '{}', old_id: {}, new_id: {})",
-//            document,
-//            updated_documents_it.first,
-//            raw_config->id,
-//            config_namespace->next_raw_config_id
-//          );
-//
-//          auto new_raw_config = std::make_shared<raw_config_t>();
-//          new_raw_config->id = config_namespace->next_raw_config_id++;
-//          new_raw_config->value = raw_config->value;
-//          new_raw_config->reference_to = raw_config->reference_to;
-//
-//          document_metadata->raw_config_by_version_by_override[updated_documents_it.first][config_namespace->current_version] = new_raw_config;
-//        }
-//      }
-//    }
-//
-//    spdlog::debug("Updating the elements of the updated documents");
-//    for (auto& item : update_response->items) {
-//      auto document_metadata_search = config_namespace->document_metadata_by_document
-//        .find(item.document);
-//
-//      if (item.raw_config == nullptr) {
-//        spdlog::debug(
-//          "Removing a raw config (document: '{}', override: '{}')",
-//          item.document,
-//          item.override_
-//        );
-//        if (document_metadata_search != config_namespace->document_metadata_by_document.end()) {
-//          document_metadata_search->second->raw_config_by_version_by_override[item.override_][config_namespace->current_version] = std::make_shared<raw_config_t>();
-//        }
-//      } else {
-//        for (const auto& reference_to : item.raw_config->reference_to) {
-//          std::shared_ptr<document_metadata_t> referenced_document_metadata;
-//          {
-//            auto search = config_namespace->document_metadata_by_document
-//              .find(reference_to);
-//            if (search == config_namespace->document_metadata_by_document.end()) {
-//              referenced_document_metadata = std::make_shared<document_metadata_t>();
-//              config_namespace
-//                ->document_metadata_by_document[reference_to] = referenced_document_metadata;
-//            } else {
-//              referenced_document_metadata = search->second;
-//            }
-//          }
-//
-//          spdlog::debug(
-//            "Increasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
-//            item.document,
-//            reference_to,
-//            referenced_document_metadata->referenced_by[item.document].v,
-//            item.override_
-//          );
-//
-//          referenced_document_metadata->referenced_by[item.document].v += 1;
-//        }
-//
-//        std::shared_ptr<document_metadata_t> document_metadata;
-//        if (document_metadata_search == config_namespace->document_metadata_by_document.end()) {
-//          document_metadata = std::make_shared<document_metadata_t>();
-//          config_namespace->document_metadata_by_document[item.document] = document_metadata;
-//        } else {
-//          document_metadata = document_metadata_search->second;
-//        }
-//
-//        spdlog::debug(
-//          "Updating a raw config (document: '{}', override: '{}', new_id: {})",
-//          item.document,
-//          item.override_,
-//          config_namespace->next_raw_config_id
-//        );
-//
-//        item.raw_config->id = config_namespace->next_raw_config_id++;
-//        document_metadata->raw_config_by_version_by_override[item.override_][config_namespace->current_version] = item.raw_config;
-//      }
-//    }
-//
-//    //Remove the namespace if the versions numbers are on the limit
-//    if (
-//      (config_namespace->next_raw_config_id >= 0xff000000)
-//      || (config_namespace->current_version >= 0xfffffff0)
-//    ) {
-//      auto search = config_namespace_by_root_path_.find(config_namespace->root_path);
-//      if (
-//        (search != config_namespace_by_root_path_.end())
-//        && (search->second->id == config_namespace->id)
-//      ) {
-//        spdlog::info(
-//          "Removing the namespace '{}' because the internal ids are in the limit",
-//          config_namespace->root_path
-//        );
-//        config_namespace_by_root_path_.erase(search);
-//      }
-//    }
-//
-//    update_api_request->set_status(update_request::Status::OK);
-//    update_api_request->set_version(config_namespace->current_version);
-//    return send_api_response(update_api_request);
-  //}
 
-  void get_affected_documents(
-    const std::shared_ptr<config_namespace_t> config_namespace,
-    const std::string& document,
-    std::unordered_set<std::string>& affected_documents
+  //TODO
+  bool send_api_get_response(
+    Queue<worker::command::CommandRef>& worker_queue
+    //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   ) {
-    if (affected_documents.count(document)) return;
-    affected_documents.insert(document);
+    auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
+      (::mhconfig::api::request::Request*) get_request_
+    );
+    worker_queue.push(api_reply_command);
 
-    auto search = config_namespace->document_metadata_by_document.find(document);
-    if (search == config_namespace->document_metadata_by_document.end()) return;
-
-    for (const auto& referenced_document_it : search->second->referenced_by) {
-      get_affected_documents(
-        config_namespace,
-        referenced_document_it.first,
-        affected_documents
-      );
-    }
+    return true;
   }
 
   bool prepare_build_request(

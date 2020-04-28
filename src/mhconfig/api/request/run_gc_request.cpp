@@ -37,7 +37,7 @@ void RunGCRequest::subscribe() {
 
 void RunGCRequest::request() {
   notify_scheduler_if_possible();
-  internal_reply();
+  reply();
 }
 
 void RunGCRequest::notify_scheduler_if_possible() {
