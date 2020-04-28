@@ -5,6 +5,7 @@
 
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/worker/command/api_reply_command.h"
 #include "mhconfig/worker/command/build_command.h"
 #include "mhconfig/builder.h"
 #include "jmutils/time.h"

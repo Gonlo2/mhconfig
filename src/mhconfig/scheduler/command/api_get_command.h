@@ -101,7 +101,6 @@ public:
 
       //return send_api_response(merged_config->api_merged_config);
       return send_api_get_response(worker_queue);  //FIXME
-      return false;
     }
 
     ///////////////////////////// Check after this
@@ -475,6 +474,7 @@ public:
     Queue<worker::command::CommandRef>& worker_queue
   ) override {
     //TODO
+    return false;
   }
 
 private:
