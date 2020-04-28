@@ -36,7 +36,7 @@ public:
   }
 
   const std::string& namespace_path() const override {
-    return get_request_->key()[0];
+    return get_request_->root_path();
   }
 
   bool execute_on_namespace(

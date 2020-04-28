@@ -17,6 +17,8 @@ std::shared_ptr<config_namespace_t> index_files(
   config_namespace->last_access_timestamp = 0;
   config_namespace->pool = std::make_shared<string_pool::Pool>();
 
+  spdlog::debug("To index the files in the path '{}'", root_path);
+
   auto paths = jmutils::filesystem::recursive_list_files(root_path);
   for (const std::string& path : paths) {
     auto result = load_raw_config(config_namespace->pool, root_path, path);
