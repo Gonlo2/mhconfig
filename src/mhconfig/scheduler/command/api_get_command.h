@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "mhconfig/worker/command/build_command.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "jmutils/time.h"
 
@@ -103,7 +104,10 @@ public:
     ///////////////////////////// Check after this
 
     spdlog::debug("Preparing build for document '{}'", get_request_->key()[0]);
-    return prepare_build_request(config_namespace);
+    return prepare_build_request(
+      config_namespace,
+      worker_queue
+    );
   }
 
   std::shared_ptr<merged_config_t> get_merged_config(
@@ -410,7 +414,8 @@ public:
   }
 
   bool prepare_build_request(
-    std::shared_ptr<config_namespace_t> config_namespace
+    std::shared_ptr<config_namespace_t> config_namespace,
+    Queue<worker::command::CommandRef>& worker_queue
   ) {
     // The references are allowed only if the graph is a DAG,
     // so we check it here
@@ -509,8 +514,12 @@ public:
       wait_built->pending_element_position_by_name.size()
     );
     if (wait_built->pending_element_position_by_name.empty()) {
-      //TODO
-      //worker_queue_.push(wait_built->command);
+      auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
+        config_namespace->id,
+        config_namespace->pool,
+        wait_built
+      );
+      worker_queue.push(build_command);
     }
 
     return true;
