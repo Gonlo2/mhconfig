@@ -2,12 +2,9 @@
 #define MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 
 #include "jmutils/container/queue.h"
-#include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_get_command.h"
-//#include "mhconfig/api/config/merged_config.h"
-//#include "mhconfig/worker/common.h"
 
 namespace mhconfig
 {
@@ -19,7 +16,7 @@ namespace request
 using jmutils::container::Queue;
 
 
-class GetRequestImpl : public Request, public GetRequest
+class GetRequestImpl : public GetRequest
 {
 public:
   GetRequestImpl(

@@ -117,7 +117,7 @@ public:
     Queue<worker::command::CommandRef>& worker_queue
   ) {
     auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-      (::mhconfig::api::request::Request*) get_request_
+      static_cast<::mhconfig::api::request::Request*>(get_request_)
     );
     worker_queue.push(api_reply_command);
 
@@ -130,12 +130,7 @@ public:
     Queue<worker::command::CommandRef>& worker_queue
     //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   ) {
-    auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-      (::mhconfig::api::request::Request*) get_request_
-    );
-    worker_queue.push(api_reply_command);
-
-    return true;
+    return send_api_response(worker_queue);
   }
 
   bool prepare_build_request(

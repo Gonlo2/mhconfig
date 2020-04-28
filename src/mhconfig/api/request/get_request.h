@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "mhconfig/api/request/request.h"
 #include "mhconfig/element.h"
 
 namespace mhconfig
@@ -13,10 +14,18 @@ namespace api
 namespace request
 {
 
-class GetRequest
+class GetRequest : public Request
 {
 public:
-  GetRequest() {};
+  GetRequest(
+    mhconfig::proto::MHConfig::AsyncService* service,
+    grpc::ServerCompletionQueue* cq_,
+    Metrics& metrics
+  )
+    : Request(service, cq_, metrics)
+  {
+  };
+
   virtual ~GetRequest() {};
 
   virtual const std::string& root_path() const = 0;
@@ -27,6 +36,7 @@ public:
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(mhconfig::ElementRef element) = 0;
+
 };
 
 } /* request */

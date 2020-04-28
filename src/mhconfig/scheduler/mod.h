@@ -121,80 +121,10 @@ private:
     return false;
   }
 
-
-
-
   std::pair<ConfigNamespaceState, std::shared_ptr<config_namespace_t>> get_or_build_namespace(
     command::CommandRef command
   );
-//
-//  void get_affected_documents(
-//    const std::shared_ptr<config_namespace_t> config_namespace,
-//    const std::string& document,
-//    std::unordered_set<std::string>& affected_documents
-//  );
-//
-//  bool send_update_response(
-//    void* id,
-//    uint64_t namespace_id,
-//    command::update::ResponseStatus status,
-//    uint32_t version
-//  );
-//
-//  bool prepare_build_request(
-//    get_request::GetRequest* get_request,
-//    std::shared_ptr<config_namespace_t> config_namespace
-//  );
-//
-//  void reset_ids_of_namespace(
-//    std::shared_ptr<config_namespace_t> config_namespace
-//  );
-//
-//  std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(
-//    const std::shared_ptr<config_namespace_t> config_namespace,
-//    const std::string& document,
-//    const std::vector<std::string> overrides,
-//    uint32_t version
-//  );
-//
-//  bool check_if_ref_graph_is_a_dag_rec(
-//    const std::shared_ptr<config_namespace_t> config_namespace,
-//    const std::string& document,
-//    const std::vector<std::string> overrides,
-//    uint32_t version,
-//    std::vector<std::string>& dfs_path,
-//    std::unordered_set<std::string>& dfs_path_set,
-//    std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
-//  );
-//
-//  std::vector<std::string> do_topological_sort_over_ref_graph(
-//    const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
-//  );
-//
-//  void do_topological_sort_over_ref_graph_rec(
-//    const std::string& document,
-//    const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents,
-//    std::unordered_set<std::string>& visited_documents,
-//    std::vector<std::string>& inverted_topological_sort
-//  );
-//
-//  std::shared_ptr<raw_config_t> get_raw_config(
-//    const std::shared_ptr<document_metadata_t> document_metadata,
-//    const std::string& override_,
-//    uint32_t version
-//  );
-//
-//  std::string make_overrides_key(
-//    const std::shared_ptr<document_metadata_t> document_metadata,
-//    const std::vector<std::string>& overrides,
-//    uint32_t version
-//  );
-//
-//  inline uint32_t get_specific_version(
-//    const std::shared_ptr<config_namespace_t> config_namespace,
-//    uint32_t version
-//  );
-//
+
 };
 
 } /* scheduler */

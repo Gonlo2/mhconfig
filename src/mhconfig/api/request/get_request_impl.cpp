@@ -13,8 +13,7 @@ GetRequestImpl::GetRequestImpl(
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : Request(service, cq_, metrics),
-    GetRequest(),
+) : GetRequest(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
 {
@@ -69,7 +68,9 @@ void GetRequestImpl::request() {
   overrides_ = to_vector(request_.overrides());
   key_ = to_vector(request_.key());
 
-  auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(this);
+  auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
+    static_cast<::mhconfig::api::request::GetRequest*>(this)
+  );
   scheduler_queue_.push(api_get_command);
 }
 
