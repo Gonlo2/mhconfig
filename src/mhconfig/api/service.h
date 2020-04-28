@@ -21,7 +21,7 @@
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/get_request_impl.h"
 #include "mhconfig/api/request/update_request_impl.h"
-#include "mhconfig/api/request/run_gc_request.h"
+#include "mhconfig/api/request/run_gc_request_impl.h"
 
 #include <prometheus/summary.h>
 #include <prometheus/exposer.h>

@@ -64,7 +64,7 @@ void Service::subscribe_requests() {
   );
   update_request->subscribe();
 
-  auto run_gc_request = new request::run_gc_request::RunGCRequest(
+  auto run_gc_request = new request::RunGCRequestImpl(
     &service_,
     cq_.get(),
     metrics_,
