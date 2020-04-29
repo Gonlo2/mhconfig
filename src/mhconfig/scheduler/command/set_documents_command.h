@@ -5,6 +5,7 @@
 
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/basic_merged_config.h"
+#include "mhconfig/api/config/optimized_merged_config.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/api_get_reply_command.h"
 #include "mhconfig/worker/command/build_command.h"

@@ -55,7 +55,10 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     merged_config->status = MergedConfigStatus::OK;
     merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
     merged_config->value = it.second.config;
-    merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
+    //merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
+    auto omc = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
+    omc->init(it.second.config); //TODO check errors and do it in a worker
+    merged_config->api_merged_config = omc;
 
     std::stringstream wait_built_key_ss;
     wait_built_key_ss << it.first << ':' << it.second.overrides_key;
