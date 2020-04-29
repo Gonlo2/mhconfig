@@ -700,6 +700,54 @@ std::shared_ptr<merged_config_t> get_merged_config(
   return nullptr;
 }
 
+std::shared_ptr<raw_config_t> get_raw_config(
+  const std::shared_ptr<document_metadata_t> document_metadata,
+  const std::string& override_,
+  uint32_t version
+) {
+  spdlog::trace(
+    "Obtaining the raw config of the override '{}' with version '{}'",
+    override_,
+    version
+  );
+
+  auto raw_config_by_version_search = document_metadata
+    ->raw_config_by_version_by_override
+    .find(override_);
+
+  if (raw_config_by_version_search == document_metadata->raw_config_by_version_by_override.end()) {
+    spdlog::trace("Don't exists the override '{}'", override_);
+    return nullptr;
+  }
+
+  auto& raw_config_by_version = raw_config_by_version_search->second;
+
+  auto raw_config_search = (version == 0)
+    ? raw_config_by_version.end()
+    : raw_config_by_version.upper_bound(version);
+
+  if (raw_config_search == raw_config_by_version.begin()) {
+    spdlog::trace("Don't exists a version lower or equal to {}", version);
+    return nullptr;
+  }
+
+  --raw_config_search;
+  if (raw_config_search->second->value == nullptr) {
+    spdlog::trace(
+      "The raw_config value is deleted for the version {}",
+      raw_config_search->first
+    );
+    return nullptr;
+  }
+
+  spdlog::trace(
+    "Obtained a raw config with the version {}",
+    raw_config_search->first
+  );
+
+  return raw_config_search->second;
+}
+
 
 } /* builder */
 } /* mhconfig */

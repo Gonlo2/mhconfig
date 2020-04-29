@@ -40,6 +40,12 @@ enum CommandType {
   GENERIC
 };
 
+enum NamespaceExecutionResult {
+  OK,
+  ERROR,
+  SOFTDELETE_NAMESPACE
+};
+
 class Command
 {
 public:
@@ -54,7 +60,7 @@ public:
   virtual uint64_t namespace_id() const;
   virtual const std::shared_ptr<config_namespace_t> config_namespace() const;
 
-  virtual bool execute_on_namespace(
+  virtual NamespaceExecutionResult execute_on_namespace(
     std::shared_ptr<config_namespace_t> config_namespace,
     Queue<worker::command::CommandRef>& worker_queue
   );

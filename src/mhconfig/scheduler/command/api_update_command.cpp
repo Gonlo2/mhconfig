@@ -37,7 +37,7 @@ const std::string& ApiUpdateCommand::namespace_path() const {
   return update_request_->root_path();
 }
 
-bool ApiUpdateCommand::execute_on_namespace(
+NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
   std::shared_ptr<config_namespace_t> config_namespace,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
@@ -47,7 +47,8 @@ bool ApiUpdateCommand::execute_on_namespace(
     update_request_
   );
   worker_queue.push(update_command);
-  return true;
+
+  return NamespaceExecutionResult::OK;
 }
 
 bool ApiUpdateCommand::on_get_namespace_error(

@@ -17,6 +17,8 @@ namespace scheduler
 namespace command
 {
 
+using namespace ::mhconfig::builder;
+
 class ApiGetCommand : public Command
 {
 public:
@@ -42,7 +44,7 @@ public:
     return get_request_->root_path();
   }
 
-  bool execute_on_namespace(
+  NamespaceExecutionResult execute_on_namespace(
     std::shared_ptr<config_namespace_t> config_namespace,
     Queue<worker::command::CommandRef>& worker_queue
   ) override {
@@ -63,7 +65,8 @@ public:
       );
 
       get_request_->set_element(UNDEFINED_ELEMENT);
-      return send_api_response(worker_queue);
+      send_api_response(worker_queue);
+      return NamespaceExecutionResult::OK;
     }
 
     // If the document exists and the user asked for a version
@@ -77,7 +80,8 @@ public:
       spdlog::trace("The asked version {} don't exists", get_request_->version());
 
       get_request_->set_element(UNDEFINED_ELEMENT);
-      return send_api_response(worker_queue);
+      send_api_response(worker_queue);
+      return NamespaceExecutionResult::OK;
     }
 
     // If we are here it's possible obtain the asked document so first of all we check
@@ -100,7 +104,8 @@ public:
       merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
 
       //return send_api_response(merged_config->api_merged_config);
-      return send_api_get_response(worker_queue);  //FIXME
+      send_api_get_response(worker_queue);  //FIXME
+      return NamespaceExecutionResult::OK;
     }
 
     ///////////////////////////// Check after this
@@ -112,27 +117,25 @@ public:
     );
   }
 
-  bool send_api_response(
+  void send_api_response(
     Queue<worker::command::CommandRef>& worker_queue
   ) {
     auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
       static_cast<::mhconfig::api::request::Request*>(get_request_)
     );
     worker_queue.push(api_reply_command);
-
-    return true;
   }
 
 
   //TODO
-  bool send_api_get_response(
+  void send_api_get_response(
     Queue<worker::command::CommandRef>& worker_queue
     //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   ) {
-    return send_api_response(worker_queue);
+    send_api_response(worker_queue);
   }
 
-  bool prepare_build_request(
+  NamespaceExecutionResult prepare_build_request(
     std::shared_ptr<config_namespace_t> config_namespace,
     Queue<worker::command::CommandRef>& worker_queue
   ) {
@@ -145,7 +148,7 @@ public:
       get_request_->version()
     );
     if (!is_a_dag_result.first) {
-      return false;
+      return NamespaceExecutionResult::ERROR;
     }
 
     // If the graph is a DAG we could do a topological sort
@@ -246,7 +249,7 @@ public:
       );
     }
 
-    return true;
+    return NamespaceExecutionResult::OK;
   }
 
   std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(
@@ -392,54 +395,6 @@ public:
     }
 
     inverted_topological_sort.push_back(document);
-  }
-
-  std::shared_ptr<raw_config_t> get_raw_config(
-    const std::shared_ptr<document_metadata_t> document_metadata,
-    const std::string& override_,
-    uint32_t version
-  ) {
-    spdlog::trace(
-      "Obtaining the raw config of the override '{}' with version '{}'",
-      override_,
-      version
-    );
-
-    auto raw_config_by_version_search = document_metadata
-      ->raw_config_by_version_by_override
-      .find(override_);
-
-    if (raw_config_by_version_search == document_metadata->raw_config_by_version_by_override.end()) {
-      spdlog::trace("Don't exists the override '{}'", override_);
-      return nullptr;
-    }
-
-    auto& raw_config_by_version = raw_config_by_version_search->second;
-
-    auto raw_config_search = (version == 0)
-      ? raw_config_by_version.end()
-      : raw_config_by_version.upper_bound(version);
-
-    if (raw_config_search == raw_config_by_version.begin()) {
-      spdlog::trace("Don't exists a version lower or equal to {}", version);
-      return nullptr;
-    }
-
-    --raw_config_search;
-    if (raw_config_search->second->value == nullptr) {
-      spdlog::trace(
-        "The raw_config value is deleted for the version {}",
-        raw_config_search->first
-      );
-      return nullptr;
-    }
-
-    spdlog::trace(
-      "Obtained a raw config with the version {}",
-      raw_config_search->first
-    );
-
-    return raw_config_search->second;
   }
 
   // Help functions

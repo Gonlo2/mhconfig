@@ -34,7 +34,7 @@ uint64_t SetDocumentsCommand::namespace_id() const {
   return namespace_id_;
 }
 
-bool SetDocumentsCommand::execute_on_namespace(
+NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
   std::shared_ptr<config_namespace_t> config_namespace,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
@@ -116,7 +116,7 @@ bool SetDocumentsCommand::execute_on_namespace(
   );
   worker_queue.push(api_reply_command);
 
-  return true;
+  return NamespaceExecutionResult::OK;
 }
 
 bool SetDocumentsCommand::on_get_namespace_error(

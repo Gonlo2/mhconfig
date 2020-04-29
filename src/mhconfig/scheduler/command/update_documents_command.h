@@ -1,9 +1,10 @@
-#ifndef MHCONFIG__SCHEDULER__COMMAND__SET_DOCUMENTS_COMMAND_H
-#define MHCONFIG__SCHEDULER__COMMAND__SET_DOCUMENTS_COMMAND_H
+#ifndef MHCONFIG__SCHEDULER__COMMAND__UPDATE_DOCUMENTS_COMMAND_H
+#define MHCONFIG__SCHEDULER__COMMAND__UPDATE_DOCUMENTS_COMMAND_H
 
 #include <memory>
 
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/request/update_request.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/api_reply_command.h"
 #include "mhconfig/worker/command/build_command.h"
@@ -18,17 +19,18 @@ namespace command
 {
 
 using namespace mhconfig::ds::config_namespace;
+using namespace mhconfig::builder;
 
-class SetDocumentsCommand : public Command
+class UpdateDocumentsCommand : public Command
 {
 public:
-  SetDocumentsCommand(
+  UpdateDocumentsCommand(
     uint64_t namespace_id,
-    std::shared_ptr<build::wait_built_t> wait_build,
-    std::unordered_map<std::string, build::built_element_t> built_elements_by_document
+    ::mhconfig::api::request::UpdateRequest* update_request,
+    std::vector<load_raw_config_result_t> items
   );
 
-  virtual ~SetDocumentsCommand();
+  virtual ~UpdateDocumentsCommand();
 
   std::string name() const override;
 
@@ -46,8 +48,18 @@ public:
 
 private:
   uint64_t namespace_id_;
-  std::shared_ptr<build::wait_built_t> wait_build_;
-  std::unordered_map<std::string, build::built_element_t> built_elements_by_document_;
+  ::mhconfig::api::request::UpdateRequest* update_request_;
+  std::vector<load_raw_config_result_t> items_;
+
+  void send_api_response(
+    Queue<worker::command::CommandRef>& worker_queue
+  );
+
+  void get_affected_documents(
+    const std::shared_ptr<config_namespace_t> config_namespace,
+    std::unordered_set<std::string>& affected_documents
+  );
+
 };
 
 } /* command */

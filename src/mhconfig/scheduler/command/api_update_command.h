@@ -27,7 +27,7 @@ public:
 
   const std::string& namespace_path() const override;
 
-  bool execute_on_namespace(
+  NamespaceExecutionResult execute_on_namespace(
     std::shared_ptr<config_namespace_t> config_namespace,
     Queue<worker::command::CommandRef>& worker_queue
   ) override;

@@ -88,11 +88,23 @@ private:
       case command::CommandType::GET_NAMESPACE_BY_PATH: {
         auto result = get_or_build_namespace(command);
         switch (result.first) {
-          case ConfigNamespaceState::OK:
-            return command->execute_on_namespace(
+          case ConfigNamespaceState::OK: {
+            auto execution_result = command->execute_on_namespace(
               result.second,
               worker_queue_
             );
+            switch (execution_result) {
+              case command::NamespaceExecutionResult::OK:
+                return true;
+              case command::NamespaceExecutionResult::ERROR:
+                return false;
+              case command::NamespaceExecutionResult::SOFTDELETE_NAMESPACE: {
+                softdelete_namespace(result.second);
+                return true;
+              }
+            }
+            return false;
+          }
           case ConfigNamespaceState::BUILDING:
             return true;
           case ConfigNamespaceState::ERROR:
@@ -108,10 +120,21 @@ private:
           return command->on_get_namespace_error(worker_queue_);
         }
 
-        return command->execute_on_namespace(
+        auto execution_result = command->execute_on_namespace(
           search->second,
           worker_queue_
         );
+        switch (execution_result) {
+          case command::NamespaceExecutionResult::OK:
+            return true;
+          case command::NamespaceExecutionResult::ERROR:
+            return false;
+          case command::NamespaceExecutionResult::SOFTDELETE_NAMESPACE: {
+            softdelete_namespace(search->second);
+            return true;
+          }
+        }
+        return false;
       }
 
       case command::CommandType::GENERIC:
@@ -125,10 +148,13 @@ private:
     command::CommandRef command
   );
 
+  void softdelete_namespace(
+    std::shared_ptr<config_namespace_t> config_namespace
+  );
+
 };
 
 } /* scheduler */
 } /* mhconfig */
-
 
 #endif

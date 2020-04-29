@@ -62,11 +62,10 @@ void UpdateRequestImpl::subscribe() {
 void UpdateRequestImpl::request() {
   relative_paths_ = to_vector(request_.relative_paths());
 
-  //command::command_t command;
-  //command.type = command::CommandType::API;
-  //command.api_request = this;
-
-  //scheduler_queue_.push(command);
+  auto api_update_command = std::make_shared<scheduler::command::ApiUpdateCommand>(
+    static_cast<::mhconfig::api::request::UpdateRequest*>(this)
+  );
+  scheduler_queue_.push(api_update_command);
 }
 
 void UpdateRequestImpl::finish() {

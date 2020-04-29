@@ -32,11 +32,19 @@ bool UpdateCommand::execute(
 ) {
   std::vector<load_raw_config_result_t> items;
   items.reserve(update_request_->relative_paths().size());
-  bool ok = add_items(items);
 
-  //TODO
-  //command.update_response->status = command::update::ResponseStatus::OK;
-  //scheduler_queue_.push(command);
+  if (!add_items(items)) {
+    update_request_->set_namespace_id(namespace_id_);
+    update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
+    update_request_->reply();
+  } else {
+    auto update_command = std::make_shared<::mhconfig::scheduler::command::UpdateDocumentsCommand>(
+      namespace_id_,
+      update_request_,
+      items
+    );
+    scheduler_queue.push(update_command);
+  }
 
   return true;
 }
