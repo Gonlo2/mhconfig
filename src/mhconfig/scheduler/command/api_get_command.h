@@ -306,10 +306,7 @@ public:
       document
     );
     if (document_metadata_search == config_namespace->document_metadata_by_document.end()) {
-      spdlog::warn(
-        "Can't found a config file with the name '{}', exiting!",
-        document
-      );
+      spdlog::warn("Can't found a config file with the name '{}'", document);
       return false;
     }
 
