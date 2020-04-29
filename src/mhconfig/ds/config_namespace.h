@@ -62,6 +62,8 @@ struct merged_config_metadata_t {
   > merged_config_by_document;
 };
 
+
+// TODO move to the builder file
 namespace build {
   struct build_element_t {
     mhconfig::ElementRef config;
