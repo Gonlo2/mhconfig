@@ -109,12 +109,11 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     built_elements_by_document_[wait_build_->request->key()[0]].overrides_key
   );
 
-  //FIXME
-  // send_api_get_response(get_request, merged_config->api_merged_config);
-  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    static_cast<::mhconfig::api::request::Request*>(wait_build_->request)
+  auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
+    wait_build_->request,
+    merged_config->api_merged_config
   );
-  worker_queue.push(api_reply_command);
+  worker_queue.push(api_get_reply_command);
 
   return NamespaceExecutionResult::OK;
 }

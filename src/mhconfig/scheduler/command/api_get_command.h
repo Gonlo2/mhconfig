@@ -126,17 +126,15 @@ public:
     worker_queue.push(api_reply_command);
   }
 
-
-  //TODO
   void send_api_get_response(
     Queue<worker::command::CommandRef>& worker_queue,
     std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   ) {
-    auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
+    auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
       get_request_,
       api_merged_config
     );
-    worker_queue.push(api_reply_command);
+    worker_queue.push(api_get_reply_command);
   }
 
   NamespaceExecutionResult prepare_build_request(

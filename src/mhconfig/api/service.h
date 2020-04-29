@@ -50,9 +50,8 @@ public:
   void join();
 
 private:
-  size_t num_threads_;
-
   std::string server_address_;
+  size_t num_threads_;
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   std::vector<std::unique_ptr<std::thread>> threads_;

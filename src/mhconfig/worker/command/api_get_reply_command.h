@@ -7,6 +7,7 @@
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/merged_config.h"
+#include "jmutils/time.h"
 
 namespace mhconfig
 {
