@@ -23,16 +23,23 @@ int run_mhconfig_server(int argc,char *argv[]) {
 
   std::string server_address(argv[0]);
   std::string prometheus_address(argv[1]);
+  size_t num_threads_api(std::atoi(argv[2]));
+  size_t num_threads_workers(std::atoi(argv[3]));
 
-  if (strcmp(argv[2], "trace") == 0) {
+  if (strcmp(argv[4], "trace") == 0) {
     spdlog::set_level(spdlog::level::trace);
-  } else if (strcmp(argv[2], "debug") == 0) {
+  } else if (strcmp(argv[4], "debug") == 0) {
     spdlog::set_level(spdlog::level::debug);
   } else {
     spdlog::set_level(spdlog::level::info);
   }
 
-  mhconfig::MHConfig server(server_address, prometheus_address);
+  mhconfig::MHConfig server(
+    server_address,
+    prometheus_address,
+    num_threads_api,
+    num_threads_workers
+  );
 
   server.run();
   server.join();

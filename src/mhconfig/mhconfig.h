@@ -23,10 +23,14 @@ namespace mhconfig
   public:
     MHConfig(
       const std::string& server_address,
-      const std::string& prometheus_address
+      const std::string& prometheus_address,
+      size_t num_threads_api,
+      size_t num_threads_workers
     ) :
       server_address_(server_address),
-      metrics_(prometheus_address)
+      metrics_(prometheus_address),
+      num_threads_api_(num_threads_api),
+      num_threads_workers_(num_threads_workers)
     {};
 
     virtual ~MHConfig() {};
@@ -45,7 +49,7 @@ namespace mhconfig
 
       worker_ = std::make_unique<mhconfig::worker::Worker>(
         worker_queue_,
-        8,
+        num_threads_workers_,
         scheduler_queue_,
         metrics_
       );
@@ -53,6 +57,7 @@ namespace mhconfig
 
       service_ = std::make_unique<api::Service>(
         server_address_,
+        num_threads_api_,
         scheduler_queue_,
         metrics_
       );
@@ -78,8 +83,9 @@ namespace mhconfig
 
   private:
     std::string server_address_;
-
     Metrics metrics_;
+    size_t num_threads_api_;
+    size_t num_threads_workers_;
 
     Queue<mhconfig::scheduler::command::CommandRef> scheduler_queue_;
     Queue<mhconfig::worker::command::CommandRef> worker_queue_;

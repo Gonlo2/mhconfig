@@ -8,10 +8,12 @@ namespace api
 
 Service::Service(
   const std::string& server_address,
+  size_t num_threads,
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) :
   server_address_(server_address),
+  num_threads_(num_threads),
   scheduler_queue_(scheduler_queue),
   metrics_(metrics)
 {
@@ -29,7 +31,7 @@ bool Service::start() {
   builder.RegisterService(&service_);
   cq_ = builder.AddCompletionQueue();
   server_ = builder.BuildAndStart();
-  logger_->info("Server listening on '{}'", server_address_);
+  spdlog::info("Server listening on '{}'", server_address_);
 
   subscribe_requests();
 
@@ -80,16 +82,16 @@ void Service::handle_request() {
   do {
     got_event = cq_->Next(&tag, &ok);
     if (!got_event) {
-      logger_->info("The completion queue has been closed");
+      spdlog::info("The completion queue has been closed");
     } else if (!ok) {
-      logger_->error("Can't read a completion queue event");
+      spdlog::error("Can't read a completion queue event");
     } else {
       try {
         static_cast<request::Request*>(tag)->proceed();
       } catch (const std::exception &e) {
-        logger_->error("Some error take place processing the gRPC input: {}", e.what());
+        spdlog::error("Some error take place processing the gRPC input: {}", e.what());
       } catch (...) {
-        logger_->error("Some unknown error take place processing the gRPC input");
+        spdlog::error("Some unknown error take place processing the gRPC input");
       }
     }
   } while (got_event);

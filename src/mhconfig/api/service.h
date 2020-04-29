@@ -40,6 +40,7 @@ class Service final
 public:
   Service(
     const std::string& server_address,
+    size_t num_threads,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
     Metrics& metrics
   );
@@ -50,8 +51,7 @@ public:
   void join();
 
 private:
-  std::shared_ptr<spdlog::logger> logger_{spdlog::get("console")};
-  size_t num_threads_{4};
+  size_t num_threads_;
 
   std::string server_address_;
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
