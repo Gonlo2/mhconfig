@@ -44,10 +44,10 @@ void Request::proceed() {
     auto new_request = clone();
     new_request->subscribe();
 
-    start_time_ = std::chrono::high_resolution_clock::now();
+    start_time_ = jmutils::time::monotonic_now();
     request();
   } else if (status_ == Status::FINISH) {
-    auto end_time = std::chrono::high_resolution_clock::now();
+    auto end_time = jmutils::time::monotonic_now();
 
     double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
       end_time - start_time_
@@ -64,6 +64,10 @@ void Request::proceed() {
 void Request::reply() {
   assert(status_ == Status::PROCESS);
   status_ = Status::FINISH;
+
+  // The call to enqueue the FINISH status need be the
+  // last call because the api workers could delete
+  // the pointer after it
   finish();
 }
 

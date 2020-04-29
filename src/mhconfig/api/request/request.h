@@ -9,6 +9,7 @@
 
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 #include "mhconfig/metrics.h"
+#include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
 
@@ -73,7 +74,7 @@ private:
   };
 
   volatile Status status_{Status::CREATE};
-  std::chrono::high_resolution_clock::time_point start_time_;
+  jmutils::time::MonotonicTimePoint start_time_;
 
   const std::string status();
 
