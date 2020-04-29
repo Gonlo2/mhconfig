@@ -26,12 +26,18 @@ namespace mhconfig
   private:
     prometheus::Exposer exposer_;
     std::shared_ptr<prometheus::Registry> registry_;
+    uint32_t metric_id_;
 
     prometheus::Summary::Quantiles quantiles_ = {{0.5, 0.05}, {0.90, 0.01}, {0.99, 0.001}};
 
     prometheus::Family<prometheus::Summary>* family_api_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
+
+    inline bool new_metric_sample() {
+      metric_id_ = (metric_id_ + 1) & 0xfff;
+      return metric_id_ == 0;
+    }
 
   };
 } /* mhconfig */

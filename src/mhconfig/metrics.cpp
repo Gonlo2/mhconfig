@@ -3,7 +3,8 @@
 namespace mhconfig
 {
   Metrics::Metrics(const std::string& address) :
-    exposer_(address)
+    exposer_(address),
+    metric_id_(0)
   {}
 
   Metrics::~Metrics() {
@@ -30,17 +31,23 @@ namespace mhconfig
   }
 
   void Metrics::api_duration(const std::string& type, double duration_ns) {
-    family_api_duration_summary_->Add({{"type", type}}, quantiles_)
-      .Observe(duration_ns);
+    if (new_metric_sample()) {
+      family_api_duration_summary_->Add({{"type", type}}, quantiles_)
+        .Observe(duration_ns);
+    }
   }
 
   void Metrics::scheduler_duration(const std::string& type, double duration_ns) {
-    family_scheduler_duration_summary_->Add({{"type", type}}, quantiles_)
-      .Observe(duration_ns);
+    if (new_metric_sample()) {
+      family_scheduler_duration_summary_->Add({{"type", type}}, quantiles_)
+        .Observe(duration_ns);
+    }
   }
 
   void Metrics::serialization_duration(double duration_ns) {
-    family_serialization_duration_summary_->Add({}, quantiles_)
-      .Observe(duration_ns);
+    if (new_metric_sample()) {
+      family_serialization_duration_summary_->Add({}, quantiles_)
+        .Observe(duration_ns);
+    }
   }
 } /* mhconfig */
