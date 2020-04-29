@@ -19,6 +19,11 @@ namespace api
 namespace request
 {
 
+typedef mhconfig::proto::MHConfig::WithRawMethod_Get<
+        mhconfig::proto::MHConfig::WithAsyncMethod_Update<
+        mhconfig::proto::MHConfig::WithAsyncMethod_RunGC<
+          mhconfig::proto::MHConfig::Service>>> CustomService;
+
 template <typename T>
 std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_repeated) {
   std::vector<T> result;
@@ -27,11 +32,16 @@ std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_re
   return result;
 }
 
+bool parse_from_byte_buffer(
+  const grpc::ByteBuffer& buffer,
+  grpc::protobuf::Message& message
+);
+
 class Request
 {
 public:
   Request(
-      mhconfig::proto::MHConfig::AsyncService* service,
+      CustomService* service,
       grpc::ServerCompletionQueue* cq,
       Metrics& metrics
   );
@@ -46,7 +56,7 @@ public:
   void reply();
 
 protected:
-  mhconfig::proto::MHConfig::AsyncService* service_;
+  CustomService* service_;
   grpc::ServerCompletionQueue* cq_;
   grpc::ServerContext ctx_;
 

@@ -2,7 +2,7 @@
 #define MHCONFIG__API__CONFIG__OPTIMIZED_MERGED_CONFIG_H
 
 #include "mhconfig/api/config/merged_config.h"
-#include "mhconfig/element.h"
+#include "mhconfig/api/config/common.h"
 
 #include "spdlog/spdlog.h"
 
@@ -35,15 +35,12 @@ public:
   bool init(ElementRef element);
 
   void add_elements(
-    const std::vector<std::string>& key,
-    ::mhconfig::proto::GetResponse& msg
+    request::GetRequest* api_request
   ) override;
 
 private:
   std::string data_;
   std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> data_range_by_skey_;
-
-  std::string get_skey(const std::vector<std::string>& key);
 };
 
 } /* config */

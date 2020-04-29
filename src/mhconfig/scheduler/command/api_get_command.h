@@ -7,6 +7,7 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/worker/command/build_command.h"
 #include "mhconfig/worker/command/api_reply_command.h"
+#include "mhconfig/worker/command/api_get_reply_command.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "jmutils/time.h"
 
@@ -103,8 +104,7 @@ public:
 
       merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
 
-      //return send_api_response(merged_config->api_merged_config);
-      send_api_get_response(worker_queue);  //FIXME
+      send_api_get_response(worker_queue, merged_config->api_merged_config);
       return NamespaceExecutionResult::OK;
     }
 
@@ -129,10 +129,14 @@ public:
 
   //TODO
   void send_api_get_response(
-    Queue<worker::command::CommandRef>& worker_queue
-    //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
+    Queue<worker::command::CommandRef>& worker_queue,
+    std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   ) {
-    send_api_response(worker_queue);
+    auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
+      get_request_,
+      api_merged_config
+    );
+    worker_queue.push(api_reply_command);
   }
 
   NamespaceExecutionResult prepare_build_request(

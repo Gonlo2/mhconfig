@@ -55,7 +55,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     merged_config->status = MergedConfigStatus::OK;
     merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
     merged_config->value = it.second.config;
-    //merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
+    merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
 
     std::stringstream wait_built_key_ss;
     wait_built_key_ss << it.first << ':' << it.second.overrides_key;
@@ -94,7 +94,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
           worker_queue.push(build_command);
         }
 
-        // We do a swap delete because we don't care of the order
+        // We do a swap delete because we don't care of the order and it's faster :P
         wait_builts[i] = wait_builts.back();
         wait_builts.pop_back();
       } else {

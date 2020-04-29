@@ -2,7 +2,6 @@
 #define MHCONFIG__API__CONFIG__BASIC_MERGED_CONFIG_H
 
 #include "mhconfig/api/config/merged_config.h"
-#include "mhconfig/element.h"
 
 namespace mhconfig
 {
@@ -18,8 +17,7 @@ public:
   virtual ~BasicMergedConfig();
 
   void add_elements(
-    const std::vector<std::string>& key,
-    ::mhconfig::proto::GetResponse& msg
+    request::GetRequest* api_request
   ) override;
 
 private:

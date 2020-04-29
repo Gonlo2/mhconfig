@@ -21,7 +21,7 @@ class UpdateRequestImpl : public UpdateRequest
 {
 public:
   UpdateRequestImpl(
-      mhconfig::proto::MHConfig::AsyncService* service,
+      CustomService* service,
       grpc::ServerCompletionQueue* cq_,
       Metrics& metrics,
       Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue

@@ -3,6 +3,7 @@
 
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/config/common.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_get_command.h"
 
@@ -20,7 +21,7 @@ class GetRequestImpl : public GetRequest
 {
 public:
   GetRequestImpl(
-      mhconfig::proto::MHConfig::AsyncService* service,
+      CustomService* service,
       grpc::ServerCompletionQueue* cq_,
       Metrics& metrics,
       Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
@@ -40,13 +41,18 @@ public:
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(mhconfig::ElementRef element) override;
+  void set_element_bytes(const std::string& data) override;
 
 protected:
-  grpc::ServerAsyncResponseWriter<mhconfig::proto::GetResponse> responder_;
+  grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
+
+  grpc::ByteBuffer raw_request_;
 
   mhconfig::proto::GetRequest request_;
   mhconfig::proto::GetResponse response_;
+
+  std::stringstream elements_data_;
 
   std::vector<std::string> overrides_;
   std::vector<std::string> key_;

@@ -9,7 +9,7 @@ namespace request
 
 
 GetRequestImpl::GetRequestImpl(
-    mhconfig::proto::MHConfig::AsyncService* service,
+    CustomService* service,
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
@@ -52,8 +52,15 @@ void GetRequestImpl::set_version(uint32_t version) {
 }
 
 void GetRequestImpl::set_element(mhconfig::ElementRef element) {
+  elements_data_.clear();
   response_.clear_elements();
-  //mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
+  mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
+}
+
+void GetRequestImpl::set_element_bytes(const std::string& data) {
+  elements_data_.clear();
+  elements_data_ << data;
+  response_.clear_elements();
 }
 
 Request* GetRequestImpl::clone() {
@@ -61,10 +68,12 @@ Request* GetRequestImpl::clone() {
 }
 
 void GetRequestImpl::subscribe() {
-  service_->RequestGet(&ctx_, &request_, &responder_, cq_, cq_, this);
+  service_->RequestGet(&ctx_, &raw_request_, &responder_, cq_, cq_, this);
 }
 
 void GetRequestImpl::request() {
+  parse_from_byte_buffer(raw_request_, request_); //TODO check error result
+
   overrides_ = to_vector(request_.overrides());
   key_ = to_vector(request_.key());
 
@@ -75,7 +84,12 @@ void GetRequestImpl::request() {
 }
 
 void GetRequestImpl::finish() {
-  responder_.Finish(response_, grpc::Status::OK, this);
+  response_.SerializeToOstream(&elements_data_);  //TODO check error
+
+  grpc::Slice slice(elements_data_.str());
+  grpc::ByteBuffer raw_response(&slice, 1);
+
+  responder_.Finish(raw_response, grpc::Status::OK, this);
 }
 
 

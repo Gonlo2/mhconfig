@@ -33,7 +33,6 @@ namespace api
 {
 
 using jmutils::container::Queue;
-//using namespace mhconfig::worker;
 
 class Service final
 {
@@ -59,7 +58,7 @@ private:
   std::vector<std::unique_ptr<std::thread>> threads_;
 
   std::unique_ptr<grpc::Server> server_;
-  mhconfig::proto::MHConfig::AsyncService service_;
+  request::CustomService service_;
   std::unique_ptr<grpc::ServerCompletionQueue> cq_;
 
   Metrics& metrics_;

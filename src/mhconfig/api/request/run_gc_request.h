@@ -16,7 +16,7 @@ class RunGCRequest : public Request
 {
 public:
   RunGCRequest(
-    mhconfig::proto::MHConfig::AsyncService* service,
+    CustomService* service,
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics
   )

@@ -27,7 +27,7 @@ class UpdateRequest : public Request
 {
 public:
   UpdateRequest(
-    mhconfig::proto::MHConfig::AsyncService* service,
+    CustomService* service,
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics
   )

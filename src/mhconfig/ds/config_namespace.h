@@ -11,8 +11,7 @@
 #include "string_pool/pool.h"
 
 #include "mhconfig/api/request/get_request.h"
-//#include "mhconfig/api/config/merged_config.h"
-//#include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/api/config/merged_config.h"
 #include "mhconfig/element.h"
 #include "jmutils/common.h"
 
@@ -41,7 +40,7 @@ struct merged_config_t {
   MergedConfigStatus status{MergedConfigStatus::UNDEFINED};
   int64_t last_access_timestamp{0};
   ElementRef value{nullptr};
-  //std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config{nullptr};
+  std::shared_ptr<::mhconfig::api::config::MergedConfig> api_merged_config{nullptr};
 };
 
 

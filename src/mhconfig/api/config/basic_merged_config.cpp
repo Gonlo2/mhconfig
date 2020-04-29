@@ -16,8 +16,7 @@ BasicMergedConfig::~BasicMergedConfig() {
 }
 
 void BasicMergedConfig::add_elements(
-  const std::vector<std::string>& key,
-  ::mhconfig::proto::GetResponse& msg
+  request::GetRequest* api_request
 ) {
   ElementRef element = element_;
   //for (const auto& x: key) {
@@ -25,11 +24,11 @@ void BasicMergedConfig::add_elements(
   //}
 
   //FIXME Ignore the first key
-  for (uint32_t i = 1; i < key.size(); ++i) {
-    element = element->get(string_pool::String(key[i]));
+  for (uint32_t i = 1; i < api_request->key().size(); ++i) {
+    element = element->get(string_pool::String(api_request->key()[i]));
   }
 
-  fill_elements(element, &msg, msg.add_elements());
+  api_request->set_element(element);
 }
 
 } /* config */

@@ -132,28 +132,29 @@ bool OptimizedMergedConfig::init(ElementRef element) {
 }
 
 void OptimizedMergedConfig::add_elements(
-  const std::vector<std::string>& key,
-  ::mhconfig::proto::GetResponse& msg
+  request::GetRequest* api_request
 ) {
-  std::string skey = get_skey(key);
+  std::stringstream ss;
+  //FIXME Ignore the first key
+  for (uint32_t i = 1; i < api_request->key().size(); ++i) {
+    ss << '/' << api_request->key()[i];
+  }
+  std::string skey(ss.str());
+
   auto search = data_range_by_skey_.find(skey);
   if (search == data_range_by_skey_.end()) {
     spdlog::trace("Can't find the key '{}'", skey);
-    fill_elements(mhconfig::UNDEFINED_ELEMENT, &msg, msg.add_elements());
+    api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
   } else {
-    spdlog::trace("Found the range of the key '{}' ({}, {})", search->first, search->second.first, search->second.second);
-    std::string msg_data(&data_[search->second.first], search->second.second);
-    msg.MergeFromString(msg_data);
+    spdlog::trace(
+      "Found the range of the key '{}' ({}, {})",
+      search->first,
+      search->second.first,
+      search->second.second
+    );
+    std::string data(&data_[search->second.first], search->second.second);
+    api_request->set_element_bytes(data);
   }
-}
-
-std::string OptimizedMergedConfig::get_skey(const std::vector<std::string>& key) {
-  std::stringstream ss;
-  //FIXME Ignore the first key
-  for (uint32_t i = 1; i < key.size(); ++i) {
-    ss << '/' << key[i];
-  }
-  return ss.str();
 }
 
 } /* config */
