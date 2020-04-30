@@ -397,23 +397,31 @@ public:
   }
 
   // Help functions
-  std::string make_overrides_key(
+  inline std::string make_overrides_key(
     const std::shared_ptr<document_metadata_t> document_metadata,
     const std::vector<std::string>& overrides,
     uint32_t version
   ) {
-    std::stringstream ss;
+    union converter {
+      char c[4];
+      uint32_t n;
+    };
+    converter k;
+
+    std::string overrides_key;
+    overrides_key.reserve(overrides.size()*4);
     for (auto& override_: overrides) {
       auto raw_config = get_raw_config(document_metadata, override_, version);
       if (raw_config != nullptr) {
-        ss << (char)(((raw_config->id)>>24)&255)
-           << (char)(((raw_config->id)>>16)&255)
-           << (char)(((raw_config->id)>>8)&255)
-           << (char)(((raw_config->id)>>0)&255);
+        k.n = raw_config->id;
+        overrides_key.push_back(k.c[0]);
+        overrides_key.push_back(k.c[1]);
+        overrides_key.push_back(k.c[2]);
+        overrides_key.push_back(k.c[3]);
       }
     }
 
-    return ss.str();
+    return overrides_key;
   }
 
   inline uint32_t get_specific_version(
