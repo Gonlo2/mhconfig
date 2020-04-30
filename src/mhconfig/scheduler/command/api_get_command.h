@@ -88,10 +88,12 @@ public:
     // If we are here it's possible obtain the asked document so first of all we check
     // if exists a cached value of the document with the requested overrides.
     // To search it we create the overrides key
-    std::string overrides_key = make_overrides_key(
+    std::string overrides_key;
+    make_overrides_key(
       document_metadata,
       get_request_->overrides(),
-      get_request_->version()
+      get_request_->version(),
+      overrides_key
     );
     auto merged_config = ::mhconfig::builder::get_merged_config(
       config_namespace,
@@ -177,10 +179,11 @@ public:
       auto document_metadata = config_namespace
         ->document_metadata_by_document[build_element.name];
 
-      build_element.overrides_key = make_overrides_key(
+      make_overrides_key(
         document_metadata,
         get_request_->overrides(),
-        get_request_->version()
+        get_request_->version(),
+        build_element.overrides_key
       );
       auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
         config_namespace,
@@ -313,10 +316,12 @@ public:
     }
 
     auto document_metadata = document_metadata_search->second;
-    std::string overrides_key = make_overrides_key(
+    std::string overrides_key;
+    make_overrides_key(
       document_metadata,
       overrides,
-      version
+      version,
+      overrides_key
     );
     auto config = ::mhconfig::builder::get_merged_config(
       config_namespace,
@@ -397,10 +402,11 @@ public:
   }
 
   // Help functions
-  inline std::string make_overrides_key(
+  inline void make_overrides_key(
     const std::shared_ptr<document_metadata_t> document_metadata,
     const std::vector<std::string>& overrides,
-    uint32_t version
+    uint32_t version,
+    std::string& overrides_key
   ) {
     union converter {
       char c[4];
@@ -408,7 +414,7 @@ public:
     };
     converter k;
 
-    std::string overrides_key;
+    overrides_key.clear();
     overrides_key.reserve(overrides.size()*4);
     for (auto& override_: overrides) {
       auto raw_config = get_raw_config(document_metadata, override_, version);
@@ -420,8 +426,6 @@ public:
         overrides_key.push_back(k.c[3]);
       }
     }
-
-    return overrides_key;
   }
 
   inline uint32_t get_specific_version(

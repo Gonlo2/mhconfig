@@ -134,12 +134,13 @@ bool OptimizedMergedConfig::init(ElementRef element) {
 void OptimizedMergedConfig::add_elements(
   request::GetRequest* api_request
 ) {
-  std::stringstream ss;
+  std::string skey;
+  skey.reserve(256);
   //FIXME Ignore the first key
   for (uint32_t i = 1; i < api_request->key().size(); ++i) {
-    ss << '/' << api_request->key()[i];
+    skey.push_back('/');
+    skey += api_request->key()[i];
   }
-  std::string skey(ss.str());
 
   auto search = data_range_by_skey_.find(skey);
   if (search == data_range_by_skey_.end()) {
