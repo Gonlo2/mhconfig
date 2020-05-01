@@ -84,7 +84,9 @@ void Service::handle_request() {
     if (!got_event) {
       spdlog::info("The completion queue has been closed");
     } else if (!ok) {
-      spdlog::error("Can't read a completion queue event");
+      spdlog::error("Can't read a completion queue event {}", tag);
+      // It's neccesary drop the event here?
+      delete static_cast<request::Request*>(tag);
     } else {
       try {
         static_cast<request::Request*>(tag)->proceed();
