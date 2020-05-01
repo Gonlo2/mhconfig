@@ -28,8 +28,38 @@ namespace scheduler
 namespace command
 {
 
+class Command;
+typedef std::shared_ptr<Command> CommandRef;
+
+} /* command */
+} /* scheduler */
+
+
+namespace scheduler
+{
+
 using jmutils::container::Queue;
 using namespace mhconfig::ds::config_namespace;
+
+struct scheduler_context_t {
+  Queue<mhconfig::worker::command::CommandRef>& worker_queue;
+  Metrics& metrics;
+
+  std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path;
+  std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id;
+  std::unordered_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path;
+
+  scheduler_context_t(
+    Queue<mhconfig::worker::command::CommandRef>& worker_queue_,
+    Metrics& metrics_
+  )
+    : worker_queue(worker_queue_),
+    metrics(metrics_)
+  {}
+};
+
+namespace command
+{
 
 static const std::string EMPTY_STRING{""};
 
@@ -70,13 +100,11 @@ public:
   );
 
   virtual bool execute(
-    Queue<worker::command::CommandRef>& worker_queue
+    scheduler_context_t& context
   );
 
 private:
 };
-
-typedef std::shared_ptr<Command> CommandRef;
 
 } /* command */
 } /* scheduler */

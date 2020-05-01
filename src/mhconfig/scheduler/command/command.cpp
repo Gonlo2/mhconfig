@@ -40,7 +40,7 @@ bool Command::on_get_namespace_error(
 }
 
 bool Command::execute(
-  Queue<worker::command::CommandRef>& worker_queue
+  scheduler_context_t& context
 ) {
   return false;
 }

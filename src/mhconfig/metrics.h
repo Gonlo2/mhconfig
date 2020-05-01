@@ -34,11 +34,6 @@ namespace mhconfig
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
 
-    inline bool new_metric_sample() {
-      metric_id_ = (metric_id_ + 1) & 0xfff;
-      return metric_id_ == 0;
-    }
-
   };
 } /* mhconfig */
 

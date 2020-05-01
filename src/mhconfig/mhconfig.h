@@ -63,7 +63,7 @@ namespace mhconfig
       );
       service_->start();
 
-      //gc_thread_ = std::make_unique<std::thread>(&MHConfig::run_gc, this);
+      gc_thread_ = std::make_unique<std::thread>(&MHConfig::run_gc, this);
 
       running_ = true;
       return true;
@@ -72,11 +72,10 @@ namespace mhconfig
     bool join() {
       if (!running_) return false;
 
-      //gc_thread_->join();
+      gc_thread_->join();
       service_->join();
       worker_->join();
       scheduler_->join();
-      //for (auto& w : workers_) w.join();
 
       return true;
     }
@@ -90,44 +89,40 @@ namespace mhconfig
     Queue<mhconfig::scheduler::command::CommandRef> scheduler_queue_;
     Queue<mhconfig::worker::command::CommandRef> worker_queue_;
 
-    //std::vector<worker::Builder> workers_;
     std::unique_ptr<mhconfig::scheduler::Scheduler> scheduler_;
     std::unique_ptr<mhconfig::worker::Worker> worker_;
     std::unique_ptr<api::Service> service_;
-    //std::unique_ptr<std::thread> gc_thread_;
+    std::unique_ptr<std::thread> gc_thread_;
 
     volatile bool running_{false};
 
     void run_gc() {
-//
-//      uint32_t default_remaining_checks[6] = {1, 5, 17, 7, 11, 3};
-//      uint32_t remaining_checks[6] = {1, 5, 17, 7, 11, 3};
-//
-//      uint32_t seconds_between_checks = 20;
-//      uint32_t max_live_in_seconds = 10;
-//
-//      auto next_check_time = std::chrono::system_clock::now();
-//      while (true) {
-//        for (int i = 0; i < 6; ++i) {
-//          if (remaining_checks[i] == 0) {
-//            worker::command::command_t command;
-//            command.type = worker::command::CommandType::RUN_GC_REQUEST;
-//            command.run_gc_request = std::make_shared<worker::command::run_gc::request_t>();
-//            command.run_gc_request->max_live_in_seconds = max_live_in_seconds;
-//            command.run_gc_request->type = static_cast<worker::command::run_gc::Type>(i);
-//
-//            scheduler_queue_.push(command);
-//
-//            remaining_checks[i] = default_remaining_checks[i];
-//          } else {
-//            --remaining_checks[i];
-//          }
-//        }
-//
-//        next_check_time += std::chrono::seconds(seconds_between_checks);
-//        std::this_thread::sleep_until(next_check_time);
-//      }
-//
+      uint32_t default_remaining_checks[6] = {1, 5, 17, 7, 11, 3};
+      uint32_t remaining_checks[6] = {1, 5, 17, 7, 11, 3};
+
+      uint32_t seconds_between_checks = 20;
+      uint32_t max_live_in_seconds = 10;
+
+      auto next_check_time = std::chrono::system_clock::now();
+      while (true) {
+        for (int i = 0; i < 6; ++i) {
+          if (remaining_checks[i] == 0) {
+            auto api_run_gc_command = std::make_shared<scheduler::command::ApiRunGCCommand>(
+              static_cast<::mhconfig::api::request::run_gc::Type>(i),
+              max_live_in_seconds
+            );
+            scheduler_queue_.push(api_run_gc_command);
+
+            remaining_checks[i] = default_remaining_checks[i];
+          } else {
+            --remaining_checks[i];
+          }
+        }
+
+        next_check_time += std::chrono::seconds(seconds_between_checks);
+        std::this_thread::sleep_until(next_check_time);
+      }
+
     }
   };
 } /* mhconfig */

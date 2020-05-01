@@ -3,6 +3,7 @@
 
 #include "jmutils/container/queue.h"
 #include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/scheduler/command/api_run_gc_command.h"
 #include "mhconfig/api/request/run_gc_request.h"
 
 namespace mhconfig
@@ -30,6 +31,9 @@ public:
 
   Request* clone() override;
   void subscribe() override;
+
+  run_gc::Type type() override;
+  uint32_t max_live_in_seconds() override;
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::RunGCResponse> responder_;

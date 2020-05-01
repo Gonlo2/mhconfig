@@ -34,7 +34,34 @@ void RunGCRequestImpl::subscribe() {
 }
 
 void RunGCRequestImpl::request() {
-  //TODO
+  auto api_run_gc_command = std::make_shared<scheduler::command::ApiRunGCCommand>(
+    type(),
+    max_live_in_seconds()
+  );
+  scheduler_queue_.push(api_run_gc_command);
+
+  reply();
+}
+
+run_gc::Type RunGCRequestImpl::type() {
+  switch (request_.type()) {
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
+      return run_gc::Type::CACHE_GENERATION_0;
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
+      return run_gc::Type::CACHE_GENERATION_1;
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_2:
+      return run_gc::Type::CACHE_GENERATION_2;
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_DEAD_POINTERS:
+      return run_gc::Type::DEAD_POINTERS;
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_NAMESPACES:
+      return run_gc::Type::NAMESPACES;
+    case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_VERSIONS:
+      return run_gc::Type::VERSIONS;
+  }
+}
+
+uint32_t RunGCRequestImpl::max_live_in_seconds() {
+  return request_.max_live_in_seconds();
 }
 
 void RunGCRequestImpl::finish() {

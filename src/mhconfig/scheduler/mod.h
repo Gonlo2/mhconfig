@@ -23,6 +23,7 @@ using jmutils::container::Queue;
 using namespace mhconfig::api::request;
 using namespace mhconfig::ds::config_namespace;
 
+
 class Scheduler : public jmutils::parallelism::Worker<Scheduler, command::CommandRef>
 {
 public:
@@ -43,14 +44,7 @@ private:
     ERROR
   };
 
-  Queue<mhconfig::worker::command::CommandRef>& worker_queue_;
-  Metrics& metrics_;
-
-  std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path_;
-  std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id_;
-
-  std::unordered_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path_;
-
+  scheduler_context_t context_;
 
   inline void loop_stats(
     command::CommandRef command,
@@ -61,7 +55,7 @@ private:
       end_time - start_time
     ).count();
 
-    metrics_.scheduler_duration(command->name(), duration_ns);
+    context_.metrics.scheduler_duration(command->name(), duration_ns);
   }
 
   inline bool process_command(
@@ -69,18 +63,19 @@ private:
   ) {
     switch (command->command_type()) {
       case command::CommandType::ADD_NAMESPACE: {
-        auto inserted_value = namespace_by_id_.emplace(
+        auto inserted_value = context_.namespace_by_id.emplace(
           command->namespace_id(),
           command->config_namespace()
         );
         assert(inserted_value.second);
 
-        namespace_by_path_[command->namespace_path()] = command->config_namespace();
+        context_.namespace_by_path[command->namespace_path()] = command->config_namespace();
 
-        auto search = commands_waiting_for_namespace_by_path_.find(command->namespace_path());
+        auto search = context_.commands_waiting_for_namespace_by_path
+          .find(command->namespace_path());
 
         input_queue_.push_all(search->second);
-        commands_waiting_for_namespace_by_path_.erase(search);
+        context_.commands_waiting_for_namespace_by_path.erase(search);
 
         return true;
       }
@@ -91,7 +86,7 @@ private:
           case ConfigNamespaceState::OK: {
             auto execution_result = command->execute_on_namespace(
               result.second,
-              worker_queue_
+              context_.worker_queue
             );
             switch (execution_result) {
               case command::NamespaceExecutionResult::OK:
@@ -108,21 +103,25 @@ private:
           case ConfigNamespaceState::BUILDING:
             return true;
           case ConfigNamespaceState::ERROR:
-            return command->on_get_namespace_error(worker_queue_);
+            return command->on_get_namespace_error(
+              context_.worker_queue
+            );
         }
 
         return false;
       }
 
       case command::CommandType::GET_NAMESPACE_BY_ID: {
-        auto search = namespace_by_id_.find(command->namespace_id());
-        if (search == namespace_by_id_.end()) {
-          return command->on_get_namespace_error(worker_queue_);
+        auto search = context_.namespace_by_id.find(command->namespace_id());
+        if (search == context_.namespace_by_id.end()) {
+          return command->on_get_namespace_error(
+            context_.worker_queue
+          );
         }
 
         auto execution_result = command->execute_on_namespace(
           search->second,
-          worker_queue_
+          context_.worker_queue
         );
         switch (execution_result) {
           case command::NamespaceExecutionResult::OK:
@@ -138,7 +137,7 @@ private:
       }
 
       case command::CommandType::GENERIC:
-        return command->execute(worker_queue_);
+        return command->execute(context_);
     }
 
     return false;
@@ -148,20 +147,19 @@ private:
     command::CommandRef command
   ) {
     // First we search for the namespace
-    auto search = namespace_by_path_.find(command->namespace_path());
-    if (search == namespace_by_path_.end()) {
+    auto search = context_.namespace_by_path.find(command->namespace_path());
+    if (search == context_.namespace_by_path.end()) {
       // If it isn't present we check if some another command ask for it
-      auto search_commands_waiting = commands_waiting_for_namespace_by_path_.find(
-        command->namespace_path()
-      );
+      auto search_commands_waiting = context_.commands_waiting_for_namespace_by_path
+        .find(command->namespace_path());
 
-      if (search_commands_waiting == commands_waiting_for_namespace_by_path_.end()) {
+      if (search_commands_waiting == context_.commands_waiting_for_namespace_by_path.end()) {
         auto setup_command = std::make_shared<::mhconfig::worker::command::SetupCommand>(
           command->namespace_path()
         );
-        worker_queue_.push(setup_command);
+        context_.worker_queue.push(setup_command);
 
-        commands_waiting_for_namespace_by_path_[command->namespace_path()].push_back(command);
+        context_.commands_waiting_for_namespace_by_path[command->namespace_path()].push_back(command);
       } else {
         // In other case we wait for the namespace
         search_commands_waiting->second.push_back(command);
