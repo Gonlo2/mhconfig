@@ -5,6 +5,7 @@
 
 #include "mhconfig/api/request/run_gc_request.h"
 #include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/worker/command/optimize_merged_config_command.h"
 
 namespace mhconfig
 {
@@ -13,14 +14,25 @@ namespace scheduler
 namespace command
 {
 
-class ApiRunGCCommand : public Command
+namespace run_gc {
+  enum Type {
+    CACHE_GENERATION_0 = 0,
+    CACHE_GENERATION_1 = 1,
+    CACHE_GENERATION_2 = 2,
+    DEAD_POINTERS = 3,
+    NAMESPACES = 4,
+    VERSIONS = 5
+  };
+}
+
+class RunGcCommand : public Command
 {
 public:
-  ApiRunGCCommand(
-    ::mhconfig::api::request::run_gc::Type type,
+  RunGcCommand(
+    run_gc::Type type,
     uint32_t max_live_in_seconds
   );
-  virtual ~ApiRunGCCommand();
+  virtual ~RunGcCommand();
 
   std::string name() const override;
 
@@ -31,12 +43,11 @@ public:
   ) override;
 
 private:
-  ::mhconfig::api::request::run_gc::Type type_;
+  run_gc::Type type_;
   uint32_t max_live_in_seconds_;
 
   void remove_merge_configs(
     scheduler_context_t& context,
-    uint32_t limit_timestamp,
     uint32_t generation
   );
 
@@ -45,13 +56,11 @@ private:
   );
 
   void remove_namespaces(
-    scheduler_context_t& context,
-    uint32_t limit_timestamp
+    scheduler_context_t& context
   );
 
   void remove_versions(
-    scheduler_context_t& context,
-    uint32_t limit_timestamp
+    scheduler_context_t& context
   );
 
 };

@@ -12,18 +12,6 @@ namespace api
 namespace request
 {
 
-namespace run_gc {
-  enum Type {
-    CACHE_GENERATION_0 = 0,
-    CACHE_GENERATION_1 = 1,
-    CACHE_GENERATION_2 = 2,
-    DEAD_POINTERS = 3,
-    NAMESPACES = 4,
-    VERSIONS = 5
-  };
-}
-
-
 class RunGCRequest : public Request
 {
 public:
@@ -38,9 +26,6 @@ public:
 
   virtual ~RunGCRequest() {
   }
-
-  virtual run_gc::Type type() = 0;
-  virtual uint32_t max_live_in_seconds() = 0;
 
 };
 

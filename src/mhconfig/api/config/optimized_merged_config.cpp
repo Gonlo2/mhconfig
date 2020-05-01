@@ -30,7 +30,7 @@ uint32_t make_elements_ranges_map_rec(
         uint32_t start_idx = idx;
 
         std::string new_skey = skey;
-        new_skey += '/';
+        new_skey += '/'; //TODO use a better delimiter
         new_skey += it.first.str();
 
         uint32_t sibling_offset = make_elements_ranges_map_rec(

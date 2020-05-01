@@ -38,7 +38,8 @@ enum MergedConfigStatus {
 
 struct merged_config_t {
   MergedConfigStatus status{MergedConfigStatus::UNDEFINED};
-  int64_t last_access_timestamp{0};
+  uint64_t creation_timestamp{0};
+  uint64_t last_access_timestamp{0};
   ElementRef value{nullptr};
   std::shared_ptr<::mhconfig::api::config::MergedConfig> api_merged_config{nullptr};
 };

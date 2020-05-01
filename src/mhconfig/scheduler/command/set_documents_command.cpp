@@ -40,7 +40,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 ) {
   spdlog::debug(
     "Processing the build response with id {}",
-    (uint64_t) wait_build_->request
+    (void*) wait_build_->request
   );
 
   for (const auto it : built_elements_by_document_) {
@@ -66,7 +66,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 
       spdlog::debug(
         "Unchecking element built for the request with id {}",
-        (uint64_t) wait_built->request
+        (void*) wait_built->request
       );
       auto search = wait_built->pending_element_position_by_name.find(it.first);
       wait_built->elements_to_build[search->second].config = it.second.config;
@@ -76,14 +76,18 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
         if (wait_built->is_main) {
           spdlog::debug(
             "Responding the get request with id {}",
-            (uint64_t) wait_built->request
+            (void*) wait_built->request
           );
 
-          //send_api_get_response(other_get_request, merged_config->api_merged_config);
+          auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
+            wait_built->request,
+            merged_config->api_merged_config
+          );
+          worker_queue.push(api_get_reply_command);
         } else {
           spdlog::debug(
             "Sending the get request with id {} to built",
-            (uint64_t) wait_built->request
+            (void*) wait_built->request
           );
 
           auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
@@ -94,7 +98,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
           worker_queue.push(build_command);
         }
 
-        // We do a swap delete because we don't care of the order and it's faster :P
+        // We do a swap delete because we don't care the order and it's faster :P
         wait_builts[i] = wait_builts.back();
         wait_builts.pop_back();
       } else {

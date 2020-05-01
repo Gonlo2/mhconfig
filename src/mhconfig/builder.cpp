@@ -74,12 +74,8 @@ std::shared_ptr<config_namespace_t> index_files(
     }
   }
 
-  uint64_t timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-    std::chrono::system_clock::now().time_since_epoch()
-  ).count();
-
   config_namespace->ok = true;
-  config_namespace->last_access_timestamp = timestamp;
+  config_namespace->last_access_timestamp = jmutils::time::monotonic_now_sec();
   config_namespace->stored_versions_by_deprecation_timestamp.emplace_back(
     0,
     config_namespace->current_version
@@ -651,6 +647,7 @@ std::shared_ptr<merged_config_t> get_or_build_merged_config(
     }
 
     merged_config = std::make_shared<merged_config_t>();
+    merged_config->creation_timestamp = jmutils::time::monotonic_now_sec();
     merged_config_metadata->merged_config_by_document[document] = merged_config;
     config_namespace->merged_config_by_gc_generation[0].push_back(merged_config);
   }

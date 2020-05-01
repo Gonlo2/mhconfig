@@ -107,7 +107,7 @@ namespace mhconfig
       while (true) {
         for (int i = 0; i < 6; ++i) {
           if (remaining_checks[i] == 0) {
-            auto api_run_gc_command = std::make_shared<scheduler::command::ApiRunGCCommand>(
+            auto api_run_gc_command = std::make_shared<scheduler::command::RunGcCommand>(
               static_cast<::mhconfig::api::request::run_gc::Type>(i),
               max_live_in_seconds
             );

@@ -21,6 +21,7 @@ namespace mhconfig
 
     void api_duration(const std::string& type, double nanoseconds);
     void scheduler_duration(const std::string& type, double duration_ns);
+    void worker_duration(const std::string& type, double duration_ns);
     void serialization_duration(double duration_ns);
 
   private:
@@ -32,6 +33,7 @@ namespace mhconfig
 
     prometheus::Family<prometheus::Summary>* family_api_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
+    prometheus::Family<prometheus::Summary>* family_worker_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
 
   };

@@ -40,12 +40,11 @@ private:
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
   ) {
-    //TODO Add workr stats
-    //double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      //end_time - start_time
-    //).count();
+    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      end_time - start_time
+    ).count();
 
-    //metrics_.scheduler_duration(command->name(), duration_ns);
+    metrics_.worker_duration(command->name(), duration_ns);
   }
 
   inline bool process_command(

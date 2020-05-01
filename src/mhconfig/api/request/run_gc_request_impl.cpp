@@ -34,7 +34,7 @@ void RunGCRequestImpl::subscribe() {
 }
 
 void RunGCRequestImpl::request() {
-  auto api_run_gc_command = std::make_shared<scheduler::command::ApiRunGCCommand>(
+  auto api_run_gc_command = std::make_shared<scheduler::command::RunGcCommand>(
     type(),
     max_live_in_seconds()
   );
@@ -46,17 +46,17 @@ void RunGCRequestImpl::request() {
 run_gc::Type RunGCRequestImpl::type() {
   switch (request_.type()) {
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
-      return run_gc::Type::CACHE_GENERATION_0;
+      return scheduler::command::run_gc::Type::CACHE_GENERATION_0;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
-      return run_gc::Type::CACHE_GENERATION_1;
+      return scheduler::command::run_gc::Type::CACHE_GENERATION_1;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_2:
-      return run_gc::Type::CACHE_GENERATION_2;
+      return scheduler::command::run_gc::Type::CACHE_GENERATION_2;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_DEAD_POINTERS:
-      return run_gc::Type::DEAD_POINTERS;
+      return scheduler::command::run_gc::Type::DEAD_POINTERS;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_NAMESPACES:
-      return run_gc::Type::NAMESPACES;
+      return scheduler::command::run_gc::Type::NAMESPACES;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_VERSIONS:
-      return run_gc::Type::VERSIONS;
+      return scheduler::command::run_gc::Type::VERSIONS;
   }
 }
 
