@@ -6,6 +6,9 @@
 
 #include "spdlog/spdlog.h"
 
+#include <cmph.h>
+
+
 namespace mhconfig
 {
 namespace api
@@ -32,6 +35,9 @@ public:
   OptimizedMergedConfig();
   virtual ~OptimizedMergedConfig();
 
+  OptimizedMergedConfig(const OptimizedMergedConfig&) = delete;
+  OptimizedMergedConfig(OptimizedMergedConfig&&) = delete;
+
   bool init(ElementRef element);
 
   void add_elements(
@@ -39,8 +45,9 @@ public:
   ) override;
 
 private:
+  cmph_t* hash_{nullptr};
+  std::vector<std::pair<uint32_t, uint32_t>> position_;
   std::string data_;
-  std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> data_range_by_skey_;
 };
 
 } /* config */

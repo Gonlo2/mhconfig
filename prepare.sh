@@ -3,9 +3,13 @@ set -e
 
 BUILD_THIRD_PARTY_PATH="build/third_party"
 
+function print_third_party_msg() {
+  echo -e "\e[94m====== Preparing the third party '$1' ======\e[0m"
+}
+
 # TODO Add test checker
 function prepare_third_party() {
-  echo -e "\e[94m====== Preparing the third party '$1' ======\e[0m"
+  print_third_party_msg "$1"
   (
     cd "$BUILD_THIRD_PARTY_PATH/$1"
     mkdir build -p
@@ -21,7 +25,7 @@ function prepare_third_party() {
 }
 
 function prepare_grpc() {
-  echo -e "\e[94m====== Preparing the third party 'protobuf' ======\e[0m"
+  print_third_party_msg protobuf
   (
     cd "$BUILD_THIRD_PARTY_PATH/grpc/third_party/protobuf"
     if ! $ONLY_INSTALL ; then
@@ -34,10 +38,25 @@ function prepare_grpc() {
     sudo ldconfig
   )
 
-  echo -e "\e[94m====== Preparing the third party 'grpc' ======\e[0m"
+  print_third_party_msg grpc
   (
     cd "$BUILD_THIRD_PARTY_PATH/grpc"
     if ! $ONLY_INSTALL ; then
+      make "-j${MAKE_N_PROC}"
+    fi
+    sudo make install
+
+    sudo ldconfig
+  )
+}
+
+function prepare_cmph() {
+  print_third_party_msg cmph
+  (
+    cd "$BUILD_THIRD_PARTY_PATH/cmph"
+    if ! $ONLY_INSTALL ; then
+      autoreconf -i
+      CXXFLAGS="-O2" ./configure
       make "-j${MAKE_N_PROC}"
     fi
     sudo make install
@@ -83,8 +102,9 @@ if ! $ONLY_INSTALL ; then
   rsync -a third_party build --exclude .git
 fi
 
+prepare_cmph
+prepare_grpc
 prepare_third_party fmt
 prepare_third_party spdlog
-prepare_grpc
 prepare_third_party prometheus-cpp
 prepare_third_party yaml-cpp "-DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF"

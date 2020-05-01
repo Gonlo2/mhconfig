@@ -48,6 +48,7 @@ target_link_libraries(mhconfig yaml-cpp)
 target_link_libraries(mhconfig ssl crypto)
 target_link_libraries(mhconfig boost_filesystem.a boost_system.a)
 target_link_libraries(mhconfig prometheus-cpp::core prometheus-cpp::pull)
+target_link_libraries(mhconfig cmph.a)
 
 # gRPC
 target_link_libraries(mhconfig libgrpc++.a grpc.a)

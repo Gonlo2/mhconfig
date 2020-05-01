@@ -90,10 +90,33 @@ OptimizedMergedConfig::OptimizedMergedConfig() {
 }
 
 OptimizedMergedConfig::~OptimizedMergedConfig() {
+  if (hash_ != nullptr) {
+    spdlog::trace("Deleted the cmph hash in {}", (void*)hash_);
+    cmph_destroy(hash_);
+    hash_ = nullptr;
+  }
 }
 
 bool OptimizedMergedConfig::init(ElementRef element) {
-  make_elements_ranges_map(element, data_range_by_skey_);
+  std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> data_range_by_skey;
+  make_elements_ranges_map(element, data_range_by_skey); //TODO pass two vectors to avoid reallocate the data
+
+  std::vector<char*> keys;
+  keys.reserve(data_range_by_skey.size());
+  for (const auto& x: data_range_by_skey) {
+    keys.push_back((char*)x.first.c_str());
+  }
+  cmph_io_adapter_t *source = cmph_io_vector_adapter(keys.data(), keys.size());
+  spdlog::trace("Created a cmph source in {}", (void*)source);
+
+  cmph_config_t *config = cmph_config_new(source);
+  spdlog::trace("Created a cmph config in {}", (void*)config);
+  cmph_config_set_graphsize(config, 0.99);
+  cmph_config_set_algo(config, CMPH_CHD);  //TODO Check and change the algorithm
+  hash_ = cmph_new(config);
+  spdlog::trace("Created a cmph hash in {}", (void*)hash_);
+
+  cmph_io_vector_adapter_destroy(source);
 
   ::mhconfig::proto::GetResponse get_response;
   fill_elements(element, &get_response, get_response.add_elements());
@@ -122,10 +145,18 @@ bool OptimizedMergedConfig::init(ElementRef element) {
 
   data_ = ss.str();
 
-  for (auto& it : data_range_by_skey_) {
-    it.second.first = size_till_position[it.second.first];
-    it.second.second = size_till_position[it.second.second] - it.second.first;
-    spdlog::trace("The size range of the key '{}' is ({}, {})", it.first, it.second.first, it.second.second);
+  position_.resize(data_range_by_skey.size());
+  for (auto& it : data_range_by_skey) {
+    uint32_t idx = cmph_search(hash_, (char*)it.first.c_str(), (cmph_uint32)it.first.size());
+    position_[idx].first = size_till_position[it.second.first];
+    position_[idx].second = size_till_position[it.second.second] - position_[idx].first;
+    spdlog::trace(
+      "The size range of the key '{}' is (hash: {}, idx: {}, size: {})",
+      it.first,
+      idx,
+      position_[idx].first,
+      position_[idx].second
+    );
   }
 
   return true;
@@ -142,18 +173,21 @@ void OptimizedMergedConfig::add_elements(
     skey += api_request->key()[i];
   }
 
-  auto search = data_range_by_skey_.find(skey);
-  if (search == data_range_by_skey_.end()) {
+  spdlog::trace("Using the cmph hash in {}", (void*)hash_);
+  uint32_t idx = cmph_search(hash_, skey.c_str(), (cmph_uint32)skey.size());
+  spdlog::trace("The cmph value of '{}' is {}", skey, idx);
+
+  if (false) { //TODO Check invalid keys
     spdlog::trace("Can't find the key '{}'", skey);
     api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
   } else {
     spdlog::trace(
       "Found the range of the key '{}' ({}, {})",
-      search->first,
-      search->second.first,
-      search->second.second
+      skey,
+      position_[idx].first,
+      position_[idx].second
     );
-    std::string data(&data_[search->second.first], search->second.second);
+    std::string data(&data_[position_[idx].first], position_[idx].second);
     api_request->set_element_bytes(data);
   }
 }
