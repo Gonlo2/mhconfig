@@ -6,6 +6,7 @@
 
 #include "spdlog/spdlog.h"
 #include "string_pool/pool.h"
+#include "jmutils/common.h"
 
 #include <cmph.h>
 

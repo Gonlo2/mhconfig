@@ -408,19 +408,12 @@ public:
     uint32_t version,
     std::string& overrides_key
   ) {
-    union converter {
-      char c[4];
-      uint32_t n;
-    };
-    converter k;
-
     overrides_key.clear();
     overrides_key.reserve(overrides.size()*4);
     for (auto& override_: overrides) {
       auto raw_config = get_raw_config(document_metadata, override_, version);
       if (raw_config != nullptr) {
-        k.n = raw_config->id;
-        overrides_key += k.c;
+        jmutils::push_uint32(overrides_key, raw_config->id);
       }
     }
   }

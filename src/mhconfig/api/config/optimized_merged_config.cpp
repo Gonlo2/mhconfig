@@ -36,9 +36,8 @@ uint32_t make_elements_ranges_map_rec(
       for (const auto& it : root->as_map()) {
         uint32_t start_idx = idx;
 
-        std::string new_skey = skey;
-        new_skey += '/'; //TODO use a better delimiter
-        new_skey += it.first.str();
+        std::string new_skey(skey);
+        jmutils::push_str(new_skey, it.first.str());
 
         uint32_t sibling_offset = make_elements_ranges_map_rec(
           it.second,
@@ -197,8 +196,7 @@ void OptimizedMergedConfig::add_elements(
   skey.clear();
   //FIXME Ignore the first key
   for (uint32_t i = 1; i < api_request->key().size(); ++i) {
-    skey.push_back('/');
-    skey += api_request->key()[i];
+    jmutils::push_str(skey, api_request->key()[i]);
   }
 
   uint32_t idx = cmph_search(hash_, skey.c_str(), (cmph_uint32)skey.size());
