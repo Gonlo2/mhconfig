@@ -24,8 +24,9 @@ void BasicMergedConfig::add_elements(
   //}
 
   //FIXME Ignore the first key
+  string_pool::string_t tmp;
   for (uint32_t i = 1; i < api_request->key().size(); ++i) {
-    element = element->get(string_pool::String(api_request->key()[i]));
+    element = element->get(string_pool::String(api_request->key()[i], &tmp));
   }
 
   api_request->set_element(element);

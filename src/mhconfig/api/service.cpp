@@ -22,6 +22,10 @@ Service::Service(
 Service::~Service() {
   server_->Shutdown();
   cq_->Shutdown();
+
+  void* ignored_tag;
+  bool ignored_ok;
+  while (cq_->Next(&ignored_tag, &ignored_ok)) { }
 }
 
 bool Service::start() {
@@ -50,29 +54,31 @@ void Service::join() {
 }
 
 void Service::subscribe_requests() {
-  auto get_request = new request::GetRequestImpl(
-    &service_,
-    cq_.get(),
-    metrics_,
-    scheduler_queue_
-  );
-  get_request->subscribe();
+  for (int i = 0; i < 1000; ++i) { //TODO configure the number of requests
+    auto get_request = new request::GetRequestImpl(
+      &service_,
+      cq_.get(),
+      metrics_,
+      scheduler_queue_
+    );
+    get_request->subscribe();
 
-  auto update_request = new request::UpdateRequestImpl(
-    &service_,
-    cq_.get(),
-    metrics_,
-    scheduler_queue_
-  );
-  update_request->subscribe();
+    auto update_request = new request::UpdateRequestImpl(
+      &service_,
+      cq_.get(),
+      metrics_,
+      scheduler_queue_
+    );
+    update_request->subscribe();
 
-  auto run_gc_request = new request::RunGCRequestImpl(
-    &service_,
-    cq_.get(),
-    metrics_,
-    scheduler_queue_
-  );
-  run_gc_request->subscribe();
+    auto run_gc_request = new request::RunGCRequestImpl(
+      &service_,
+      cq_.get(),
+      metrics_,
+      scheduler_queue_
+    );
+    run_gc_request->subscribe();
+  }
 }
 
 void Service::handle_request() {

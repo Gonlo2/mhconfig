@@ -420,10 +420,7 @@ public:
       auto raw_config = get_raw_config(document_metadata, override_, version);
       if (raw_config != nullptr) {
         k.n = raw_config->id;
-        overrides_key.push_back(k.c[0]);
-        overrides_key.push_back(k.c[1]);
-        overrides_key.push_back(k.c[2]);
-        overrides_key.push_back(k.c[3]);
+        overrides_key += k.c;
       }
     }
   }

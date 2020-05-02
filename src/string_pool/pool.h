@@ -34,7 +34,8 @@ struct chunk_t {
 
 struct string_t {
   uint32_t hash;
-  uint32_t size;
+  uint32_t size : 31;
+  bool needs_to_be_destroyed : 1;
   char* data;
   chunk_t* chunk;
   string_t* next;
@@ -42,9 +43,15 @@ struct string_t {
 };
 
 
-inline void init_string(const std::string& str, char* data, string_t* result) {
+inline void init_string(
+  const std::string& str,
+  char* data,
+  string_t* result,
+  bool needs_to_be_destroyed
+) {
   result->hash = std::hash<std::string>{}(str);
   result->size = str.size();
+  result->needs_to_be_destroyed = needs_to_be_destroyed;
   result->data = data;
   result->next = nullptr;
   result->chunk = nullptr;
@@ -62,22 +69,30 @@ public:
   explicit String() noexcept : ptr_(nullptr) {
   }
 
+  //TODO avoid create data
   explicit String(const std::string& str) noexcept {
     void* data = aligned_alloc(sizeof(size_t), sizeof(string_t));
     assert (data != nullptr);
     ptr_ = new (data) string_t;
-    init_string(str, (char*) str.c_str(), ptr_);
+    init_string(str, (char*) str.c_str(), ptr_, true);
     ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
   }
 
+  //TODO avoid create data
+  explicit String(const std::string& str, string_t* internal_struct) noexcept
+    : ptr_(internal_struct)
+  {
+    init_string(str, (char*) str.c_str(), ptr_, false);
+  }
+
   String(string_t* ptr) noexcept : ptr_(ptr) {
-    if (ptr_ != nullptr) {
+    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
       ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
     }
   }
 
   String(const String& o) noexcept : ptr_(o.ptr_) {
-    if (ptr_ != nullptr) {
+    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
       ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
     }
   }
@@ -88,7 +103,7 @@ public:
 
   String& operator=(const String& o) noexcept {
     ptr_ = o.ptr_;
-    if (ptr_ != nullptr) {
+    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
       ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
     }
     return *this;

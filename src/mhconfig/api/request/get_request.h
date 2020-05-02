@@ -36,7 +36,7 @@ public:
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(mhconfig::ElementRef element) = 0;
-  virtual void set_element_bytes(const std::string& data) = 0;
+  virtual void set_element_bytes(const char* data, size_t len) = 0;
 
 };
 

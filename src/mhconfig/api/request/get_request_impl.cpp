@@ -57,9 +57,9 @@ void GetRequestImpl::set_element(mhconfig::ElementRef element) {
   mhconfig::api::config::fill_elements(element, &response_, response_.add_elements());
 }
 
-void GetRequestImpl::set_element_bytes(const std::string& data) {
+void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
   elements_data_.clear();
-  elements_data_ << data;
+  elements_data_.write(data, len);
   response_.clear_elements();
 }
 

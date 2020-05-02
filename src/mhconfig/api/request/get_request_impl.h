@@ -41,7 +41,7 @@ public:
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(mhconfig::ElementRef element) override;
-  void set_element_bytes(const std::string& data) override;
+  void set_element_bytes(const char* data, size_t len) override;
 
 protected:
   grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;

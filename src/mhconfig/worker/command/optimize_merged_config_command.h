@@ -8,6 +8,8 @@
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/builder.h"
 
+#include "string_pool/pool.h"
+
 namespace mhconfig
 {
 namespace worker
@@ -21,7 +23,8 @@ class OptimizeMergedConfigCommand : public Command
 {
 public:
   OptimizeMergedConfigCommand(
-    std::shared_ptr<merged_config_t> merged_config
+    std::shared_ptr<merged_config_t> merged_config,
+    std::shared_ptr<string_pool::Pool> pool
   );
   virtual ~OptimizeMergedConfigCommand();
 
@@ -34,6 +37,7 @@ public:
 
 private:
   std::shared_ptr<merged_config_t> merged_config_;
+  std::shared_ptr<string_pool::Pool> pool_;
 };
 
 } /* command */

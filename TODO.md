@@ -11,6 +11,7 @@
 - Reuse the requests
 - Change the do_topological_sort_over_ref_graph_rec to iterative version
 - Use two kind of workers: low priority for optimization and high priority for setup/get/update
+- Check the string_pool
 
 # Doing
 

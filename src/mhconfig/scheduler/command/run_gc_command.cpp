@@ -97,7 +97,8 @@ void RunGcCommand::remove_merge_configs(
             ++number_of_removed_merged_configs;
           } else {
             auto optimize_merged_config_command = std::make_shared<::mhconfig::worker::command::OptimizeMergedConfigCommand>(
-              from[i]
+              from[i],
+              it.second->pool
             );
             context.worker_queue.push(optimize_merged_config_command);
 

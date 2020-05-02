@@ -8,7 +8,7 @@ string_t* make_string_ptr(const std::string& str, chunk_t* chunk) {
   string_t* result = new (data) string_t;
   assert(result != nullptr);
 
-  init_string(str, chunk->next_data, result);
+  init_string(str, chunk->next_data, result, true);
   memcpy(chunk->next_data, str.c_str(), str.size());
   result->chunk = chunk;
   if (chunk->last_string == nullptr) {
@@ -22,7 +22,7 @@ string_t* make_string_ptr(const std::string& str, chunk_t* chunk) {
 }
 
 String::~String() {
-  if (ptr_ != nullptr) {
+  if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
     uint64_t refcount = ptr_->refcount.fetch_sub(1, std::memory_order_relaxed);
     if (refcount == 1) {
       ptr_->~string_t();

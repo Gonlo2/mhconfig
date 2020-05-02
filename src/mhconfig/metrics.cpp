@@ -36,22 +36,22 @@ namespace mhconfig
   }
 
   void Metrics::api_duration(const std::string& type, double duration_ns) {
-    family_api_duration_summary_->Add({{"type", type}}, quantiles_)
-      .Observe(duration_ns);
+    //family_api_duration_summary_->Add({{"type", type}}, quantiles_)
+      //.Observe(duration_ns);
   }
 
   void Metrics::scheduler_duration(const std::string& type, double duration_ns) {
-    family_scheduler_duration_summary_->Add({{"type", type}}, quantiles_)
-      .Observe(duration_ns);
+    //family_scheduler_duration_summary_->Add({{"type", type}}, quantiles_)
+      //.Observe(duration_ns);
   }
 
   void Metrics::worker_duration(const std::string& type, double duration_ns) {
-    family_worker_duration_summary_->Add({{"type", type}}, quantiles_)
-      .Observe(duration_ns);
+    //family_worker_duration_summary_->Add({{"type", type}}, quantiles_)
+      //.Observe(duration_ns);
   }
 
   void Metrics::serialization_duration(double duration_ns) {
-    family_serialization_duration_summary_->Add({}, quantiles_)
-      .Observe(duration_ns);
+    //family_serialization_duration_summary_->Add({}, quantiles_)
+      //.Observe(duration_ns);
   }
 } /* mhconfig */

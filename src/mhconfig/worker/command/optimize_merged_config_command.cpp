@@ -8,10 +8,12 @@ namespace command
 {
 
 OptimizeMergedConfigCommand::OptimizeMergedConfigCommand(
-  std::shared_ptr<merged_config_t> merged_config
+  std::shared_ptr<merged_config_t> merged_config,
+  std::shared_ptr<string_pool::Pool> pool
 )
   : Command(),
-  merged_config_(merged_config)
+  merged_config_(merged_config),
+  pool_(pool)
 {
 }
 
@@ -27,7 +29,10 @@ bool OptimizeMergedConfigCommand::execute(
   Metrics& metrics
 ) {
   auto optimized_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
-  bool ok = optimized_merged_config->init(merged_config_->value);
+  bool ok = optimized_merged_config->init(
+    merged_config_->value,
+    pool_
+  );
   if (ok) {
     // This works only because the the api merged config object is modified only in the
     // scheduler thread and that modification trigger this command, so at this point

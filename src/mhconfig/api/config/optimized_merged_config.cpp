@@ -7,13 +7,20 @@ namespace api
 namespace config
 {
 
+namespace
+{
+  std::string& get_skey_buffer() {
+    thread_local static std::string buffer;
+    return buffer;
+  }
+}
 
 uint32_t make_elements_ranges_map_rec(
   mhconfig::ElementRef root,
   uint32_t& idx,
   const std::string& skey,
   bool add,
-  std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& output
+  std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>>& output
 ) {
   ++idx;
 
@@ -43,7 +50,7 @@ uint32_t make_elements_ranges_map_rec(
 
         if (add) {
           spdlog::trace("The position range of the key '{}' is ({}, {})", new_skey, start_idx, start_idx + sibling_offset - 1);
-          output[new_skey] = std::make_pair(start_idx, start_idx + sibling_offset);
+          output.emplace_back(new_skey, std::make_pair(start_idx, start_idx + sibling_offset));
         }
 
         parent_sibling_offset += sibling_offset;
@@ -76,13 +83,19 @@ uint32_t make_elements_ranges_map_rec(
 
 void make_elements_ranges_map(
   mhconfig::ElementRef root,
-  std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& output
+  std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>>& output
 ) {
   uint32_t idx = 0;
   std::string key = "";
-  uint32_t size = make_elements_ranges_map_rec(root, idx, key, true, output);
+  uint32_t size = make_elements_ranges_map_rec(
+    root,
+    idx,
+    key,
+    true,
+    output
+  );
   spdlog::trace("The position range of the key '' is ({}, {})", 0, size);
-  output[key] = std::make_pair(0, size);
+  output.emplace_back(key, std::make_pair(0, size));
 }
 
 
@@ -97,16 +110,19 @@ OptimizedMergedConfig::~OptimizedMergedConfig() {
   }
 }
 
-bool OptimizedMergedConfig::init(ElementRef element) {
-  std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> data_range_by_skey;
-  make_elements_ranges_map(element, data_range_by_skey); //TODO pass two vectors to avoid reallocate the data
+bool OptimizedMergedConfig::init(
+  ElementRef element,
+  std::shared_ptr<string_pool::Pool> pool
+) {
+  std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> skeys_and_positions;
+  make_elements_ranges_map(element, skeys_and_positions);
 
-  std::vector<char*> keys;
-  keys.reserve(data_range_by_skey.size());
-  for (const auto& x: data_range_by_skey) {
-    keys.push_back((char*)x.first.c_str());
+  std::vector<char*> skeys;
+  skeys.reserve(skeys_and_positions.size());
+  for (auto& x: skeys_and_positions) {
+    skeys.push_back((char*)x.first.c_str());
   }
-  cmph_io_adapter_t *source = cmph_io_vector_adapter(keys.data(), keys.size());
+  cmph_io_adapter_t *source = cmph_io_vector_adapter(skeys.data(), skeys.size());
   spdlog::trace("Created a cmph source in {}", (void*)source);
 
   cmph_config_t *config = cmph_config_new(source);
@@ -150,17 +166,24 @@ bool OptimizedMergedConfig::init(ElementRef element) {
 
   data_ = ss.str();
 
-  position_.resize(data_range_by_skey.size());
-  for (auto& it : data_range_by_skey) {
-    uint32_t idx = cmph_search(hash_, (char*)it.first.c_str(), (cmph_uint32)it.first.size());
-    position_[idx].first = size_till_position[it.second.first];
-    position_[idx].second = size_till_position[it.second.second] - position_[idx].first;
+  position_.resize(skeys_and_positions.size());
+  for (auto& it : skeys_and_positions) {
+    uint32_t idx = cmph_search(
+      hash_,
+      (char*)it.first.c_str(),
+      (cmph_uint32)it.first.size()
+    );
+
+    position_[idx].key = pool->add(it.first);
+    position_[idx].start = size_till_position[it.second.first];
+    position_[idx].size = size_till_position[it.second.second] - position_[idx].start;
+
     spdlog::trace(
       "The size range of the key '{}' is (hash: {}, idx: {}, size: {})",
       it.first,
       idx,
-      position_[idx].first,
-      position_[idx].second
+      position_[idx].start,
+      position_[idx].size
     );
   }
 
@@ -170,30 +193,31 @@ bool OptimizedMergedConfig::init(ElementRef element) {
 void OptimizedMergedConfig::add_elements(
   request::GetRequest* api_request
 ) {
-  std::string skey;
-  skey.reserve(256);
+  std::string& skey = get_skey_buffer();
+  skey.clear();
   //FIXME Ignore the first key
   for (uint32_t i = 1; i < api_request->key().size(); ++i) {
     skey.push_back('/');
     skey += api_request->key()[i];
   }
 
-  spdlog::trace("Using the cmph hash in {}", (void*)hash_);
   uint32_t idx = cmph_search(hash_, skey.c_str(), (cmph_uint32)skey.size());
   spdlog::trace("The cmph value of '{}' is {}", skey, idx);
 
-  if (false) { //TODO Check invalid keys
-    spdlog::trace("Can't find the key '{}'", skey);
-    api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
-  } else {
+  if (position_[idx].key == skey) {
     spdlog::trace(
       "Found the range of the key '{}' ({}, {})",
       skey,
-      position_[idx].first,
-      position_[idx].second
+      position_[idx].start,
+      position_[idx].size
     );
-    std::string data(&data_[position_[idx].first], position_[idx].second);
-    api_request->set_element_bytes(data);
+    api_request->set_element_bytes(
+      &data_[position_[idx].start],
+      position_[idx].size
+    );
+  } else {
+    spdlog::trace("Can't find the key '{}'", skey);
+    api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
   }
 }
 
