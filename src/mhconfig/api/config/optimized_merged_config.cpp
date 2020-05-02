@@ -114,7 +114,12 @@ bool OptimizedMergedConfig::init(ElementRef element) {
   cmph_config_set_graphsize(config, 0.99);
   cmph_config_set_algo(config, CMPH_CHD);  //TODO Check and change the algorithm
   hash_ = cmph_new(config);
-  spdlog::trace("Created a cmph hash in {}", (void*)hash_);
+  if (hash_ == nullptr) {
+    spdlog::trace("Can't create the cmph hash");
+    return false;
+  } else {
+    spdlog::trace("Created a cmph hash in {}", (void*)hash_);
+  }
 
   cmph_io_vector_adapter_destroy(source);
 
@@ -124,7 +129,7 @@ bool OptimizedMergedConfig::init(ElementRef element) {
   std::stringstream ss;
 
   std::vector<uint32_t> size_till_position;
-  size_till_position.reserve(get_response.elements().size());
+  size_till_position.reserve(get_response.elements().size()+1);
   size_till_position.push_back(0);
   ::mhconfig::proto::GetResponse tmp_get_response;
   auto tmp_element = tmp_get_response.add_elements();

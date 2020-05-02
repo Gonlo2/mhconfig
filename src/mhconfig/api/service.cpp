@@ -85,7 +85,7 @@ void Service::handle_request() {
       spdlog::info("The completion queue has been closed");
     } else if (!ok) {
       spdlog::error("Can't read a completion queue event {}", tag);
-      // It's neccesary drop the event here?
+      // It's neccesary drop the class inside because the inheritance?
       delete static_cast<request::Request*>(tag);
     } else {
       try {
