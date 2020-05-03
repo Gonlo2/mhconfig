@@ -10,7 +10,7 @@ namespace command
 UpdateCommand::UpdateCommand(
   uint64_t namespace_id,
   std::shared_ptr<string_pool::Pool> pool,
-  ::mhconfig::api::request::UpdateRequest* update_request
+  std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request
 )
   : Command(),
   namespace_id_(namespace_id),
@@ -36,7 +36,7 @@ bool UpdateCommand::execute(
   if (!add_items(items)) {
     update_request_->set_namespace_id(namespace_id_);
     update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
-    update_request_->reply();
+    update_request_->commit();
   } else {
     auto update_command = std::make_shared<::mhconfig::scheduler::command::UpdateDocumentsCommand>(
       namespace_id_,

@@ -8,12 +8,16 @@
 #include <string>
 #include <memory>
 
+#include <boost/functional/hash.hpp>
+
 #include "string_pool/pool.h"
 
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/config/merged_config.h"
 #include "mhconfig/element.h"
 #include "jmutils/common.h"
+
 
 namespace mhconfig
 {
@@ -21,6 +25,8 @@ namespace ds
 {
 namespace config_namespace
 {
+
+//TODO Review the names
 
 const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 
@@ -44,24 +50,17 @@ struct merged_config_t {
   std::shared_ptr<::mhconfig::api::config::MergedConfig> api_merged_config{nullptr};
 };
 
+struct override_metadata_t {
+  std::map<uint32_t, std::shared_ptr<raw_config_t>> raw_config_by_version;
+  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
+};
 
+//TODO Check if it's better use a unique_ptr for this to avoid copy
+// the data in the hash table rebuilds
 struct document_metadata_t {
-  std::unordered_map<
-    std::string,
-    std::map<uint32_t, std::shared_ptr<raw_config_t>>
-  > raw_config_by_version_by_override;
-
+  std::unordered_map<std::string, override_metadata_t> override_by_key;
   std::unordered_map<std::string, ::jmutils::zero_value_t<uint32_t>> referenced_by;
 };
-
-
-struct merged_config_metadata_t {
-  std::unordered_map<
-    std::string,
-    std::weak_ptr<merged_config_t>
-  > merged_config_by_document;
-};
-
 
 // TODO move to the builder file
 namespace build {
@@ -86,7 +85,7 @@ namespace build {
     bool is_main;
     std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
 
-    ::mhconfig::api::request::GetRequest* request;
+    std::shared_ptr<::mhconfig::api::request::GetRequest> request;
     uint32_t specific_version;
     std::vector<build_element_t> elements_to_build;
   };
@@ -98,6 +97,7 @@ struct config_namespace_t {
   uint32_t current_version{1};
   uint64_t id;
   uint64_t last_access_timestamp;
+  uint64_t num_watchers{0};
   std::string root_path;
 
   std::shared_ptr<string_pool::Pool> pool;
@@ -109,8 +109,8 @@ struct config_namespace_t {
 
   std::unordered_map<
     std::string,
-    std::shared_ptr<merged_config_metadata_t>
-  > merged_config_metadata_by_overrides_key;
+    std::weak_ptr<merged_config_t>
+  > merged_config_by_overrides_key;
 
   std::vector<
     std::shared_ptr<merged_config_t>

@@ -5,6 +5,7 @@
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/run_gc_command.h"
 #include "mhconfig/api/request/run_gc_request.h"
+#include "mhconfig/api/request/request.h"
 
 namespace mhconfig
 {
@@ -16,7 +17,7 @@ namespace request
 using jmutils::container::Queue;
 using namespace mhconfig::scheduler::command;
 
-class RunGCRequestImpl : public RunGCRequest
+class RunGCRequestImpl : public Request, public RunGCRequest, public std::enable_shared_from_this<RunGCRequestImpl>
 {
 public:
   RunGCRequestImpl(
@@ -29,8 +30,10 @@ public:
 
   const std::string name() const override;
 
-  Request* clone() override;
+  std::shared_ptr<Session> clone() override;
   void subscribe() override;
+
+  bool commit() override;
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::RunGCResponse> responder_;

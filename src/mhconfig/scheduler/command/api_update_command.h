@@ -17,7 +17,7 @@ class ApiUpdateCommand : public Command
 {
 public:
   ApiUpdateCommand(
-    ::mhconfig::api::request::UpdateRequest* update_request
+    std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request
   );
   virtual ~ApiUpdateCommand();
 
@@ -29,6 +29,7 @@ public:
 
   NamespaceExecutionResult execute_on_namespace(
     std::shared_ptr<config_namespace_t> config_namespace,
+    Queue<CommandRef>& scheduler_queue,
     Queue<worker::command::CommandRef>& worker_queue
   ) override;
 
@@ -37,7 +38,7 @@ public:
   ) override;
 
 private:
-  ::mhconfig::api::request::UpdateRequest* update_request_;
+  std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request_;
 };
 
 } /* command */

@@ -23,20 +23,11 @@ enum Status {
 } /* update_request */
 
 
-class UpdateRequest : public Request
+class UpdateRequest : public Commitable
 {
 public:
-  UpdateRequest(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    Metrics& metrics
-  )
-    : Request(service, cq_, metrics)
-  {
-  };
-
-  virtual ~UpdateRequest() {
-  };
+  UpdateRequest() {};
+  virtual ~UpdateRequest() {};
 
   virtual const std::string& root_path() const = 0;
   virtual const std::vector<std::string>& relative_paths() const = 0;

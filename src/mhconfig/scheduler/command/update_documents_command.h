@@ -5,9 +5,11 @@
 
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
+#include "mhconfig/api/stream/watch_stream_impl.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/api_reply_command.h"
 #include "mhconfig/worker/command/build_command.h"
+#include "mhconfig/scheduler/command/api_get_command.h"
 #include "mhconfig/builder.h"
 #include "jmutils/time.h"
 
@@ -26,7 +28,7 @@ class UpdateDocumentsCommand : public Command
 public:
   UpdateDocumentsCommand(
     uint64_t namespace_id,
-    ::mhconfig::api::request::UpdateRequest* update_request,
+    std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request,
     std::vector<load_raw_config_result_t> items
   );
 
@@ -39,6 +41,7 @@ public:
 
   NamespaceExecutionResult execute_on_namespace(
     std::shared_ptr<config_namespace_t> config_namespace,
+    Queue<CommandRef>& scheduler_queue,
     Queue<worker::command::CommandRef>& worker_queue
   ) override;
 
@@ -48,7 +51,7 @@ public:
 
 private:
   uint64_t namespace_id_;
-  ::mhconfig::api::request::UpdateRequest* update_request_;
+  std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request_;
   std::vector<load_raw_config_result_t> items_;
 
   void send_api_response(

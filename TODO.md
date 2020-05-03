@@ -12,6 +12,8 @@
 - Change the do_topological_sort_over_ref_graph_rec to iterative version
 - Use two kind of workers: low priority for optimization and high priority for setup/get/update
 - Check the string_pool
+- Change the namespace_id and another values that return a u64 with the grpc API to i64 to avoid problems with languajes
+  without u64 support like java.
 
 # Doing
 

@@ -9,7 +9,7 @@ namespace command
 
 UpdateDocumentsCommand::UpdateDocumentsCommand(
   uint64_t namespace_id,
-  ::mhconfig::api::request::UpdateRequest* update_request,
+  std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request,
   std::vector<load_raw_config_result_t> items
 )
   : Command(),
@@ -36,6 +36,7 @@ uint64_t UpdateDocumentsCommand::namespace_id() const {
 
 NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
   std::shared_ptr<config_namespace_t> config_namespace,
+  Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   update_request_->set_namespace_id(config_namespace->id);
@@ -88,6 +89,8 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     }
   }
 
+  std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_to_trigger;
+
   spdlog::debug("Updating the id of the affected documents");
   std::unordered_map<std::string, std::unordered_set<std::string>> updated_documents_by_override;
   for (auto& item : items_) {
@@ -130,8 +133,28 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
         new_raw_config->value = raw_config->value;
         new_raw_config->reference_to = raw_config->reference_to;
 
-        document_metadata->raw_config_by_version_by_override[updated_documents_it.first][config_namespace->current_version] = new_raw_config;
+        document_metadata->override_by_key[updated_documents_it.first]
+          .raw_config_by_version[config_namespace->current_version] = new_raw_config;
       }
+
+
+      auto override_search = document_metadata->override_by_key
+        .find(updated_documents_it.first);
+
+      if (override_search != document_metadata->override_by_key.end()) {
+        auto& watchers = override_search->second.watchers;
+        for (size_t i = 0; i < watchers.size();) {
+          if (auto watcher = watchers[i].lock()) {
+            watchers_to_trigger.insert(watcher);
+            ++i;
+          } else {
+            watchers[i] = watchers.back();
+            watchers.pop_back();
+            --(config_namespace->num_watchers);
+          }
+        }
+      }
+
     }
   }
 
@@ -147,7 +170,8 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
         item.override_
       );
       if (document_metadata_search != config_namespace->document_metadata_by_document.end()) {
-        document_metadata_search->second->raw_config_by_version_by_override[item.override_][config_namespace->current_version] = std::make_shared<raw_config_t>();
+        document_metadata_search->second->override_by_key[item.override_]
+          .raw_config_by_version[config_namespace->current_version] = std::make_shared<raw_config_t>();
       }
     } else {
       for (const auto& reference_to : item.raw_config->reference_to) {
@@ -157,8 +181,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
             .find(reference_to);
           if (search == config_namespace->document_metadata_by_document.end()) {
             referenced_document_metadata = std::make_shared<document_metadata_t>();
-            config_namespace
-              ->document_metadata_by_document[reference_to] = referenced_document_metadata;
+            config_namespace->document_metadata_by_document[reference_to] = referenced_document_metadata;
           } else {
             referenced_document_metadata = search->second;
           }
@@ -191,8 +214,46 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
       );
 
       item.raw_config->id = config_namespace->next_raw_config_id++;
-      document_metadata->raw_config_by_version_by_override[item.override_][config_namespace->current_version] = item.raw_config;
+      document_metadata->override_by_key[item.override_]
+        .raw_config_by_version[config_namespace->current_version] = item.raw_config;
     }
+
+    if (document_metadata_search != config_namespace->document_metadata_by_document.end()) {
+      auto override_search = document_metadata_search->second
+        ->override_by_key
+        .find(item.override_);
+
+      if (override_search != document_metadata_search->second->override_by_key.end()) {
+        auto& watchers = override_search->second.watchers;
+        for (size_t i = 0; i < watchers.size();) {
+          if (auto watcher = watchers[i].lock()) {
+            watchers_to_trigger.insert(watcher);
+            ++i;
+          } else {
+            watchers[i] = watchers.back();
+            watchers.pop_back();
+            --(config_namespace->num_watchers);
+          }
+        }
+      }
+    }
+  }
+
+  for (auto watcher : watchers_to_trigger) {
+    spdlog::debug(
+      "The document '{}' changed and it has a watcher",
+      watcher->document()
+    );
+    auto output_message = watcher->make_output_message();
+    output_message->set_uid(watcher->uid());
+
+    auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
+      std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
+        watcher,
+        output_message
+      )
+    );
+    scheduler_queue.push(api_get_command);
   }
 
   update_request_->set_status(::mhconfig::api::request::update_request::OK);
@@ -225,7 +286,7 @@ void UpdateDocumentsCommand::send_api_response(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    static_cast<::mhconfig::api::request::Request*>(update_request_)
+    update_request_
   );
   worker_queue.push(api_reply_command);
 }

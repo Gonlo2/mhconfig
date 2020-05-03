@@ -212,25 +212,23 @@ public:
     auto search = set_.find(String(str));
     if (search != set_.end()) return *search;
 
-    logger_->debug("Adding a new string");
+    spdlog::debug("Adding a new string");
     return *set_.insert(store_string(str)).first;
   }
 
 private:
   friend class String;
 
-  std::shared_ptr<spdlog::logger> logger_{spdlog::get("console")};
-
   std::unordered_set<String> set_;
   chunk_t* chunk_;
 
   const String store_string(const std::string& str) {
-    logger_->debug("Adding a new string of size {}", str.size());
+    spdlog::debug("Adding a new string of size {}", str.size());
 
     chunk_t* back_chunk = chunk_;
     while (back_chunk->next != nullptr) {
       size_t s = (char*) back_chunk->next->next_data - (char*) &back_chunk->next->data;
-      logger_->trace("The chunk {} used {} bytes", (uint64_t)back_chunk->next, s);
+      spdlog::trace("The chunk {} used {} bytes", (uint64_t)back_chunk->next, s);
       if (s + str.size() <= CHUNK_DATA_SIZE) break;
       back_chunk = back_chunk->next;
     }
@@ -240,10 +238,10 @@ private:
     std::unique_lock lock_chunk(back_chunk->next->mutex);
 
     string_t* string = make_string_ptr(str, back_chunk->next);
-    logger_->trace("Made the string {} in {}", (void*)string, (void*)string->data);
+    spdlog::trace("Made the string {} in {}", (void*)string, (void*)string->data);
 
     size_t data_size = align(str.size());
-    logger_->trace("Moving the next_data pointer {} bytes", data_size);
+    spdlog::trace("Moving the next_data pointer {} bytes", data_size);
     back_chunk->next->next_data += data_size;
 
     return String(string);
@@ -253,16 +251,16 @@ private:
     std::unique_lock lock_pool(chunk_->mutex);
     std::unique_lock lock_chunk(chunk->mutex);
 
-    logger_->debug("Compacting the chunk {}", (void*)chunk);
+    spdlog::debug("Compacting the chunk {}", (void*)chunk);
 
     chunk->fragmented_size.store(0, std::memory_order_relaxed);
 
-    logger_->trace("Looking for the first string");
+    spdlog::trace("Looking for the first string");
     chunk->next_data = chunk->data;
     while (chunk->first_string != nullptr) {
       string_t* s = chunk->first_string;
       if (s->refcount.load(std::memory_order_relaxed) != 1) break;
-      logger_->trace("Removing the string {}", (void*)s);
+      spdlog::trace("Removing the string {}", (void*)s);
       chunk->first_string = s->next;
       s->chunk = nullptr;
       set_.erase(String(s));
@@ -270,17 +268,17 @@ private:
 
     chunk->last_string = chunk->first_string;
 
-    logger_->trace("Compacting the strings");
+    spdlog::trace("Compacting the strings");
     string_t* next_string = chunk->last_string;
     while (next_string != nullptr) {
       string_t* s = next_string;
       next_string = s->next;
       if (s->refcount.load(std::memory_order_relaxed) == 1) {
-        logger_->trace("Removing the string {}", (void*)s);
+        spdlog::trace("Removing the string {}", (void*)s);
         s->chunk = nullptr;
         set_.erase(String(s));
       } else {
-        logger_->trace("Compacting the string {}", (void*)s);
+        spdlog::trace("Compacting the string {}", (void*)s);
         chunk->last_string->next = s;
         chunk->last_string = s;
         char* from = s->data;
@@ -296,7 +294,7 @@ private:
   }
 
   chunk_t* new_chunk() {
-    logger_->trace("Making a new chunk");
+    spdlog::trace("Making a new chunk");
     void* data = aligned_alloc(sizeof(size_t), sizeof(chunk_t));
     assert (data != nullptr);
     chunk_t* chunk = new (data) chunk_t;

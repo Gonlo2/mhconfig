@@ -13,7 +13,7 @@ UpdateRequestImpl::UpdateRequestImpl(
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : UpdateRequest(service, cq_, metrics),
+) : Request(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
 {
@@ -51,25 +51,29 @@ void UpdateRequestImpl::set_version(uint32_t version) {
   response_.set_version(version);
 }
 
-Request* UpdateRequestImpl::clone() {
-  return new UpdateRequestImpl(service_, cq_, metrics_, scheduler_queue_);
+bool UpdateRequestImpl::commit() {
+  return reply();
+}
+
+std::shared_ptr<Session> UpdateRequestImpl::clone() {
+  return make_session<UpdateRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
 }
 
 void UpdateRequestImpl::subscribe() {
-  service_->RequestUpdate(&ctx_, &request_, &responder_, cq_, cq_, this);
+  service_->RequestUpdate(&ctx_, &request_, &responder_, cq_, cq_, tag());
 }
 
 void UpdateRequestImpl::request() {
   relative_paths_ = to_vector(request_.relative_paths());
 
   auto api_update_command = std::make_shared<scheduler::command::ApiUpdateCommand>(
-    static_cast<::mhconfig::api::request::UpdateRequest*>(this)
+    shared_from_this()
   );
   scheduler_queue_.push(api_update_command);
 }
 
 void UpdateRequestImpl::finish() {
-  responder_.Finish(response_, grpc::Status::OK, this);
+  responder_.Finish(response_, grpc::Status::OK, tag());
 }
 
 

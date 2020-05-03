@@ -1,9 +1,7 @@
 #ifndef MHCONFIG__API__REQUEST__RUN_GC_REQUEST_H
 #define MHCONFIG__API__REQUEST__RUN_GC_REQUEST_H
 
-#include "jmutils/container/queue.h"
-#include "mhconfig/api/request/request.h"
-#include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/api/session.h"
 
 namespace mhconfig
 {
@@ -12,21 +10,11 @@ namespace api
 namespace request
 {
 
-class RunGCRequest : public Request
+class RunGCRequest : public Commitable
 {
 public:
-  RunGCRequest(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    Metrics& metrics
-  )
-    : Request(service, cq_, metrics)
-  {
-  };
-
-  virtual ~RunGCRequest() {
-  }
-
+  RunGCRequest() {}
+  virtual ~RunGCRequest() {}
 };
 
 } /* request */

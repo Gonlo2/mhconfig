@@ -17,7 +17,7 @@ namespace request
 using jmutils::container::Queue;
 
 
-class UpdateRequestImpl : public UpdateRequest
+class UpdateRequestImpl : public Request, public UpdateRequest, public std::enable_shared_from_this<UpdateRequestImpl>
 {
 public:
   UpdateRequestImpl(
@@ -30,7 +30,7 @@ public:
 
   const std::string name() const override;
 
-  Request* clone() override;
+  std::shared_ptr<Session> clone() override;
   void subscribe() override;
 
   const std::string& root_path() const override;
@@ -39,6 +39,8 @@ public:
   void set_namespace_id(uint64_t namespace_id) override;
   void set_status(update_request::Status status) override;
   void set_version(uint32_t version) override;
+
+  bool commit() override;
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;

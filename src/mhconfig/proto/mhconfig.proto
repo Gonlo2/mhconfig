@@ -3,9 +3,13 @@ syntax = "proto3";
 package mhconfig.proto;
 
 service MHConfig {
-  rpc Get(GetRequest) returns (GetResponse) {}
-  rpc Update(UpdateRequest) returns (UpdateResponse) {}
-  rpc RunGC(RunGCRequest) returns (RunGCResponse) {}
+  // Public methods
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Watch(stream WatchRequest) returns (stream WatchResponse);
+
+  // Admin methods
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc RunGC(RunGCRequest) returns (RunGCResponse);
 }
 
 
@@ -13,7 +17,7 @@ message GetRequest {
   string root_path = 1;
   repeated string overrides = 2;
   uint32 version = 3;
-  string document = 4;
+  //string document = 4;  //TODO
   repeated string key = 5;
 }
 
@@ -54,6 +58,30 @@ message RunGCRequest {
 }
 
 message RunGCResponse {
+}
+
+
+message WatchRequest {
+  uint32 uid = 1;
+  bool remove = 2;
+  string root_path = 3;
+  repeated string overrides = 4;
+  uint32 version = 5;
+  string document = 6;
+}
+
+message WatchResponse {
+  uint32 uid = 1;
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+    UID_IN_USE = 2;
+    INVALID_VERSION = 3;
+  }
+  Status status = 2;
+  uint64 namespace_id = 3;
+  uint32 version = 4;
+  repeated Element elements = 5;
 }
 
 

@@ -55,7 +55,7 @@ void Service::join() {
 
 void Service::subscribe_requests() {
   for (int i = 0; i < 1000; ++i) { //TODO configure the number of requests
-    auto get_request = new request::GetRequestImpl(
+    auto get_request = make_session<request::GetRequestImpl>(
       &service_,
       cq_.get(),
       metrics_,
@@ -63,7 +63,7 @@ void Service::subscribe_requests() {
     );
     get_request->subscribe();
 
-    auto update_request = new request::UpdateRequestImpl(
+    auto update_request = make_session<request::UpdateRequestImpl>(
       &service_,
       cq_.get(),
       metrics_,
@@ -71,13 +71,21 @@ void Service::subscribe_requests() {
     );
     update_request->subscribe();
 
-    auto run_gc_request = new request::RunGCRequestImpl(
+    auto run_gc_request = make_session<request::RunGCRequestImpl>(
       &service_,
       cq_.get(),
       metrics_,
       scheduler_queue_
     );
     run_gc_request->subscribe();
+
+    auto watch_stream = make_session<stream::WatchStreamImpl>(
+      &service_,
+      cq_.get(),
+      metrics_,
+      scheduler_queue_
+    );
+    watch_stream->subscribe();
   }
 }
 
@@ -89,17 +97,21 @@ void Service::handle_request() {
     got_event = cq_->Next(&tag, &ok);
     if (!got_event) {
       spdlog::info("The completion queue has been closed");
-    } else if (!ok) {
-      spdlog::error("Can't read a completion queue event {}", tag);
-      // It's neccesary drop the class inside because the inheritance?
-      delete static_cast<request::Request*>(tag);
     } else {
       try {
-        static_cast<request::Request*>(tag)->proceed();
+        spdlog::trace("Obtained the completion queue event {}", tag);
+        auto session = static_cast<Session*>(tag);
+        if (ok) {
+          auto _ = session->proceed();
+        } else {
+          spdlog::debug("The completion queue event {} isn't ok, destroying it", tag);
+          auto _ = session->destroy();
+        }
+        spdlog::trace("Processed the completion queue event {}", tag);
       } catch (const std::exception &e) {
-        spdlog::error("Some error take place processing the gRPC input: {}", e.what());
+        spdlog::error("Some error take place processing the gRPC session: {}", e.what());
       } catch (...) {
-        spdlog::error("Some unknown error take place processing the gRPC input");
+        spdlog::error("Some unknown error take place processing the gRPC session");
       }
     }
   } while (got_event);

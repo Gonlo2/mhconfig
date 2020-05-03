@@ -153,19 +153,18 @@ void RunGcCommand::remove_dead_pointers(
   size_t number_of_removed_dead_pointers = 0;
   size_t number_of_processed_pointers = 0;
   for (auto& it : context.namespace_by_path) {
-    for (auto& it_2 : it.second->merged_config_metadata_by_overrides_key) {
-      number_of_processed_pointers += it_2.second->merged_config_by_document.size();
+    number_of_processed_pointers += it.second
+      ->merged_config_by_overrides_key.size();
 
-      for (
-        auto it_3 = it_2.second->merged_config_by_document.begin();
-        it_3 != it_2.second->merged_config_by_document.end();
-      ) {
-        if (it_3->second.expired()) {
-          it_3 = it_2.second->merged_config_by_document.erase(it_3);
-          ++number_of_removed_dead_pointers;
-        } else {
-          ++it_3;
-        }
+    for (
+      auto it_2 = it.second->merged_config_by_overrides_key.begin();
+      it_2 != it.second->merged_config_by_overrides_key.end();
+    ) {
+      if (it_2->second.expired()) {
+        it_2 = it.second->merged_config_by_overrides_key.erase(it_2);
+        ++number_of_removed_dead_pointers;
+      } else {
+        ++it_2;
       }
     }
   }
@@ -193,7 +192,10 @@ void RunGcCommand::remove_namespaces(
     auto it = context.namespace_by_id.begin();
     it != context.namespace_by_id.end();
   ) {
-    if (it->second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
+    if (
+      (it->second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp)
+      && (it->second->num_watchers == 0)
+    ) {
       spdlog::debug(
         "Removing the namespace '{}' with id {}",
         it->second->root_path,
@@ -256,49 +258,63 @@ void RunGcCommand::remove_versions(
         auto it_2 = config_namespace->document_metadata_by_document.begin();
         it_2 != config_namespace->document_metadata_by_document.end();
       ) {
-        auto& raw_config_by_version_by_override = it_2
-          ->second
-          ->raw_config_by_version_by_override;
-
+        auto& override_by_key = it_2->second->override_by_key;
         for (
-          auto it_3 = raw_config_by_version_by_override.begin();
-          it_3 != raw_config_by_version_by_override.end();
+          auto it_3 = override_by_key.begin();
+          it_3 != override_by_key.end();
         ) {
-          auto& raw_config_by_version = it_3->second;
-
-          auto version_search = raw_config_by_version.lower_bound(remove_till_version);
-          bool delete_override = version_search == raw_config_by_version.end();
-          if (delete_override) {
-            delete_override = raw_config_by_version.rbegin()->second->value == nullptr;
-            if (!delete_override) --version_search;
+          auto& watchers = it_3->second.watchers;
+          //TODO add some stats
+          for (size_t i = 0; i < watchers.size();) {
+            if (watchers[i].expired()) {
+              watchers[i] = watchers.back();
+              watchers.pop_back();
+              --(config_namespace->num_watchers);
+            } else {
+              ++i;
+            }
           }
 
-          if (delete_override) {
+          auto& raw_config_by_version = it_3->second.raw_config_by_version;
+
+          auto it_4 = raw_config_by_version.begin();
+          while (
+            (raw_config_by_version.size() > 1) && (it_4->first < remove_till_version)
+          ) {
+            spdlog::debug(
+              "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
+              it_4->first,
+              it_2->first,
+              it_3->first,
+              it.first
+            );
+            it_4 = raw_config_by_version.erase(it_4);
+          }
+
+          if (!raw_config_by_version.empty() && (it_4->second->value == nullptr)) {
+            spdlog::debug(
+              "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
+              it_4->first,
+              it_2->first,
+              it_3->first,
+              it.first
+            );
+            it_4 = raw_config_by_version.erase(it_4);
+          }
+
+          if (raw_config_by_version.empty() && it_3->second.watchers.empty()) {
             spdlog::debug(
               "Removed override '{}' in the namespace '{}'",
               it_3->first,
               it.first
             );
-
-            it_3 = raw_config_by_version_by_override.erase(it_3);
+            it_3 = override_by_key.erase(it_3);
           } else {
-            spdlog::debug(
-              "Removed the {} previous versions to {} of the override '{}' in the namespace '{}'",
-              std::distance(raw_config_by_version.begin(), version_search),
-              remove_till_version,
-              it_3->first,
-              it.first
-            );
-
-            raw_config_by_version.erase(
-              raw_config_by_version.begin(),
-              version_search
-            );
             ++it_3;
           }
         }
 
-        if (raw_config_by_version_by_override.empty()) {
+        if (override_by_key.empty()) {
           it_2 = config_namespace->document_metadata_by_document.erase(it_2);
         } else {
           ++it_2;

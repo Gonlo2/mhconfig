@@ -12,7 +12,7 @@ RunGCRequestImpl::RunGCRequestImpl(
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : RunGCRequest(service, cq_, metrics),
+) : Request(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
 {
@@ -25,12 +25,16 @@ const std::string RunGCRequestImpl::name() const {
   return "RUN_GC";
 }
 
-Request* RunGCRequestImpl::clone() {
-  return new RunGCRequestImpl(service_, cq_, metrics_, scheduler_queue_);
+std::shared_ptr<Session> RunGCRequestImpl::clone() {
+  return make_session<RunGCRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
 }
 
 void RunGCRequestImpl::subscribe() {
-  service_->RequestRunGC(&ctx_, &request_, &responder_, cq_, cq_, this);
+  service_->RequestRunGC(&ctx_, &request_, &responder_, cq_, cq_, tag());
+}
+
+bool RunGCRequestImpl::commit() {
+  return reply();
 }
 
 void RunGCRequestImpl::request() {
@@ -65,7 +69,7 @@ uint32_t RunGCRequestImpl::max_live_in_seconds() {
 }
 
 void RunGCRequestImpl::finish() {
-  responder_.Finish(response_, grpc::Status::OK, this);
+  responder_.Finish(response_, grpc::Status::OK, tag());
 }
 
 

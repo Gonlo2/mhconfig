@@ -18,10 +18,11 @@
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 
-#include "mhconfig/api/request/request.h"
+#include "mhconfig/api/session.h"
 #include "mhconfig/api/request/get_request_impl.h"
 #include "mhconfig/api/request/update_request_impl.h"
 #include "mhconfig/api/request/run_gc_request_impl.h"
+#include "mhconfig/api/stream/watch_stream_impl.h"
 
 #include <prometheus/summary.h>
 #include <prometheus/exposer.h>
@@ -57,7 +58,7 @@ private:
   std::vector<std::unique_ptr<std::thread>> threads_;
 
   std::unique_ptr<grpc::Server> server_;
-  request::CustomService service_;
+  CustomService service_;
   std::unique_ptr<grpc::ServerCompletionQueue> cq_;
 
   Metrics& metrics_;

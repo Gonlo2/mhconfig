@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "mhconfig/api/request/request.h"
+#include "mhconfig/api/session.h"
 #include "mhconfig/element.h"
 
 namespace mhconfig
@@ -14,18 +14,10 @@ namespace api
 namespace request
 {
 
-class GetRequest : public Request
+class GetRequest : public Commitable
 {
 public:
-  GetRequest(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    Metrics& metrics
-  )
-    : Request(service, cq_, metrics)
-  {
-  };
-
+  GetRequest() {};
   virtual ~GetRequest() {};
 
   virtual const std::string& root_path() const = 0;
@@ -37,7 +29,6 @@ public:
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(mhconfig::ElementRef element) = 0;
   virtual void set_element_bytes(const char* data, size_t len) = 0;
-
 };
 
 } /* request */

@@ -17,7 +17,7 @@ namespace request
 using jmutils::container::Queue;
 
 
-class GetRequestImpl : public GetRequest
+class GetRequestImpl : public Request, public GetRequest, public std::enable_shared_from_this<GetRequestImpl>
 {
 public:
   GetRequestImpl(
@@ -30,7 +30,7 @@ public:
 
   const std::string name() const override;
 
-  Request* clone() override;
+  std::shared_ptr<Session> clone() override;
   void subscribe() override;
 
   const std::string& root_path() const override;
@@ -42,6 +42,8 @@ public:
   void set_version(uint32_t version) override;
   void set_element(mhconfig::ElementRef element) override;
   void set_element_bytes(const char* data, size_t len) override;
+
+  bool commit() override;
 
 protected:
   grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;

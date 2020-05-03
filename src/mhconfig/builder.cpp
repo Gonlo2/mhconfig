@@ -44,12 +44,12 @@ std::shared_ptr<config_namespace_t> index_files(
     }
 
     result.raw_config->id = config_namespace->next_raw_config_id++;
-    document_metadata->raw_config_by_version_by_override[result.override_][1] = result.raw_config;
+    document_metadata->override_by_key[result.override_].raw_config_by_version[1] = result.raw_config;
   }
 
   for (auto document_metadata_it : config_namespace->document_metadata_by_document) {
-    for (auto raw_config_by_override_it : document_metadata_it.second->raw_config_by_version_by_override) {
-      for (auto& reference_to : raw_config_by_override_it.second[1]->reference_to) {
+    for (auto override_it : document_metadata_it.second->override_by_key) {
+      for (auto& reference_to : override_it.second.raw_config_by_version[1]->reference_to) {
         std::shared_ptr<document_metadata_t> referenced_document_metadata;
         {
           auto search = config_namespace->document_metadata_by_document
@@ -58,7 +58,7 @@ std::shared_ptr<config_namespace_t> index_files(
             spdlog::error(
               "The document '{}' in the override '{}' has a '{}' tag to the inexistent document '{}'",
               document_metadata_it.first,
-              raw_config_by_override_it.first,
+              override_it.first,
               TAG_REF,
               reference_to
             );
@@ -633,22 +633,9 @@ std::shared_ptr<merged_config_t> get_or_build_merged_config(
     overrides_key
   );
   if (merged_config == nullptr) {
-    std::shared_ptr<merged_config_metadata_t> merged_config_metadata = nullptr;
-    {
-      auto search = config_namespace->merged_config_metadata_by_overrides_key
-        .find(overrides_key);
-
-      if (search == config_namespace->merged_config_metadata_by_overrides_key.end()) {
-        merged_config_metadata = std::make_shared<merged_config_metadata_t>();
-        config_namespace->merged_config_metadata_by_overrides_key[overrides_key] = merged_config_metadata;
-      } else {
-        merged_config_metadata = search->second;
-      }
-    }
-
     merged_config = std::make_shared<merged_config_t>();
     merged_config->creation_timestamp = jmutils::time::monotonic_now_sec();
-    merged_config_metadata->merged_config_by_document[document] = merged_config;
+    config_namespace->merged_config_by_overrides_key[overrides_key] = merged_config;
     config_namespace->merged_config_by_gc_generation[0].push_back(merged_config);
   }
 
@@ -660,31 +647,15 @@ std::shared_ptr<merged_config_t> get_merged_config(
   const std::string& document,
   const std::string& overrides_key
 ) {
-  std::shared_ptr<merged_config_metadata_t> merged_config_metadata = nullptr;
   // First we search if exists cached some mergd config using the overrides_key
-  {
-    auto search = config_namespace
-      ->merged_config_metadata_by_overrides_key
-      .find(overrides_key);
+  auto search = config_namespace->merged_config_by_overrides_key
+    .find(overrides_key);
 
-    if (search == config_namespace->merged_config_metadata_by_overrides_key.end()) {
-      return nullptr;
-    }
-
-    merged_config_metadata = search->second;
-    assert(merged_config_metadata != nullptr);
-  }
-
-  // If the override is cached we search the document
-  auto search = merged_config_metadata
-    ->merged_config_by_document
-    .find(document);
-
-  if (search == merged_config_metadata->merged_config_by_document.end()) {
+  if (search == config_namespace->merged_config_by_overrides_key.end()) {
     return nullptr;
   }
 
-  // We use a weak pointer to free the merged config so it's
+  // We use a weak pointer to free the old merged config so it's
   // possible that the obtained pointer is empty
   if (auto merged_config = search->second.lock()) {
     return merged_config;
@@ -692,7 +663,8 @@ std::shared_ptr<merged_config_t> get_merged_config(
 
   // If the pointer is invalidated we drop the item to avoid
   // do this check in a future, I'm to lazy ;)
-  merged_config_metadata->merged_config_by_document.erase(search);
+  config_namespace->merged_config_by_overrides_key
+    .erase(search);
 
   return nullptr;
 }
@@ -708,16 +680,16 @@ std::shared_ptr<raw_config_t> get_raw_config(
     version
   );
 
-  auto raw_config_by_version_search = document_metadata
-    ->raw_config_by_version_by_override
+  auto override_search = document_metadata->override_by_key
     .find(override_);
 
-  if (raw_config_by_version_search == document_metadata->raw_config_by_version_by_override.end()) {
+  if (override_search == document_metadata->override_by_key.end()) {
     spdlog::trace("Don't exists the override '{}'", override_);
     return nullptr;
   }
 
-  auto& raw_config_by_version = raw_config_by_version_search->second;
+  auto& raw_config_by_version = override_search->second
+    .raw_config_by_version;
 
   auto raw_config_search = (version == 0)
     ? raw_config_by_version.end()

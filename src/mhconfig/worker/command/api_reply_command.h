@@ -19,9 +19,8 @@ using namespace mhconfig::ds::config_namespace;
 class ApiReplyCommand : public Command
 {
 public:
-
   ApiReplyCommand(
-    ::mhconfig::api::request::Request* request
+    std::shared_ptr<::mhconfig::api::Commitable> commitable
   );
   virtual ~ApiReplyCommand();
 
@@ -33,7 +32,7 @@ public:
   ) override;
 
 private:
-  ::mhconfig::api::request::Request* request_;
+  std::shared_ptr<::mhconfig::api::Commitable> commitable_;
 };
 
 } /* command */

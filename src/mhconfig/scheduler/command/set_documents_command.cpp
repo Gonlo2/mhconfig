@@ -36,11 +36,12 @@ uint64_t SetDocumentsCommand::namespace_id() const {
 
 NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
   std::shared_ptr<config_namespace_t> config_namespace,
+  Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   spdlog::debug(
     "Processing the build response with id {}",
-    (void*) wait_build_->request
+    (void*) wait_build_->request.get()
   );
 
   for (const auto it : built_elements_by_document_) {
@@ -57,16 +58,13 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     merged_config->value = it.second.config;
     merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
 
-    std::stringstream wait_built_key_ss;
-    wait_built_key_ss << it.first << ':' << it.second.overrides_key;
-
-    auto& wait_builts = config_namespace->wait_builts_by_key[wait_built_key_ss.str()];
+    auto& wait_builts = config_namespace->wait_builts_by_key[it.second.overrides_key];
     for (size_t i = 0; i < wait_builts.size(); ) {
       auto wait_built = wait_builts[i];
 
       spdlog::debug(
         "Unchecking element built for the request with id {}",
-        (void*) wait_built->request
+        (void*) wait_built->request.get()
       );
       auto search = wait_built->pending_element_position_by_name.find(it.first);
       wait_built->elements_to_build[search->second].config = it.second.config;
@@ -76,7 +74,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
         if (wait_built->is_main) {
           spdlog::debug(
             "Responding the get request with id {}",
-            (void*) wait_built->request
+            (void*) wait_built->request.get()
           );
 
           auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
@@ -87,7 +85,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
         } else {
           spdlog::debug(
             "Sending the get request with id {} to built",
-            (void*) wait_built->request
+            (void*) wait_built->request.get()
           );
 
           auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(

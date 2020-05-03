@@ -86,6 +86,7 @@ private:
           case ConfigNamespaceState::OK: {
             auto execution_result = command->execute_on_namespace(
               result.second,
+              input_queue_,
               context_.worker_queue
             );
             switch (execution_result) {
@@ -121,6 +122,7 @@ private:
 
         auto execution_result = command->execute_on_namespace(
           search->second,
+          input_queue_,
           context_.worker_queue
         );
         switch (execution_result) {

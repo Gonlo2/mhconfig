@@ -13,7 +13,7 @@ GetRequestImpl::GetRequestImpl(
     grpc::ServerCompletionQueue* cq_,
     Metrics& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : GetRequest(service, cq_, metrics),
+) : Request(service, cq_, metrics),
     responder_(&ctx_),
     scheduler_queue_(scheduler_queue)
 {
@@ -63,12 +63,16 @@ void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
   response_.clear_elements();
 }
 
-Request* GetRequestImpl::clone() {
-  return new GetRequestImpl(service_, cq_, metrics_, scheduler_queue_);
+bool GetRequestImpl::commit() {
+  return reply();
+}
+
+std::shared_ptr<Session> GetRequestImpl::clone() {
+  return make_session<GetRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
 }
 
 void GetRequestImpl::subscribe() {
-  service_->RequestGet(&ctx_, &raw_request_, &responder_, cq_, cq_, this);
+  service_->RequestGet(&ctx_, &raw_request_, &responder_, cq_, cq_, tag());
 }
 
 void GetRequestImpl::request() {
@@ -78,7 +82,7 @@ void GetRequestImpl::request() {
   key_ = to_vector(request_.key());
 
   auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
-    static_cast<::mhconfig::api::request::GetRequest*>(this)
+    shared_from_this()
   );
   scheduler_queue_.push(api_get_command);
 }
@@ -89,7 +93,7 @@ void GetRequestImpl::finish() {
   grpc::Slice slice(elements_data_.str());
   grpc::ByteBuffer raw_response(&slice, 1);
 
-  responder_.Finish(raw_response, grpc::Status::OK, this);
+  responder_.Finish(raw_response, grpc::Status::OK, tag());
 }
 
 

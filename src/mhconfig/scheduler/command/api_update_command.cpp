@@ -16,7 +16,7 @@ namespace command
 {
 
 ApiUpdateCommand::ApiUpdateCommand(
-  ::mhconfig::api::request::UpdateRequest* update_request
+  std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request
 ) : Command(),
     update_request_(update_request)
 {
@@ -39,6 +39,7 @@ const std::string& ApiUpdateCommand::namespace_path() const {
 
 NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
   std::shared_ptr<config_namespace_t> config_namespace,
+  Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   auto update_command = std::make_shared<::mhconfig::worker::command::UpdateCommand>(

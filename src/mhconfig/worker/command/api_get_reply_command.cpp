@@ -8,7 +8,7 @@ namespace command
 {
 
 ApiGetReplyCommand::ApiGetReplyCommand(
-  ::mhconfig::api::request::GetRequest* request,
+  std::shared_ptr<::mhconfig::api::request::GetRequest> request,
   std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
 )
   : Command(),
@@ -28,18 +28,8 @@ bool ApiGetReplyCommand::execute(
   Queue<scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) {
-  auto start_time = jmutils::time::monotonic_now();
-
-  api_merged_config_->add_elements(request_);
-  request_->reply();
-
-  auto end_time = jmutils::time::monotonic_now();
-
-  double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-    end_time - start_time
-  ).count();
-  metrics.serialization_duration(duration_ns);
-
+  api_merged_config_->add_elements(request_.get());
+  request_->commit();
   return true;
 }
 

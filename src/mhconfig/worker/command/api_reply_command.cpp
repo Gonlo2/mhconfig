@@ -8,10 +8,10 @@ namespace command
 {
 
 ApiReplyCommand::ApiReplyCommand(
-  ::mhconfig::api::request::Request* request
+  std::shared_ptr<::mhconfig::api::Commitable> commitable
 )
   : Command(),
-  request_(request)
+  commitable_(commitable)
 {
 }
 
@@ -26,7 +26,7 @@ bool ApiReplyCommand::execute(
   Queue<scheduler::command::CommandRef>& scheduler_queue,
   Metrics& metrics
 ) {
-  request_->reply();
+  commitable_->commit();
   return true;
 }
 
