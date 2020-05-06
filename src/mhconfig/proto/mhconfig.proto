@@ -14,22 +14,38 @@ service MHConfig {
 
 
 message GetRequest {
+  // the root path of the namespace to obtain the configuration.
   string root_path = 1;
+  // the list of overrides to apply from lower to higher priority.
   repeated string overrides = 2;
+  // the version of the configuration to retrieve, it retrieve the latest
+  // version with a zero value and the proper version otherwise.
   uint32 version = 3;
-  //string document = 4;  //TODO
-  repeated string key = 5;
+  // the key to retrieve and it must have at least one element.
+  repeated string key = 4;
 }
 
 message GetResponse {
-  uint64 namespace_id = 1;
-  uint32 version = 2;
-  repeated Element elements = 3;
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+    // has been requested a removed or inexistent version.
+    INVALID_VERSION = 2;
+    // in the case of use the `ref` tag, the dependency graph have a cycle.
+    REF_GRAPH_IS_NOT_DAG = 3;
+  }
+  Status status = 1;
+  uint64 namespace_id = 2;
+  // the returned version, it's the last version if the asked version was the zero.
+  uint32 version = 3;
+  repeated Element elements = 4;
 }
 
 
 message UpdateRequest {
+  // the root path of the namespace that has been changed.
   string root_path = 1;
+  // the list of paths to check for changes, this apply to creations, modifications and deletions.
   repeated string relative_paths = 2;
 }
 
@@ -40,6 +56,7 @@ message UpdateResponse {
     ERROR = 1;
   }
   Status status = 2;
+  // the new version.
   uint32 version = 3;
 }
 
@@ -62,21 +79,36 @@ message RunGCResponse {
 
 
 message WatchRequest {
+  // the id to assign to the watcher (this is assigned by the client).
   uint32 uid = 1;
+  // if the purpose of the call is remove the watcher with the provided uid.
   bool remove = 2;
+  // the root path of the namespace to obtain the configuration.
   string root_path = 3;
+  // the list of overrides to apply from lower to higher priority.
   repeated string overrides = 4;
+  // the last know version of the configuration, in the case of zero the server
+  // will reply the latest one, in other case the server will reply when exists
+  // a newer version that change the configuration. Please note that this means
+  // that the server can skip several versions if the server don't change the
+  // requested document directly or indirectly
   uint32 version = 5;
+  // document to watch.
   string document = 6;
 }
 
 message WatchResponse {
+  // the id assigned to the watcher.
   uint32 uid = 1;
   enum Status {
     OK = 0;
     ERROR = 1;
-    UID_IN_USE = 2;
-    INVALID_VERSION = 3;
+    // has been requested a removed or inexistent version
+    INVALID_VERSION = 2;
+    // in the case of use the `ref` tag, the dependency graph have a cycle.
+    REF_GRAPH_IS_NOT_DAG = 3;
+    // the provided uid is already in use.
+    UID_IN_USE = 4;
   }
   Status status = 2;
   uint64 namespace_id = 3;
