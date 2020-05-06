@@ -13,6 +13,17 @@ namespace api
 {
 namespace request
 {
+namespace get_request
+{
+
+enum Status {
+  OK,
+  ERROR,
+  INVALID_VERSION,
+  REF_GRAPH_IS_NOT_DAG
+};
+
+} /* get_request */
 
 class GetRequest : public Commitable
 {
@@ -25,6 +36,7 @@ public:
   virtual const std::vector<std::string>& overrides() const = 0;
   virtual const std::vector<std::string>& key() const = 0;
 
+  virtual void set_status(get_request::Status status) = 0;
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(mhconfig::ElementRef element) = 0;

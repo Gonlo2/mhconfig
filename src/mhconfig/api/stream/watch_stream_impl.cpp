@@ -29,11 +29,14 @@ void WatchOutputMessageImpl::set_status(watch::Status status) {
     case watch::Status::ERROR:
       proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
       break;
-    case watch::Status::UID_IN_USE:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
-      break;
     case watch::Status::INVALID_VERSION:
       proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
+      break;
+    case watch::Status::REF_GRAPH_IS_NOT_DAG:
+      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
+      break;
+    case watch::Status::UID_IN_USE:
+      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
       break;
   }
 }
@@ -59,12 +62,17 @@ void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
 }
 
 bool WatchOutputMessageImpl::send(bool finish) {
-  proto_response_.SerializeToOstream(&elements_data_);  //TODO check error
+  bool ok = proto_response_.SerializeToOstream(&elements_data_);
+  if (ok) {
+    slice_ = grpc::Slice(elements_data_.str());
+    response_ = grpc::ByteBuffer(&slice_, 1);
 
-  slice_ = grpc::Slice(elements_data_.str());
-  response_ = grpc::ByteBuffer(&slice_, 1);
+    return stream_->send(shared_from_this(), finish);
+  }
 
-  return stream_->send(shared_from_this(), finish);
+  //TODO add support to close the stream without a message
+  return stream_->send(shared_from_this(), true);
+  return false;
 }
 
 
@@ -140,6 +148,23 @@ const std::vector<std::string>& WatchGetRequest::key() const {
   return key_;
 }
 
+void WatchGetRequest::set_status(::mhconfig::api::request::get_request::Status status) {
+  switch (status) {
+    case ::mhconfig::api::request::get_request::Status::OK:
+      output_message_->set_status(watch::Status::OK);
+      break;
+    case ::mhconfig::api::request::get_request::Status::ERROR:
+      output_message_->set_status(watch::Status::ERROR);
+      break;
+    case ::mhconfig::api::request::get_request::Status::INVALID_VERSION:
+      output_message_->set_status(watch::Status::INVALID_VERSION);
+      break;
+    case ::mhconfig::api::request::get_request::Status::REF_GRAPH_IS_NOT_DAG:
+      output_message_->set_status(watch::Status::REF_GRAPH_IS_NOT_DAG);
+      break;
+  }
+}
+
 void WatchGetRequest::set_namespace_id(uint64_t namespace_id) {
   output_message_->set_namespace_id(namespace_id);
 }
@@ -189,19 +214,25 @@ void WatchStreamImpl::subscribe() {
 
 void WatchStreamImpl::request(std::unique_ptr<grpc::ByteBuffer>&& raw_req) {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
-  parse_from_byte_buffer(*raw_req, *req); //TODO check error result
-
+  bool ok = parse_from_byte_buffer(*raw_req, *req);
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
-  auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
-  if (inserted.second) {
-    auto api_watch_command = std::make_shared<scheduler::command::ApiWatchCommand>(
-      msg
-    );
-    scheduler_queue_.push(api_watch_command);
+  if (ok) {
+    auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
+    if (inserted.second) {
+      auto api_watch_command = std::make_shared<scheduler::command::ApiWatchCommand>(
+        msg
+      );
+      scheduler_queue_.push(api_watch_command);
+    } else {
+      auto out_msg = msg->make_output_message();
+      out_msg->set_status(watch::Status::UID_IN_USE);
+      out_msg->send();
+    }
   } else {
     auto out_msg = msg->make_output_message();
-    out_msg->set_status(watch::Status::UID_IN_USE);
-    out_msg->send();
+    out_msg->set_uid(msg->uid());
+    out_msg->set_status(watch::Status::ERROR);
+    out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }
 }
 

@@ -123,7 +123,14 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 bool SetDocumentsCommand::on_get_namespace_error(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
-  assert(false);
+  wait_build_->request->set_element(UNDEFINED_ELEMENT);
+
+  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
+    wait_build_->request
+  );
+  worker_queue.push(api_reply_command);
+
+  return true;
 }
 
 } /* command */

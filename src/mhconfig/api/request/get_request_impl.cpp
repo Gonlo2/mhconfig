@@ -42,6 +42,22 @@ const std::vector<std::string>& GetRequestImpl::key() const {
   return key_;
 }
 
+void GetRequestImpl::set_status(get_request::Status status) {
+  switch (status) {
+    case get_request::Status::OK:
+      response_.set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_OK);
+      break;
+    case get_request::Status::ERROR:
+      response_.set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_ERROR);
+      break;
+    case get_request::Status::INVALID_VERSION:
+      response_.set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_INVALID_VERSION);
+      break;
+    case get_request::Status::REF_GRAPH_IS_NOT_DAG:
+      response_.set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_REF_GRAPH_IS_NOT_DAG);
+      break;
+  }
+}
 
 void GetRequestImpl::set_namespace_id(uint64_t namespace_id) {
   response_.set_namespace_id(namespace_id);
@@ -76,24 +92,35 @@ void GetRequestImpl::subscribe() {
 }
 
 void GetRequestImpl::request() {
-  parse_from_byte_buffer(raw_request_, request_); //TODO check error result
+  bool ok = parse_from_byte_buffer(raw_request_, request_);
+  if (ok) {
+    overrides_ = to_vector(request_.overrides());
+    key_ = to_vector(request_.key());
 
-  overrides_ = to_vector(request_.overrides());
-  key_ = to_vector(request_.key());
-
-  auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
-    shared_from_this()
-  );
-  scheduler_queue_.push(api_get_command);
+    auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
+      shared_from_this()
+    );
+    scheduler_queue_.push(api_get_command);
+  } else {
+    set_element(UNDEFINED_ELEMENT);
+    reply();
+  }
 }
 
 void GetRequestImpl::finish() {
-  response_.SerializeToOstream(&elements_data_);  //TODO check error
+  bool ok = response_.SerializeToOstream(&elements_data_);
+  if (ok) {
+    grpc::Slice slice(elements_data_.str());
+    grpc::ByteBuffer raw_response(&slice, 1);
 
-  grpc::Slice slice(elements_data_.str());
-  grpc::ByteBuffer raw_response(&slice, 1);
-
-  responder_.Finish(raw_response, grpc::Status::OK, tag());
+    responder_.Finish(raw_response, grpc::Status::OK, tag());
+  } else {
+    grpc::Status status(
+      grpc::StatusCode::CANCELLED,
+      "Some problem takes place serializing the message"
+    );
+    responder_.FinishWithError(status, tag());
+  }
 }
 
 

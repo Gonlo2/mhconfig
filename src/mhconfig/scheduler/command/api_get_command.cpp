@@ -65,7 +65,9 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   ) {
     spdlog::trace("The asked version {} don't exists", get_request_->version());
 
-    get_request_->set_element(UNDEFINED_ELEMENT);
+    get_request_->set_status(
+      ::mhconfig::api::request::get_request::Status::INVALID_VERSION
+    );
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
   }
@@ -135,8 +137,9 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
     get_request_->version()
   );
   if (!is_a_dag_result.first) {
-    //TODO return a proper error
-    get_request_->set_element(UNDEFINED_ELEMENT);
+    get_request_->set_status(
+      ::mhconfig::api::request::get_request::Status::REF_GRAPH_IS_NOT_DAG
+    );
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
   }
@@ -384,8 +387,11 @@ void ApiGetCommand::do_topological_sort_over_ref_graph_rec(
 bool ApiGetCommand::on_get_namespace_error(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
-  //TODO
-  return false;
+  get_request_->set_status(
+    ::mhconfig::api::request::get_request::Status::ERROR
+  );
+  send_api_response(worker_queue);
+  return true;
 }
 
 } /* command */

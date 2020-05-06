@@ -278,7 +278,9 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
 bool UpdateDocumentsCommand::on_get_namespace_error(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
+  update_request_->set_status(::mhconfig::api::request::update_request::ERROR);
   send_api_response(worker_queue);
+
   return true;
 }
 

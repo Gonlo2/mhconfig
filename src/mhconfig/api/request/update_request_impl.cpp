@@ -40,11 +40,14 @@ void UpdateRequestImpl::set_namespace_id(uint64_t namespace_id) {
 }
 
 void UpdateRequestImpl::set_status(update_request::Status status) {
-  // TODO
-  //switch (status) {
-    //case Status::OK:
-  //}
-  //response_.set_status(version);
+  switch (status) {
+    case update_request::Status::OK:
+      response_.set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_OK);
+      break;
+    case update_request::Status::ERROR:
+      response_.set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_ERROR);
+      break;
+  }
 }
 
 void UpdateRequestImpl::set_version(uint32_t version) {

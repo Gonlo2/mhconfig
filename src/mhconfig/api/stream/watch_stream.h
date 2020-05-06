@@ -17,8 +17,9 @@ namespace watch
 enum Status {
   OK,
   ERROR,
+  INVALID_VERSION,
+  REF_GRAPH_IS_NOT_DAG,
   UID_IN_USE,
-  INVALID_VERSION
 };
 
 } /* watch */

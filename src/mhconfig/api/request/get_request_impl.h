@@ -38,6 +38,7 @@ public:
   const std::vector<std::string>& overrides() const override;
   const std::vector<std::string>& key() const override;
 
+  void set_status(get_request::Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(mhconfig::ElementRef element) override;

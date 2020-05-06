@@ -84,8 +84,16 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
 bool ApiWatchCommand::on_get_namespace_error(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
-  //TODO
-  return false;
+  auto output_message = message_->make_output_message();
+  output_message->set_uid(message_->uid());
+  output_message->set_status(::mhconfig::api::stream::watch::Status::ERROR);
+
+  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
+    output_message
+  );
+  worker_queue.push(api_reply_command);
+
+  return true;
 }
 
 } /* command */

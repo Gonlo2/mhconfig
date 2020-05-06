@@ -55,8 +55,13 @@ NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
 bool ApiUpdateCommand::on_get_namespace_error(
   Queue<worker::command::CommandRef>& worker_queue
 ) {
-  //TODO
-  return false;
+  update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
+  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
+    update_request_
+  );
+  worker_queue.push(api_reply_command);
+
+  return true;
 }
 
 } /* command */
