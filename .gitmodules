@@ -1,0 +1,18 @@
+[submodule "third_party/cmph"]
+	path = third_party/cmph
+	url = git@github.com:bonitao/cmph.git
+[submodule "third_party/fmt"]
+	path = third_party/fmt
+	url = git@github.com:fmtlib/fmt.git
+[submodule "third_party/grpc"]
+	path = third_party/grpc
+	url = https://github.com/grpc/grpc
+[submodule "third_party/prometheus-cpp"]
+	path = third_party/prometheus-cpp
+	url = https://github.com/jupp0r/prometheus-cpp.git
+[submodule "third_party/spdlog"]
+	path = third_party/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "third_party/yaml-cpp"]
+	path = third_party/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git
