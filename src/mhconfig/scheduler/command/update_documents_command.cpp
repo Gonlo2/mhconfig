@@ -62,7 +62,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
 
     if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
       auto raw_config = get_raw_config(
-        document_metadata_search->second,
+        *document_metadata_search->second,
         item.override_,
         0
       );
@@ -114,7 +114,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
         .document_metadata_by_document[document];
 
       auto raw_config = get_raw_config(
-        document_metadata,
+        *document_metadata,
         updated_documents_it.first,
         0
       );

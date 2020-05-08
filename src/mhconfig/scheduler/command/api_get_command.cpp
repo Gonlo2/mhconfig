@@ -77,7 +77,7 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   // To search it we create the overrides key
   std::string overrides_key;
   make_overrides_key(
-    document_metadata,
+    *document_metadata,
     get_request_->overrides(),
     get_request_->version(),
     overrides_key
@@ -169,7 +169,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
       .document_metadata_by_document[build_element.name];
 
     make_overrides_key(
-      document_metadata,
+      *document_metadata,
       get_request_->overrides(),
       get_request_->version(),
       build_element.overrides_key
@@ -187,7 +187,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
         );
         for (const auto& k : get_request_->overrides()) {
           auto raw_config = get_raw_config(
-            document_metadata,
+            *document_metadata,
             k,
             get_request_->version()
           );
@@ -302,7 +302,7 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   auto document_metadata = document_metadata_search->second;
   std::string overrides_key;
   make_overrides_key(
-    document_metadata,
+    *document_metadata,
     overrides,
     version,
     overrides_key
@@ -320,7 +320,7 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   dfs_path_set.insert(document);
 
   for (uint32_t i = 0; i < overrides.size(); ++i) {
-    auto raw_config = get_raw_config(document_metadata, overrides[i], version);
+    auto raw_config = get_raw_config(*document_metadata, overrides[i], version);
     if (raw_config != nullptr) {
       for (const auto& ref_document : raw_config->reference_to) {
         referenced_documents[ref_document].insert(document);

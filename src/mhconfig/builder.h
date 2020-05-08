@@ -111,7 +111,7 @@ std::shared_ptr<merged_config_t> get_merged_config(
 );
 
 std::shared_ptr<raw_config_t> get_raw_config(
-  const std::shared_ptr<document_metadata_t> document_metadata,
+  const document_metadata_t& document_metadata,
   const std::string& override_,
   uint32_t version
 );

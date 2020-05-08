@@ -90,7 +90,7 @@ private:
 
   // Help functions
   inline void make_overrides_key(
-    const std::shared_ptr<document_metadata_t> document_metadata,
+    const document_metadata_t& document_metadata,
     const std::vector<std::string>& overrides,
     uint32_t version,
     std::string& overrides_key
