@@ -24,6 +24,9 @@ class Pool;
 struct chunk_t {
   std::atomic<uint32_t> fragmented_size;
   char* next_data;
+  // We could life only with one pointer to the next string but with the
+  // last string we could link the new strings in the same order that the
+  // data sections, allowing compact the strings in place
   string_t* first_string;
   string_t* last_string;
   Pool* pool;
@@ -33,7 +36,7 @@ struct chunk_t {
 };
 
 struct string_t {
-  uint32_t hash;
+  size_t hash;
   uint32_t size : 31;
   bool needs_to_be_destroyed : 1;
   char* data;
@@ -69,7 +72,6 @@ public:
   explicit String() noexcept : ptr_(nullptr) {
   }
 
-  //TODO avoid create data
   explicit String(const std::string& str) noexcept {
     void* data = aligned_alloc(sizeof(size_t), sizeof(string_t));
     assert (data != nullptr);
@@ -78,7 +80,6 @@ public:
     ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
   }
 
-  //TODO avoid create data
   explicit String(const std::string& str, string_t* internal_struct) noexcept
     : ptr_(internal_struct)
   {
@@ -189,6 +190,7 @@ class Pool
 {
 public:
   Pool() {
+    // Sentinel value that allow simplify the code at the cost of lost one chunk
     chunk_ = new_chunk();
   }
 
@@ -209,8 +211,11 @@ public:
   const String add(const std::string& str) {
     std::unique_lock lock(chunk_->mutex);
 
-    auto search = set_.find(String(str));
-    if (search != set_.end()) return *search;
+    string_t tmp_internal_string;
+    auto search = set_.find(String(str, &tmp_internal_string));
+    if (search != set_.end()) {
+      return *search;
+    }
 
     spdlog::debug("Adding a new string");
     return *set_.insert(store_string(str)).first;
@@ -248,6 +253,8 @@ private:
   }
 
   const void compact_chunk(chunk_t* chunk) {
+    // First we block the accesses to the pool and the chunk to modify until the
+    // compact process finish
     std::unique_lock lock_pool(chunk_->mutex);
     std::unique_lock lock_chunk(chunk->mutex);
 
@@ -262,6 +269,10 @@ private:
       if (s->refcount.load(std::memory_order_relaxed) != 1) break;
       spdlog::trace("Removing the string {}", (void*)s);
       chunk->first_string = s->next;
+      // This is the hacky/tricky logic that avoid call recursively to compact
+      // the same chunk after erase the new string, since we defined as null
+      // the chunk the destructor will avoid the compacter branch and remove
+      // successfully the string at the end :magic:
       s->chunk = nullptr;
       set_.erase(String(s));
     }
@@ -275,6 +286,7 @@ private:
       next_string = s->next;
       if (s->refcount.load(std::memory_order_relaxed) == 1) {
         spdlog::trace("Removing the string {}", (void*)s);
+        // The same as before ;)
         s->chunk = nullptr;
         set_.erase(String(s));
       } else {
@@ -286,6 +298,7 @@ private:
         s->data = to;
         size_t data_size = align(s->size);
         chunk->next_data += data_size;
+        // We compact the data in place \o/
         while (to != chunk->next_data) *to++ = *from++;
       }
     }
