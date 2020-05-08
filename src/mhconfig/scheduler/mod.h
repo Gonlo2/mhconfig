@@ -85,7 +85,7 @@ private:
         switch (result.first) {
           case ConfigNamespaceState::OK: {
             auto execution_result = command->execute_on_namespace(
-              result.second,
+              *result.second,
               input_queue_,
               context_.worker_queue
             );
@@ -95,7 +95,7 @@ private:
               case command::NamespaceExecutionResult::ERROR:
                 return false;
               case command::NamespaceExecutionResult::SOFTDELETE_NAMESPACE: {
-                softdelete_namespace(result.second);
+                softdelete_namespace(*result.second);
                 return true;
               }
             }
@@ -121,7 +121,7 @@ private:
         }
 
         auto execution_result = command->execute_on_namespace(
-          search->second,
+          *search->second,
           input_queue_,
           context_.worker_queue
         );
@@ -131,7 +131,7 @@ private:
           case command::NamespaceExecutionResult::ERROR:
             return false;
           case command::NamespaceExecutionResult::SOFTDELETE_NAMESPACE: {
-            softdelete_namespace(search->second);
+            softdelete_namespace(*search->second);
             return true;
           }
         }
@@ -184,7 +184,7 @@ private:
   }
 
   void softdelete_namespace(
-    std::shared_ptr<config_namespace_t> config_namespace
+    config_namespace_t& config_namespace
   );
 
 };

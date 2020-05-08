@@ -35,7 +35,7 @@ uint64_t SetDocumentsCommand::namespace_id() const {
 }
 
 NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
@@ -47,7 +47,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
   for (const auto it : built_elements_by_document_) {
     spdlog::debug("Setting the document '{}'", it.first);
 
-    auto document_metadata = config_namespace->document_metadata_by_document[it.first];
+    auto document_metadata = config_namespace.document_metadata_by_document[it.first];
     auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
       config_namespace,
       it.first,
@@ -58,7 +58,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     merged_config->value = it.second.config;
     merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
 
-    auto& wait_builts = config_namespace->wait_builts_by_key[it.second.overrides_key];
+    auto& wait_builts = config_namespace.wait_builts_by_key[it.second.overrides_key];
     for (size_t i = 0; i < wait_builts.size(); ) {
       auto wait_built = wait_builts[i];
 
@@ -89,8 +89,8 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
           );
 
           auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
-            config_namespace->id,
-            config_namespace->pool,
+            config_namespace.id,
+            config_namespace.pool,
             wait_built
           );
           worker_queue.push(build_command);

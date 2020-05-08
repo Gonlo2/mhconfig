@@ -91,7 +91,7 @@ public:
   virtual const std::shared_ptr<config_namespace_t> config_namespace() const;
 
   virtual NamespaceExecutionResult execute_on_namespace(
-    std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     Queue<CommandRef>& scheduler_queue,
     Queue<worker::command::CommandRef>& worker_queue
   );

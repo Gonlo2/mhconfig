@@ -34,7 +34,7 @@ public:
   const std::string& namespace_path() const override;
 
   NamespaceExecutionResult execute_on_namespace(
-    std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     Queue<CommandRef>& scheduler_queue,
     Queue<worker::command::CommandRef>& worker_queue
   ) override;
@@ -56,21 +56,21 @@ private:
   );
 
   NamespaceExecutionResult prepare_build_request(
-    std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     Queue<worker::command::CommandRef>& worker_queue
   );
 
   std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(
-    const std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     const std::string& document,
-    const std::vector<std::string> overrides,
+    const std::vector<std::string>& overrides,
     uint32_t version
   );
 
   bool check_if_ref_graph_is_a_dag_rec(
-    const std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     const std::string& document,
-    const std::vector<std::string> overrides,
+    const std::vector<std::string>& overrides,
     uint32_t version,
     std::vector<std::string>& dfs_path,
     std::unordered_set<std::string>& dfs_path_set,
@@ -106,10 +106,10 @@ private:
   }
 
   inline uint32_t get_specific_version(
-    const std::shared_ptr<config_namespace_t> config_namespace,
+    const config_namespace_t& config_namespace,
     uint32_t version
   ) {
-    return (version == 0) ? config_namespace->current_version : version;
+    return (version == 0) ? config_namespace.current_version : version;
   }
 };
 

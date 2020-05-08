@@ -38,13 +38,13 @@ const std::string& ApiUpdateCommand::namespace_path() const {
 }
 
 NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   auto update_command = std::make_shared<::mhconfig::worker::command::UpdateCommand>(
-    config_namespace->id,
-    config_namespace->pool,
+    config_namespace.id,
+    config_namespace.pool,
     update_request_
   );
   worker_queue.push(update_command);

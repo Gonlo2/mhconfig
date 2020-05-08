@@ -30,12 +30,12 @@ const std::string& ApiWatchCommand::namespace_path() const {
 }
 
 NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   // First we check if the asked version is lower that the current one
-  if (config_namespace->current_version < message_->version()) {
+  if (config_namespace.current_version < message_->version()) {
     auto output_message = message_->make_output_message();
     output_message->set_uid(message_->uid());
     output_message->set_status(::mhconfig::api::stream::watch::Status::INVALID_VERSION);
@@ -51,7 +51,7 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   bool notify = false;
 
   auto document_metadata = config_namespace
-    ->document_metadata_by_document[message_->document()];
+    .document_metadata_by_document[message_->document()];
 
   for (const auto& override_: message_->overrides()) {
     auto& override_metadata = document_metadata->override_by_key[override_];
@@ -61,7 +61,7 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
       && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
   }
 
-  config_namespace->num_watchers += message_->overrides().size();
+  config_namespace.num_watchers += message_->overrides().size();
 
   // If the asked merged config is already deprecated we notify the watcher
   if (notify) {

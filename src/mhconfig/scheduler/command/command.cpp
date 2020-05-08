@@ -27,7 +27,7 @@ const std::shared_ptr<config_namespace_t> Command::config_namespace() const {
 }
 
 NamespaceExecutionResult Command::execute_on_namespace(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {

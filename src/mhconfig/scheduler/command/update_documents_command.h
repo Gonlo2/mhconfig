@@ -40,7 +40,7 @@ public:
   uint64_t namespace_id() const override;
 
   NamespaceExecutionResult execute_on_namespace(
-    std::shared_ptr<config_namespace_t> config_namespace,
+    config_namespace_t& config_namespace,
     Queue<CommandRef>& scheduler_queue,
     Queue<worker::command::CommandRef>& worker_queue
   ) override;
@@ -59,7 +59,7 @@ private:
   );
 
   void get_affected_documents(
-    const std::shared_ptr<config_namespace_t> config_namespace,
+    const config_namespace_t& config_namespace,
     std::unordered_set<std::string>& affected_documents
   );
 

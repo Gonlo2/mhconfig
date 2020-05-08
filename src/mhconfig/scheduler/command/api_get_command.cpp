@@ -30,7 +30,7 @@ const std::string& ApiGetCommand::namespace_path() const {
 }
 
 NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<CommandRef>& scheduler_queue,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
@@ -38,13 +38,13 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   get_request_->set_version(
     get_specific_version(config_namespace, get_request_->version())
   );
-  get_request_->set_namespace_id(config_namespace->id);
+  get_request_->set_namespace_id(config_namespace.id);
 
   // We check if exists the asked document
-  auto search = config_namespace->document_metadata_by_document
+  auto search = config_namespace.document_metadata_by_document
     .find(get_request_->key()[0]);
 
-  if (search == config_namespace->document_metadata_by_document.end()) {
+  if (search == config_namespace.document_metadata_by_document.end()) {
     spdlog::warn(
       "Can't found a config file with the name '{}'",
       get_request_->key()[0]
@@ -60,8 +60,8 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   auto document_metadata = search->second;
   if (
       (get_request_->version() != 0)
-      && !config_namespace->stored_versions_by_deprecation_timestamp.empty()
-      && (get_request_->version() < config_namespace->stored_versions_by_deprecation_timestamp.front().second)
+      && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
+      && (get_request_->version() < config_namespace.stored_versions_by_deprecation_timestamp.front().second)
   ) {
     spdlog::trace("The asked version {} don't exists", get_request_->version());
 
@@ -125,7 +125,7 @@ void ApiGetCommand::send_api_get_response(
 }
 
 NamespaceExecutionResult ApiGetCommand::prepare_build_request(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   Queue<worker::command::CommandRef>& worker_queue
 ) {
   // The references are allowed only if the graph is a DAG,
@@ -166,7 +166,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
     spdlog::debug("Checking the document '{}'", build_element.name);
 
     auto document_metadata = config_namespace
-      ->document_metadata_by_document[build_element.name];
+      .document_metadata_by_document[build_element.name];
 
     make_overrides_key(
       document_metadata,
@@ -206,7 +206,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
         );
         wait_built->pending_element_position_by_name[build_element.name] = i;
 
-        config_namespace->wait_builts_by_key[build_element.overrides_key]
+        config_namespace.wait_builts_by_key[build_element.overrides_key]
           .push_back(wait_built);
         break;
       }
@@ -225,8 +225,8 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
       (void*)wait_built->request.get()
     );
     auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
-      config_namespace->id,
-      config_namespace->pool,
+      config_namespace.id,
+      config_namespace.pool,
       wait_built
     );
     worker_queue.push(build_command);
@@ -242,9 +242,9 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
 }
 
 std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> ApiGetCommand::check_if_ref_graph_is_a_dag(
-  const std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   const std::string& document,
-  const std::vector<std::string> overrides,
+  const std::vector<std::string>& overrides,
   uint32_t version
 ) {
   std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> result;
@@ -267,9 +267,9 @@ std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>
 }
 
 bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
-  const std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   const std::string& document,
-  const std::vector<std::string> overrides,
+  const std::vector<std::string>& overrides,
   uint32_t version,
   std::vector<std::string>& dfs_path,
   std::unordered_set<std::string>& dfs_path_set,
@@ -291,10 +291,10 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
 
   if (referenced_documents.count(document)) return true;
 
-  auto document_metadata_search = config_namespace->document_metadata_by_document.find(
+  auto document_metadata_search = config_namespace.document_metadata_by_document.find(
     document
   );
-  if (document_metadata_search == config_namespace->document_metadata_by_document.end()) {
+  if (document_metadata_search == config_namespace.document_metadata_by_document.end()) {
     spdlog::warn("Can't found a config file with the name '{}'", document);
     return false;
   }

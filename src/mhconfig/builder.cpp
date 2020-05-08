@@ -623,7 +623,7 @@ ElementRef make_element(
 // Get logic
 
 std::shared_ptr<merged_config_t> get_or_build_merged_config(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   const std::string& document,
   const std::string& overrides_key
 ) {
@@ -635,23 +635,23 @@ std::shared_ptr<merged_config_t> get_or_build_merged_config(
   if (merged_config == nullptr) {
     merged_config = std::make_shared<merged_config_t>();
     merged_config->creation_timestamp = jmutils::time::monotonic_now_sec();
-    config_namespace->merged_config_by_overrides_key[overrides_key] = merged_config;
-    config_namespace->merged_config_by_gc_generation[0].push_back(merged_config);
+    config_namespace.merged_config_by_overrides_key[overrides_key] = merged_config;
+    config_namespace.merged_config_by_gc_generation[0].push_back(merged_config);
   }
 
   return merged_config;
 }
 
 std::shared_ptr<merged_config_t> get_merged_config(
-  std::shared_ptr<config_namespace_t> config_namespace,
+  config_namespace_t& config_namespace,
   const std::string& document,
   const std::string& overrides_key
 ) {
   // First we search if exists cached some mergd config using the overrides_key
-  auto search = config_namespace->merged_config_by_overrides_key
+  auto search = config_namespace.merged_config_by_overrides_key
     .find(overrides_key);
 
-  if (search == config_namespace->merged_config_by_overrides_key.end()) {
+  if (search == config_namespace.merged_config_by_overrides_key.end()) {
     return nullptr;
   }
 
@@ -663,7 +663,7 @@ std::shared_ptr<merged_config_t> get_merged_config(
 
   // If the pointer is invalidated we drop the item to avoid
   // do this check in a future, I'm to lazy ;)
-  config_namespace->merged_config_by_overrides_key
+  config_namespace.merged_config_by_overrides_key
     .erase(search);
 
   return nullptr;
