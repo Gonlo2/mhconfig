@@ -45,10 +45,11 @@ file(
 add_executable(mhconfig src/mhconfig.cpp ${SRC_SOURCES} ${mhconfig_service_sources})
 target_link_libraries(mhconfig pthread)
 target_link_libraries(mhconfig yaml-cpp)
-target_link_libraries(mhconfig ssl crypto)
+target_link_libraries(mhconfig ssl.a crypto.a)
 target_link_libraries(mhconfig boost_filesystem.a boost_system.a)
 target_link_libraries(mhconfig prometheus-cpp::core prometheus-cpp::pull)
 target_link_libraries(mhconfig cmph.a)
+target_link_libraries(mhconfig libstdc++.a) # probably it's possible remove this
 
 # gRPC
 target_link_libraries(mhconfig libgrpc++.a grpc.a)
