@@ -1,0 +1,6 @@
+hola:
+  mundo: whatever
+  perro: o_no
+  aaaaa: !ref [mio]
+  test: !sref [hola, perro]
+  adios: hola

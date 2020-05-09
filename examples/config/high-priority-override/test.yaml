@@ -1,0 +1,9 @@
+hola:
+  to_delete:
+    - hola: !delete
+      adios: 2
+  mundo: tuyo
+  seq: [~]
+  o2: !format
+  - "{host}:{port} (database: {database}, table: {table})"
+  - !ref [mio]
