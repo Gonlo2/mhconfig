@@ -1,9 +1,6 @@
 # Pending taks
-- [ ] Send a error if the path don't exists.
-- [ ] Ignore hiden files/dirs.
 - [ ] Add sampling to the metrics, preferably by request.
 - [ ] Replace the queue with a channel.
-- [ ] Add doc.
 - [ ] Add tests.
 - [ ] Allow increase the number of waiting requests.
 - [ ] Reuse the requests.

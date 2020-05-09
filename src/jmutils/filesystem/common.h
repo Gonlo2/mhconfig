@@ -14,8 +14,9 @@ namespace jmutils
 namespace filesystem
 {
 
-std::vector<std::string> recursive_list_files(
-  const std::string& dir
+bool recursive_list_files(
+  const std::string& dir,
+  std::vector<std::string>& result
 );
 
 std::string relative_parent_path(

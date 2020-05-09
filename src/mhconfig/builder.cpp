@@ -19,32 +19,56 @@ std::shared_ptr<config_namespace_t> index_files(
 
   spdlog::debug("To index the files in the path '{}'", root_path);
 
-  auto paths = jmutils::filesystem::recursive_list_files(root_path);
-  for (const std::string& path : paths) {
-    auto result = load_raw_config(config_namespace->pool, root_path, path);
-    if (result.status == LoadRawConfigStatus::INVALID_FILE) {
-      continue;
-    } else if (result.status != LoadRawConfigStatus::OK) {
-      return config_namespace;
-    }
-
-    std::shared_ptr<document_metadata_t> document_metadata = nullptr;
-    {
-      auto search = config_namespace->document_metadata_by_document.find(
-        result.document
+  boost::system::error_code error_code;
+  std::vector<std::string> paths;
+  for (
+    boost::filesystem::recursive_directory_iterator it(root_path, error_code), end;
+    it != end;
+    ++it
+  ) {
+    auto filename = it->path().filename().string();
+    if (!filename.empty() && (filename[0] == '.')) {
+      it.no_push();
+    } else if (boost::filesystem::is_regular_file(it->path()) && (it->path().extension() == ".yaml")) {
+      auto result = load_raw_config(
+        config_namespace->pool,
+        root_path,
+        it->path().string()
       );
-      if (search == config_namespace->document_metadata_by_document.end()) {
-        document_metadata = std::make_shared<document_metadata_t>();
-        config_namespace->document_metadata_by_document[
-          result.document
-        ] = document_metadata;
-      } else {
-        document_metadata = search->second;
+      if (result.status == LoadRawConfigStatus::INVALID_FILE) {
+        continue;
+      } else if (result.status != LoadRawConfigStatus::OK) {
+        return config_namespace;
       }
-    }
 
-    result.raw_config->id = config_namespace->next_raw_config_id++;
-    document_metadata->override_by_key[result.override_].raw_config_by_version[1] = result.raw_config;
+      std::shared_ptr<document_metadata_t> document_metadata = nullptr;
+      {
+        auto search = config_namespace->document_metadata_by_document.find(
+          result.document
+        );
+        if (search == config_namespace->document_metadata_by_document.end()) {
+          document_metadata = std::make_shared<document_metadata_t>();
+          config_namespace->document_metadata_by_document[
+            result.document
+          ] = document_metadata;
+        } else {
+          document_metadata = search->second;
+        }
+      }
+
+      result.raw_config->id = config_namespace->next_raw_config_id++;
+      document_metadata->override_by_key[result.override_].raw_config_by_version[1] = result.raw_config;
+    }
+  }
+
+  if (error_code) {
+    spdlog::error(
+      "Some error take place obtaining the files on '{}': {}",
+      root_path,
+      error_code.message()
+    );
+
+    return config_namespace;
   }
 
   for (auto document_metadata_it : config_namespace->document_metadata_by_document) {

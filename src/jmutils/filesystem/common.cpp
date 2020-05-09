@@ -5,17 +5,17 @@ namespace jmutils
 namespace filesystem
 {
 
-std::vector<std::string> recursive_list_files(
-  const std::string& dir
+bool recursive_list_files(
+  const std::string& dir,
+  std::vector<std::string>& result
 ) {
-  std::vector<std::string> files;
   for (auto it : boost::filesystem::recursive_directory_iterator(dir)) {
     if (boost::filesystem::is_regular_file(it.path())) {
-      files.push_back(it.path().string());
+      result.push_back(it.path().string());
     }
   }
 
-  return files;
+  return true;
 }
 
 std::string relative_parent_path(

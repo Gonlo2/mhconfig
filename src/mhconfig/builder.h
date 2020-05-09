@@ -6,6 +6,9 @@
 #include "jmutils/filesystem/common.h"
 #include "jmutils/common.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include "spdlog/spdlog.h"
 
 namespace mhconfig
