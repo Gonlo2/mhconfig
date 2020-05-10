@@ -260,6 +260,7 @@ This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) f
 ## Third party libraries
 
 * CMPH: http://cmph.sourceforge.net/index.html
+* concurrentqueue: https://github.com/cameron314/concurrentqueue
 * fmt: https://github.com/fmtlib/fmt
 * grpc: https://grpc.io/
 * prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
