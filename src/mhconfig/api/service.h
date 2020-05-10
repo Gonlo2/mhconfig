@@ -42,7 +42,7 @@ public:
     const std::string& server_address,
     size_t num_threads,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-    Metrics& metrics
+    metrics::MetricsService& metrics
   );
 
   virtual ~Service();
@@ -61,7 +61,7 @@ private:
   CustomService service_;
   std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_;
 
-  Metrics& metrics_;
+  metrics::MetricsService& metrics_;
 
   void subscribe_requests(
     grpc::ServerCompletionQueue* cq

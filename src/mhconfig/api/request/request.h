@@ -8,7 +8,7 @@
 #include <chrono>
 
 #include "mhconfig/api/session.h"
-#include "mhconfig/metrics.h"
+#include "mhconfig/metrics/metrics_service.h"
 #include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
@@ -26,7 +26,7 @@ public:
   Request(
       CustomService* service,
       grpc::ServerCompletionQueue* cq,
-      Metrics& metrics
+      metrics::MetricsService& metrics
   );
   virtual ~Request();
 
@@ -35,7 +35,7 @@ public:
   bool reply();
 
 protected:
-  Metrics& metrics_;
+  metrics::MetricsService& metrics_;
 
   virtual void request() = 0;
   virtual void finish() = 0;

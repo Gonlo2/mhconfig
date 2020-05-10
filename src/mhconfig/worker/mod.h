@@ -7,7 +7,7 @@
 #include "jmutils/container/queue.h"
 #include "jmutils/time.h"
 #include "jmutils/parallelism/worker.h"
-#include "mhconfig/metrics.h"
+#include "mhconfig/metrics/metrics_service.h"
 #include "mhconfig/worker/command/command.h"
 
 namespace mhconfig
@@ -23,8 +23,7 @@ public:
   Worker(
     Queue<command::CommandRef>& worker_queue,
     size_t num_threads,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-    Metrics& metrics
+    command::Command::context_t context
   );
 
   virtual ~Worker();
@@ -32,11 +31,17 @@ public:
 private:
   friend class jmutils::parallelism::Worker<Worker, command::CommandRef>;
 
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
-  Metrics& metrics_;
+  command::Command::context_t context_;
+
+  inline bool metricate(
+    command::CommandRef& command,
+    uint_fast32_t sequential_id
+  ) {
+    return command->force_take_metric() || ((sequential_id & 0xfff) == 0);
+  }
 
   inline void loop_stats(
-    command::CommandRef command,
+    command::CommandRef& command,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
   ) {
@@ -44,16 +49,17 @@ private:
       end_time - start_time
     ).count();
 
-    metrics_.worker_duration(command->name(), duration_ns);
+    context_.metrics_service.observe(
+      metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
+      {{"type", command->name()}},
+      duration_ns
+    );
   }
 
   inline bool process_command(
     command::CommandRef command
   ) {
-    return command->execute(
-      scheduler_queue_,
-      metrics_
-    );
+    return command->execute(context_);
   }
 
 };

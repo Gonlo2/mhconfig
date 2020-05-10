@@ -10,7 +10,7 @@ namespace request
 Request::Request(
   CustomService* service,
   grpc::ServerCompletionQueue* cq,
-  Metrics& metrics
+  metrics::MetricsService& metrics
 )
   : Session(service, cq),
     metrics_(metrics)
@@ -33,16 +33,24 @@ std::shared_ptr<Session> Request::proceed() {
       auto new_request = clone();
       new_request->subscribe();
 
-      start_time_ = jmutils::time::monotonic_now();
+      if ((((uintptr_t)tag()) & 0xfff) == 0) {
+        start_time_ = jmutils::time::monotonic_now();
+      }
       request();
     } else if (status_ == Status::FINISH) {
-      auto end_time = jmutils::time::monotonic_now();
+      if ((((uintptr_t)tag()) & 0xfff) == 0) {
+        auto end_time = jmutils::time::monotonic_now();
 
-      double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        end_time - start_time_
-      ).count();
+        double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+          end_time - start_time_
+        ).count();
 
-      metrics_.api_duration(name(), duration_ns);
+        metrics_.observe(
+          metrics::MetricsService::MetricId::API_DURATION_NANOSECONDS,
+          {{"type", name()}},
+          duration_ns
+        );
+      }
 
       return destroy();
     } else {

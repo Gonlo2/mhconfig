@@ -24,9 +24,12 @@ std::string OptimizeMergedConfigCommand::name() const {
   return "OPTIMIZE_MERGED_CONFIG";
 }
 
+bool OptimizeMergedConfigCommand::force_take_metric() const {
+  return true;
+}
+
 bool OptimizeMergedConfigCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   auto optimized_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
   bool ok = optimized_merged_config->init(

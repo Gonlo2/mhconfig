@@ -12,7 +12,8 @@
 
 #include "spdlog/spdlog.h"
 
-#include "mhconfig/metrics.h"
+#include "mhconfig/metrics/sync_metrics_service.h"
+#include "mhconfig/metrics/async_metrics_service.h"
 
 namespace mhconfig
 {
@@ -28,7 +29,8 @@ namespace mhconfig
       size_t num_threads_workers
     ) :
       server_address_(server_address),
-      metrics_(prometheus_address),
+      sync_metrics_service_(prometheus_address),
+      async_metrics_service_(worker_queue_),
       num_threads_api_(num_threads_api),
       num_threads_workers_(num_threads_workers)
     {};
@@ -38,28 +40,31 @@ namespace mhconfig
     bool run() {
       if (running_) return false;
 
-      metrics_.init();
-
-      scheduler_ = std::make_unique<mhconfig::scheduler::Scheduler>(
-        scheduler_queue_,
-        worker_queue_,
-        metrics_
-      );
-      scheduler_->start();
+      sync_metrics_service_.init();
 
       worker_ = std::make_unique<mhconfig::worker::Worker>(
         worker_queue_,
         num_threads_workers_,
-        scheduler_queue_,
-        metrics_
+        mhconfig::worker::command::Command::context_t(
+          scheduler_queue_,
+          async_metrics_service_,
+          sync_metrics_service_
+        )
       );
       worker_->start();
+
+      scheduler_ = std::make_unique<mhconfig::scheduler::Scheduler>(
+        scheduler_queue_,
+        worker_queue_,
+        async_metrics_service_
+      );
+      scheduler_->start();
 
       service_ = std::make_unique<api::Service>(
         server_address_,
         num_threads_api_,
         scheduler_queue_,
-        metrics_
+        async_metrics_service_
       );
       service_->start();
 
@@ -74,15 +79,16 @@ namespace mhconfig
 
       gc_thread_->join();
       service_->join();
-      worker_->join();
       scheduler_->join();
+      worker_->join();
 
       return true;
     }
 
   private:
     std::string server_address_;
-    Metrics metrics_;
+    metrics::SyncMetricsService sync_metrics_service_;
+    metrics::AsyncMetricsService async_metrics_service_;
     size_t num_threads_api_;
     size_t num_threads_workers_;
 

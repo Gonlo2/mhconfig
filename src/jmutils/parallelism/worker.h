@@ -69,37 +69,50 @@ private:
   void run() {
     spdlog::debug("Started the worker");
 
+    uint_fast32_t sequential_id{0};
+
     while (true) {
       spdlog::debug("The worker is waiting for a command");
       auto command = input_queue_.pop();
 
-      auto start_time = jmutils::time::monotonic_now();
+      if (static_cast<Parent*>(this)->metricate(command, sequential_id)) {
+        auto start_time = jmutils::time::monotonic_now();
+        execute_command(command);
+        auto end_time = jmutils::time::monotonic_now();
 
-      try {
-        spdlog::debug("Received a {} command", command->name());
-        bool ok = static_cast<Parent*>(this)->process_command(command);
-        if (!ok) {
-          spdlog::error("Can't process a {} command", command->name());
-        }
-      } catch (const std::exception &e) {
-        spdlog::error(
-          "Some error take place processing the command {}: {}",
-          command->name(),
-          e.what()
-        );
-      } catch (...) {
-        spdlog::error(
-          "Some unknown error take place processing the command {}",
-          command->name()
-        );
+        static_cast<Parent*>(this)->loop_stats(command, start_time, end_time);
+      } else {
+        execute_command(command);
       }
 
-      auto end_time = jmutils::time::monotonic_now();
-
-      static_cast<Parent*>(this)->loop_stats(command, start_time, end_time);
+      sequential_id = (sequential_id+1) & 0xefffffff;
     }
 
     spdlog::debug("Finished the worker");
+  }
+
+  inline bool execute_command(Command& command) {
+    try {
+      spdlog::debug("Received a {} command", command->name());
+      bool ok = static_cast<Parent*>(this)->process_command(command);
+      if (!ok) {
+        spdlog::error("Can't process a {} command", command->name());
+      }
+      return ok;
+    } catch (const std::exception &e) {
+      spdlog::error(
+        "Some error take place processing the command {}: {}",
+        command->name(),
+        e.what()
+      );
+    } catch (...) {
+      spdlog::error(
+        "Some unknown error take place processing the command {}",
+        command->name()
+      );
+    }
+
+    return false;
   }
 
 };

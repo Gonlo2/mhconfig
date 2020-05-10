@@ -9,7 +9,7 @@
 #include <queue>
 
 #include "mhconfig/api/session.h"
-#include "mhconfig/metrics.h"
+#include "mhconfig/metrics/metrics_service.h"
 #include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
@@ -28,7 +28,7 @@ public:
   Stream(
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
-    Metrics& metrics
+    metrics::MetricsService& metrics
   )
     : Session(service, cq),
       metrics_(metrics),
@@ -84,7 +84,7 @@ public:
   }
 
 protected:
-  Metrics& metrics_;
+  metrics::MetricsService& metrics_;
   grpc::ServerAsyncReaderWriter<Resp, Req> stream_;
 
   //TODO Use this with CRTP

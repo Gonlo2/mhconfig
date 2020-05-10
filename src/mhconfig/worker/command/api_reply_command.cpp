@@ -23,8 +23,7 @@ std::string ApiReplyCommand::name() const {
 }
 
 bool ApiReplyCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   commitable_->commit();
   return true;

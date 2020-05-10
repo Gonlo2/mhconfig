@@ -26,9 +26,12 @@ std::string UpdateCommand::name() const {
   return "UPDATE";
 }
 
+bool UpdateCommand::force_take_metric() const {
+  return true;
+}
+
 bool UpdateCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   std::vector<load_raw_config_result_t> items;
   items.reserve(update_request_->relative_paths().size());
@@ -43,7 +46,7 @@ bool UpdateCommand::execute(
       update_request_,
       items
     );
-    scheduler_queue.push(update_command);
+    context.scheduler_queue.push(update_command);
   }
 
   return true;

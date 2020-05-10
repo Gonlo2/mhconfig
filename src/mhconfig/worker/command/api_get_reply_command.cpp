@@ -25,8 +25,7 @@ std::string ApiGetReplyCommand::name() const {
 }
 
 bool ApiGetReplyCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   api_merged_config_->add_elements(request_.get());
   request_->commit();

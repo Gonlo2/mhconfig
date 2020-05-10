@@ -12,7 +12,6 @@
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/setup_command.h"
-#include "mhconfig/metrics.h"
 
 namespace mhconfig
 {
@@ -30,7 +29,7 @@ public:
   Scheduler(
     Queue<command::CommandRef>& scheduler_queue,
     Queue<mhconfig::worker::command::CommandRef>& worker_queue,
-    Metrics& metrics
+    metrics::MetricsService& metrics
   );
 
   virtual ~Scheduler();
@@ -46,8 +45,15 @@ private:
 
   scheduler_context_t context_;
 
+  inline bool metricate(
+    command::CommandRef& command,
+    uint_fast32_t sequential_id
+  ) {
+    return (sequential_id & 0xfff) == 0;
+  }
+
   inline void loop_stats(
-    command::CommandRef command,
+    command::CommandRef& command,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
   ) {
@@ -55,7 +61,11 @@ private:
       end_time - start_time
     ).count();
 
-    context_.metrics.scheduler_duration(command->name(), duration_ns);
+    context_.metrics.observe(
+      metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
+      {{"type", command->name()}},
+      duration_ns
+    );
   }
 
   inline bool process_command(

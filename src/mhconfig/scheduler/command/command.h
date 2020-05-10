@@ -6,7 +6,7 @@
 #include "jmutils/container/queue.h"
 #include "mhconfig/ds/config_namespace.h"
 #include "mhconfig/worker/command/command.h"
-#include "mhconfig/metrics.h"
+#include "mhconfig/metrics/metrics_service.h"
 
 namespace mhconfig
 {
@@ -43,7 +43,7 @@ using namespace mhconfig::ds::config_namespace;
 
 struct scheduler_context_t {
   Queue<mhconfig::worker::command::CommandRef>& worker_queue;
-  Metrics& metrics;
+  metrics::MetricsService& metrics;
 
   std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path;
   std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id;
@@ -51,7 +51,7 @@ struct scheduler_context_t {
 
   scheduler_context_t(
     Queue<mhconfig::worker::command::CommandRef>& worker_queue_,
-    Metrics& metrics_
+    metrics::MetricsService& metrics_
   )
     : worker_queue(worker_queue_),
     metrics(metrics_)
@@ -121,18 +121,30 @@ using jmutils::container::Queue;
 class Command
 {
 public:
+  struct context_t {
+    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue;
+    metrics::MetricsService& async_metrics_service;
+    metrics::MetricsService& metrics_service;
+
+    context_t(
+      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_,
+      metrics::MetricsService& async_metrics_service_,
+      metrics::MetricsService& metrics_service_
+    )
+      : scheduler_queue(scheduler_queue_),
+      async_metrics_service(async_metrics_service_),
+      metrics_service(metrics_service_)
+    {}
+  };
+
   Command();
   virtual ~Command();
 
   virtual std::string name() const = 0;
 
-  virtual bool execute(
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-    Metrics& metrics
-  ) = 0;
+  virtual bool force_take_metric() const;
 
-private:
-  /* data */
+  virtual bool execute(context_t& context) = 0;
 };
 
 } /* command */

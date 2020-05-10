@@ -1,5 +1,5 @@
-#ifndef MHCONFIG__METRICS_H
-#define MHCONFIG__METRICS_H
+#ifndef MHCONFIG__METRICS__SYNC_METRICS_SERVICE_H
+#define MHCONFIG__METRICS__SYNC_METRICS_SERVICE_H
 
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -9,34 +9,45 @@
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
+#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/worker/command/observe_metric_command.h"
+
 namespace mhconfig
 {
-  class Metrics
+namespace metrics
+{
+
+  class SyncMetricsService : public MetricsService
   {
   public:
-    Metrics(const std::string& address);
-    virtual ~Metrics();
+    SyncMetricsService(const std::string& address);
+    virtual ~SyncMetricsService();
 
     void init();
 
-    void api_duration(const std::string& type, double nanoseconds);
-    void scheduler_duration(const std::string& type, double duration_ns);
-    void worker_duration(const std::string& type, double duration_ns);
-    void serialization_duration(double duration_ns);
+    void observe(
+      MetricId id,
+      std::map<std::string, std::string>&& labels,
+      double value
+    ) override;
 
   private:
     prometheus::Exposer exposer_;
     std::shared_ptr<prometheus::Registry> registry_;
-    uint32_t metric_id_;
 
-    prometheus::Summary::Quantiles quantiles_ = {{0.5, 0.05}, {0.90, 0.01}, {0.99, 0.001}};
+    prometheus::Summary::Quantiles quantiles_ = {
+      {0.5, 0.05},
+      {0.90, 0.01},
+      {0.99, 0.001}
+    };
 
     prometheus::Family<prometheus::Summary>* family_api_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_worker_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
-
   };
+
+} /* metrics */
 } /* mhconfig */
 
-#endif /* ifndef MHCONFIG__MHCONFIG_H */
+#endif

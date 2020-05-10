@@ -41,7 +41,7 @@ You could find the executable in `./build/mhconfig`
 To run the program execute
 
 ```bash
-./mhconfig server <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers> <logger level>
+./mhconfig <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers> <logger level>
 ```
 
 Where the logger level could be `trace`, `debug` or `info`.
@@ -49,7 +49,7 @@ Where the logger level could be `trace`, `debug` or `info`.
 For example
 
 ```bash
-./mhconfig server 0.0.0.0:2222 0.0.0.0:1111 13 13 info
+./mhconfig 0.0.0.0:2222 0.0.0.0:1111 13 13 info
 ```
 
 To test it you could implement a client using the protobuf file `./src/mhconfig/proto/mhconfig.proto` or using some tool

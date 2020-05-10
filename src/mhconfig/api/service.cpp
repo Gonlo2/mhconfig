@@ -10,7 +10,7 @@ Service::Service(
   const std::string& server_address,
   size_t num_threads,
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  metrics::MetricsService& metrics
 ) :
   server_address_(server_address),
   num_threads_(num_threads),

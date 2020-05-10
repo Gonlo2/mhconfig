@@ -19,13 +19,16 @@ std::string SetupCommand::name() const {
   return "SETUP";
 }
 
+bool SetupCommand::force_take_metric() const {
+  return true;
+}
+
 bool SetupCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   auto config_namespace = mhconfig::builder::index_files(path_);
   auto add_namespace_command = std::make_shared<scheduler::command::AddNamespaceCommand>(config_namespace);
-  scheduler_queue.push(add_namespace_command);
+  context.scheduler_queue.push(add_namespace_command);
   return true;
 }
 

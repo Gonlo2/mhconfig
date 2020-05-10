@@ -8,7 +8,7 @@ namespace scheduler
 Scheduler::Scheduler(
   Queue<command::CommandRef>& scheduler_queue,
   Queue<mhconfig::worker::command::CommandRef>& worker_queue,
-  Metrics& metrics
+  metrics::MetricsService& metrics
 ) :
   jmutils::parallelism::Worker<Scheduler, command::CommandRef>(scheduler_queue, 1),
   context_(worker_queue, metrics)

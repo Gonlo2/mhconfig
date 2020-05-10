@@ -31,8 +31,7 @@ public:
   std::string name() const override;
 
   bool execute(
-    Queue<scheduler::command::CommandRef>& scheduler_queue,
-    Metrics& metrics
+    context_t& context
   ) override;
 
 private:

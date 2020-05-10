@@ -1,5 +1,4 @@
 # Pending taks
-- [ ] Add sampling to the metrics, preferably by request.
 - [ ] Replace the queue with a channel.
 - [ ] Add tests.
 - [ ] Allow increase the number of waiting requests.

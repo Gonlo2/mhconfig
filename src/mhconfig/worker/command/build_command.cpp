@@ -26,9 +26,12 @@ std::string BuildCommand::name() const {
   return "BUILD";
 }
 
+bool BuildCommand::force_take_metric() const {
+  return true;
+}
+
 bool BuildCommand::execute(
-  Queue<scheduler::command::CommandRef>& scheduler_queue,
-  Metrics& metrics
+  context_t& context
 ) {
   std::unordered_map<std::string, build::built_element_t> built_elements_by_document;
 
@@ -81,7 +84,7 @@ bool BuildCommand::execute(
     wait_build_,
     built_elements_by_document
   );
-  scheduler_queue.push(set_documents_command);
+  context.scheduler_queue.push(set_documents_command);
 
   return true;
 }

@@ -10,7 +10,7 @@ namespace request
 RunGCRequestImpl::RunGCRequestImpl(
     CustomService* service,
     grpc::ServerCompletionQueue* cq_,
-    Metrics& metrics,
+    metrics::MetricsService& metrics,
     Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
 ) : Request(service, cq_, metrics),
     responder_(&ctx_),

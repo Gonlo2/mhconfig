@@ -189,7 +189,7 @@ bool WatchGetRequest::commit() {
 WatchStreamImpl::WatchStreamImpl(
   CustomService* service,
   grpc::ServerCompletionQueue* cq,
-  Metrics& metrics,
+  metrics::MetricsService& metrics,
   Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
 )
   : Stream(service, cq, metrics),

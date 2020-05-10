@@ -23,7 +23,7 @@ public:
   GetRequestImpl(
       CustomService* service,
       grpc::ServerCompletionQueue* cq_,
-      Metrics& metrics,
+      metrics::MetricsService& metrics,
       Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
   );
   virtual ~GetRequestImpl();

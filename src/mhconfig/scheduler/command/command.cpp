@@ -60,6 +60,10 @@ Command::Command() {
 Command::~Command() {
 }
 
+bool Command::force_take_metric() const {
+  return false;
+}
+
 } /* command */
 } /* worker */
 
