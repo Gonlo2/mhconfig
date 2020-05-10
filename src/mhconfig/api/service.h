@@ -59,12 +59,17 @@ private:
 
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
-  std::unique_ptr<grpc::ServerCompletionQueue> cq_;
+  std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_;
 
   Metrics& metrics_;
 
-  void subscribe_requests();
-  void handle_request();
+  void subscribe_requests(
+    grpc::ServerCompletionQueue* cq
+  );
+
+  void handle_requests(
+    grpc::ServerCompletionQueue* cq
+  );
 };
 
 } /* api */

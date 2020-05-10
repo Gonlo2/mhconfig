@@ -21,11 +21,16 @@ Service::Service(
 
 Service::~Service() {
   server_->Shutdown();
-  cq_->Shutdown();
+  for (auto& cq : cqs_) {
+    cq->Shutdown();
+  }
 
   void* ignored_tag;
   bool ignored_ok;
-  while (cq_->Next(&ignored_tag, &ignored_ok)) { }
+  for (auto& cq : cqs_) {
+    while (cq->Next(&ignored_tag, &ignored_ok)) {
+    }
+  }
 }
 
 bool Service::start() {
@@ -33,16 +38,20 @@ bool Service::start() {
 
   builder.AddListeningPort(server_address_, grpc::InsecureServerCredentials());
   builder.RegisterService(&service_);
-  cq_ = builder.AddCompletionQueue();
+
+  cqs_.reserve(num_threads_);
+  for (size_t i = 0; i < num_threads_; ++i) {
+    cqs_.emplace_back(builder.AddCompletionQueue());
+  }
+
   server_ = builder.BuildAndStart();
+
   spdlog::info("Server listening on '{}'", server_address_);
 
-  subscribe_requests();
-
   threads_.reserve(num_threads_);
-  for (size_t i = 0; i < num_threads_; ++i) {
+  for (auto& cq: cqs_) {
     threads_.push_back(
-      std::make_unique<std::thread>(&Service::handle_request, this)
+      std::make_unique<std::thread>(&Service::handle_requests, this, cq.get())
     );
   }
 
@@ -50,14 +59,18 @@ bool Service::start() {
 }
 
 void Service::join() {
-  for (auto& thread: threads_) thread->join();
+  for (auto& thread: threads_) {
+    thread->join();
+  }
 }
 
-void Service::subscribe_requests() {
-  for (int i = 0; i < 1000; ++i) { //TODO configure the number of requests
+void Service::subscribe_requests(
+  grpc::ServerCompletionQueue* cq
+) {
+  for (size_t i = 0; i < 100; ++i) { //TODO configure the number of requests
     auto get_request = make_session<request::GetRequestImpl>(
       &service_,
-      cq_.get(),
+      cq,
       metrics_,
       scheduler_queue_
     );
@@ -65,7 +78,7 @@ void Service::subscribe_requests() {
 
     auto update_request = make_session<request::UpdateRequestImpl>(
       &service_,
-      cq_.get(),
+      cq,
       metrics_,
       scheduler_queue_
     );
@@ -73,7 +86,7 @@ void Service::subscribe_requests() {
 
     auto run_gc_request = make_session<request::RunGCRequestImpl>(
       &service_,
-      cq_.get(),
+      cq,
       metrics_,
       scheduler_queue_
     );
@@ -81,7 +94,7 @@ void Service::subscribe_requests() {
 
     auto watch_stream = make_session<stream::WatchStreamImpl>(
       &service_,
-      cq_.get(),
+      cq,
       metrics_,
       scheduler_queue_
     );
@@ -89,12 +102,16 @@ void Service::subscribe_requests() {
   }
 }
 
-void Service::handle_request() {
+void Service::handle_requests(
+  grpc::ServerCompletionQueue* cq
+) {
+  subscribe_requests(cq);
+
   void* tag;
   bool got_event;
   bool ok;
   do {
-    got_event = cq_->Next(&tag, &ok);
+    got_event = cq->Next(&tag, &ok);
     if (!got_event) {
       spdlog::info("The completion queue has been closed");
     } else {

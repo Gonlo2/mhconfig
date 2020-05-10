@@ -44,12 +44,12 @@ To run the program execute
 ./mhconfig server <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers> <logger level>
 ```
 
-Where the num of gRPC threads need be one (this is deprecated and will removed in a future) and the logger level could be `trace`, `debug` or `info`.
+Where the logger level could be `trace`, `debug` or `info`.
 
 For example
 
 ```bash
-./mhconfig server 0.0.0.0:2222 0.0.0.0:1111 1 13 info
+./mhconfig server 0.0.0.0:2222 0.0.0.0:1111 13 13 info
 ```
 
 To test it you could implement a client using the protobuf file `./src/mhconfig/proto/mhconfig.proto` or using some tool
