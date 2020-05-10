@@ -23,7 +23,7 @@ string_t* make_string_ptr(const std::string& str, chunk_t* chunk) {
 
 String::~String() {
   if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
-    uint64_t refcount = ptr_->refcount.fetch_sub(1, std::memory_order_relaxed);
+    uint64_t refcount = ptr_->refcount.fetch_sub(1, std::memory_order_acq_rel);
     // This logic is tricky, if this is the last reference we could drop the string
     if (refcount == 1) {
       ptr_->~string_t();
