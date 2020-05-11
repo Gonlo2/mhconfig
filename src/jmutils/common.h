@@ -31,6 +31,12 @@ inline void push_str(std::string& output, const std::string& str) {
   output += str;
 }
 
+template <typename T>
+inline void swap_delete(T& container, size_t pos) {
+  std::swap(container[pos], container.back());
+  container.pop_back();
+}
+
 } /* jmutils */
 
 #endif /* ifndef JMUTILS__COMMON_H */

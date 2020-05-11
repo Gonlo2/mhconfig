@@ -20,6 +20,8 @@ enum Status {
   INVALID_VERSION,
   REF_GRAPH_IS_NOT_DAG,
   UID_IN_USE,
+  UNKNOWN_UID,
+  REMOVED
 };
 
 } /* watch */

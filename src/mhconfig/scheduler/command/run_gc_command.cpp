@@ -7,6 +7,7 @@
 #include "mhconfig/worker/command/update_command.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "jmutils/time.h"
+#include "jmutils/common.h"
 
 namespace mhconfig
 {
@@ -104,8 +105,7 @@ void RunGcCommand::remove_merge_configs(
 
             to.push_back(from[i]);
           }
-          from[i] = from.back();
-          from.pop_back();
+          jmutils::swap_delete(from, i);
         } else {
           ++i;
         }
@@ -128,8 +128,7 @@ void RunGcCommand::remove_merge_configs(
       // This generation has the guru configs
       for (size_t i = 0; i < from.size(); ) {
         if(from[i]->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
-          from[i] = from.back();
-          from.pop_back();
+          jmutils::swap_delete(from, i);
           ++number_of_removed_merged_configs;
         } else {
           ++i;
@@ -267,8 +266,7 @@ void RunGcCommand::remove_versions(
           //TODO add some stats
           for (size_t i = 0; i < watchers.size();) {
             if (watchers[i].expired()) {
-              watchers[i] = watchers.back();
-              watchers.pop_back();
+              jmutils::swap_delete(watchers, i);
               --(config_namespace->num_watchers);
             } else {
               ++i;

@@ -58,49 +58,54 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     merged_config->value = it.second.config;
     merged_config->api_merged_config = std::make_shared<mhconfig::api::config::BasicMergedConfig>(it.second.config);
 
-    auto& wait_builts = config_namespace.wait_builts_by_key[it.second.overrides_key];
-    for (size_t i = 0; i < wait_builts.size(); ) {
-      auto wait_built = wait_builts[i];
+    auto wait_builts_search = config_namespace.wait_builts_by_key
+      .find(it.second.overrides_key);
 
-      spdlog::debug(
-        "Unchecking element built for the request with id {}",
-        (void*) wait_built->request.get()
-      );
-      auto search = wait_built->pending_element_position_by_name.find(it.first);
-      wait_built->elements_to_build[search->second].config = it.second.config;
-      wait_built->pending_element_position_by_name.erase(search);
+    if (wait_builts_search != config_namespace.wait_builts_by_key.end()) {
+      for (size_t i = 0; i < wait_builts_search->second.size(); ) {
+        auto wait_built = wait_builts_search->second[i];
 
-      if (wait_built->pending_element_position_by_name.empty()) {
-        if (wait_built->is_main) {
-          spdlog::debug(
-            "Responding the get request with id {}",
-            (void*) wait_built->request.get()
-          );
+        spdlog::debug(
+          "Unchecking element built for the request with id {}",
+          (void*) wait_built->request.get()
+        );
+        auto search = wait_built->pending_element_position_by_name.find(it.first);
+        wait_built->elements_to_build[search->second].config = it.second.config;
+        wait_built->pending_element_position_by_name.erase(search);
 
-          auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
-            wait_built->request,
-            merged_config->api_merged_config
-          );
-          worker_queue.push(api_get_reply_command);
+        if (wait_built->pending_element_position_by_name.empty()) {
+          if (wait_built->is_main) {
+            spdlog::debug(
+              "Responding the get request with id {}",
+              (void*) wait_built->request.get()
+            );
+
+            auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
+              wait_built->request,
+              merged_config->api_merged_config
+            );
+            worker_queue.push(api_get_reply_command);
+          } else {
+            spdlog::debug(
+              "Sending the get request with id {} to built",
+              (void*) wait_built->request.get()
+            );
+
+            auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
+              config_namespace.id,
+              config_namespace.pool,
+              wait_built
+            );
+            worker_queue.push(build_command);
+          }
+
+          jmutils::swap_delete(wait_builts_search->second, i);
         } else {
-          spdlog::debug(
-            "Sending the get request with id {} to built",
-            (void*) wait_built->request.get()
-          );
-
-          auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
-            config_namespace.id,
-            config_namespace.pool,
-            wait_built
-          );
-          worker_queue.push(build_command);
+          ++i;
         }
-
-        // We do a swap delete because we don't care the order and it's faster :P
-        wait_builts[i] = wait_builts.back();
-        wait_builts.pop_back();
-      } else {
-        ++i;
+      }
+      if (wait_builts_search->second.empty()) {
+        config_namespace.wait_builts_by_key.erase(wait_builts_search);
       }
     }
   }

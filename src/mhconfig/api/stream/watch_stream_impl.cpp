@@ -38,6 +38,12 @@ void WatchOutputMessageImpl::set_status(watch::Status status) {
     case watch::Status::UID_IN_USE:
       proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
       break;
+    case watch::Status::UNKNOWN_UID:
+      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
+      break;
+    case watch::Status::REMOVED:
+      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
+      break;
   }
 }
 
@@ -217,16 +223,29 @@ void WatchStreamImpl::request(std::unique_ptr<grpc::ByteBuffer>&& raw_req) {
   bool ok = parse_from_byte_buffer(*raw_req, *req);
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
   if (ok) {
-    auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
-    if (inserted.second) {
-      auto api_watch_command = std::make_shared<scheduler::command::ApiWatchCommand>(
-        msg
-      );
-      scheduler_queue_.push(api_watch_command);
-    } else {
+    if (msg->remove()) {
+      spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), tag());
+      size_t removed_elements = watcher_by_id_.erase(msg->uid());
       auto out_msg = msg->make_output_message();
-      out_msg->set_status(watch::Status::UID_IN_USE);
+      out_msg->set_uid(msg->uid());
+      out_msg->set_status(
+        (removed_elements == 0) ? watch::Status::UNKNOWN_UID : watch::Status::REMOVED
+      );
       out_msg->send();
+    } else {
+      spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), tag());
+      auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
+      if (inserted.second) {
+        auto api_watch_command = std::make_shared<scheduler::command::ApiWatchCommand>(
+          msg
+        );
+        scheduler_queue_.push(api_watch_command);
+      } else {
+        auto out_msg = msg->make_output_message();
+        out_msg->set_uid(msg->uid());
+        out_msg->set_status(watch::Status::UID_IN_USE);
+        out_msg->send();
+      }
     }
   } else {
     auto out_msg = msg->make_output_message();

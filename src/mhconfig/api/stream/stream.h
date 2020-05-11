@@ -126,7 +126,7 @@ private:
 
   std::queue<std::shared_ptr<OutMsg>> messages_to_send_;
   std::unique_ptr<Req> next_req_;
-  bool going_to_finish_;
+  bool going_to_finish_{false};
 
   void prepare_next_request() {
     next_req_ = std::make_unique<Req>();

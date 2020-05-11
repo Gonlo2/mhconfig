@@ -12,6 +12,7 @@
 #include "mhconfig/scheduler/command/api_get_command.h"
 #include "mhconfig/builder.h"
 #include "jmutils/time.h"
+#include "jmutils/common.h"
 
 namespace mhconfig
 {

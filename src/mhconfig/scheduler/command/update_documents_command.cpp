@@ -148,8 +148,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
             watchers_to_trigger.insert(watcher);
             ++i;
           } else {
-            watchers[i] = watchers.back();
-            watchers.pop_back();
+            jmutils::swap_delete(watchers, i);
             --(config_namespace.num_watchers);
           }
         }
@@ -230,8 +229,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
             watchers_to_trigger.insert(watcher);
             ++i;
           } else {
-            watchers[i] = watchers.back();
-            watchers.pop_back();
+            jmutils::swap_delete(watchers, i);
             --config_namespace.num_watchers;
           }
         }

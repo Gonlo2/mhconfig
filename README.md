@@ -206,27 +206,20 @@ message WatchResponse {
     REF_GRAPH_IS_NOT_DAG = 3;
     // the provided uid is already in use.
     UID_IN_USE = 4;
+    // the provided uid don't exists in the system.
+    UNKNOWN_UID = 5;
+    // the provided has been removee, keep in mind that it's possible to have
+    // career conditions in this method if:
+    // - a file has been changed and processing of the watcher has begun
+    // - an watcher has been requested to be removed
+    // - it's returned that the watcher has been removed
+    // - a configuration with the removed watcher identifier is returned
+    REMOVED = 6;
   }
   Status status = 2;
   uint64 namespace_id = 3;
   uint32 version = 4;
   repeated Element elements = 5;
-}
-
-
-message Element {
-  enum NodeType {
-    SCALAR_NODE = 0;
-    MAP_NODE = 1;
-    SEQUENCE_NODE = 2;
-    NULL_NODE = 3;
-    UNDEFINED_NODE = 4;
-  }
-  NodeType type = 1;
-  uint32 sibling_offset = 2;
-  uint32 size = 3;
-  string key = 4;
-  string value = 5;
 }
 ```
 
