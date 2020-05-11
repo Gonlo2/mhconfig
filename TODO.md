@@ -1,4 +1,5 @@
 # Pending taks
+- [ ] Replace the queue with a channel.
 - [ ] Add tests.
 - [ ] Allow increase the number of waiting requests.
 - [ ] Reuse the requests.

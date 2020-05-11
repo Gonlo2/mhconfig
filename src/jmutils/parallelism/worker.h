@@ -71,10 +71,9 @@ private:
 
     uint_fast32_t sequential_id{0};
 
-    Command command;
     while (true) {
       spdlog::debug("The worker is waiting for a command");
-      input_queue_.pop(command);
+      auto command = input_queue_.pop();
 
       if (static_cast<Parent*>(this)->metricate(command, sequential_id)) {
         auto start_time = jmutils::time::monotonic_now();

@@ -2,8 +2,15 @@
 #define JMUTILS__STRUCTURES__THREAD_SAFE_QUEUE_H
 
 #include <stdlib.h>
+#include <memory>
+#include <queue>
+#include <thread>
+#include <mutex>
+#include <utility>
+#include <condition_variable>
 
-#include "blockingconcurrentqueue.h"
+#include <iostream>
+#include <exception>
 
 namespace jmutils
 {
@@ -22,23 +29,56 @@ public:
   Queue(const Queue&) = delete;
   Queue(Queue&&) = delete;
 
-  void pop(T& result) {
-    queue_.wait_dequeue(result);
+  T pop() {
+    std::unique_lock<std::mutex> mlock(mutex_);
+    while (queue_.empty()) cond_.wait(mlock);
+
+    T item = queue_.front();
+    queue_.pop();
+    return item;
   }
 
-  // TODO check if it was possible to add the item
+  std::pair<bool, T> pop_before(
+    const std::chrono::high_resolution_clock::time_point& t
+  ) {
+    std::pair<bool, T> result;
+
+    std::unique_lock<std::mutex> mlock(mutex_);
+
+    while (queue_.empty()) {
+      if (cond_.wait_until(mlock, t) == std::cv_status::timeout) break;
+    }
+
+    result.first = !queue_.empty();
+    if (result.first) {
+      result.second = queue_.front();
+      queue_.pop();
+    }
+
+    return result;
+  }
+
   void push(T item) {
-    queue_.enqueue(item);
+    std::unique_lock<std::mutex> mlock(mutex_);
+    queue_.push(item);
+    mlock.unlock();
+    cond_.notify_one();
   }
 
-  // TODO check if it was possible to add the item
   template <typename Container>
   void push_all(Container items) {
-    queue_.enqueue_bulk(items.data(), items.size());
+    std::unique_lock<std::mutex> mlock(mutex_);
+    for (const auto& x : items) queue_.push(x);
+    mlock.unlock();
+    for (size_t i = 0; i < items.size(); ++i) {
+      cond_.notify_one();
+    }
   }
 
-private:
-  moodycamel::BlockingConcurrentQueue<T> queue_;
+protected:
+  std::queue<T> queue_;
+  std::mutex mutex_;
+  std::condition_variable cond_;
 };
 
 } /* container */
