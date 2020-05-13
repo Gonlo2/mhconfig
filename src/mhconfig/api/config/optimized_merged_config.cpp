@@ -111,7 +111,7 @@ OptimizedMergedConfig::~OptimizedMergedConfig() {
 
 bool OptimizedMergedConfig::init(
   ElementRef element,
-  std::shared_ptr<string_pool::Pool> pool
+  std::shared_ptr<::string_pool::Pool> pool
 ) {
   std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> skeys_and_positions;
   make_elements_ranges_map(element, skeys_and_positions);

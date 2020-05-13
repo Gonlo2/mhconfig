@@ -29,8 +29,8 @@ namespace mhconfig {
   class Element;
 
   typedef std::shared_ptr<Element> ElementRef;
-  typedef string_pool::String Literal;
-  typedef std::unordered_map<string_pool::String, ElementRef> Map;
+  typedef ::string_pool::String Literal;
+  typedef std::unordered_map<::string_pool::String, ElementRef> Map;
   typedef std::shared_ptr<Map> MapRef;
   typedef std::vector<ElementRef> Sequence;
   typedef std::shared_ptr<Sequence> SequenceRef;
@@ -38,7 +38,7 @@ namespace mhconfig {
   const static ElementRef UNDEFINED_ELEMENT{std::make_shared<Element>()};
 
   const static std::string DATA_TAG_EMPTY{"?"};
-  const static Literal TAG_EMPTY{string_pool::String(DATA_TAG_EMPTY)};
+  const static Literal TAG_EMPTY{::string_pool::String(DATA_TAG_EMPTY)};
 
   namespace conversion
   {

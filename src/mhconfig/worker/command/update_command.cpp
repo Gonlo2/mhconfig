@@ -9,7 +9,7 @@ namespace command
 
 UpdateCommand::UpdateCommand(
   uint64_t namespace_id,
-  std::shared_ptr<string_pool::Pool> pool,
+  std::shared_ptr<::string_pool::Pool> pool,
   std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request
 )
   : Command(),

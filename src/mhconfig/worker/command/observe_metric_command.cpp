@@ -8,7 +8,7 @@ namespace command
 {
 
 ObserveMetricCommand::ObserveMetricCommand(
-  metrics::MetricsService::MetricId id,
+  metrics::MetricsService::ObservableId id,
   std::map<std::string, std::string>&& labels,
   double value
 )

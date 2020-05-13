@@ -16,7 +16,7 @@ namespace metrics
   }
 
   void AsyncMetricsService::observe(
-    MetricId id,
+    ObservableId id,
     std::map<std::string, std::string>&& labels,
     double value
   ) {
@@ -26,6 +26,19 @@ namespace metrics
       value
     );
     worker_queue_.push(observe_metric_command);
+  }
+
+  void AsyncMetricsService::set(
+    GaugeId id,
+    std::map<std::string, std::string>&& labels,
+    double value
+  ) {
+    auto set_metric_command = std::make_shared<::mhconfig::worker::command::SetMetricCommand>(
+      id,
+      std::move(labels),
+      value
+    );
+    worker_queue_.push(set_metric_command);
   }
 
 } /* metrics */

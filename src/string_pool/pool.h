@@ -175,8 +175,8 @@ inline bool operator!=(const std::string& lhs, const String& rhs) {
 
 namespace std {
   template <>
-  struct hash<string_pool::String> {
-    std::size_t operator()(const string_pool::String& v) const {
+  struct hash<::string_pool::String> {
+    std::size_t operator()(const ::string_pool::String& v) const {
       return v.hash();
     }
   };
@@ -186,11 +186,35 @@ namespace std {
 namespace string_pool
 {
 
+struct stats_t {
+  uint32_t num_strings;
+  uint32_t num_chunks;
+  uint32_t reclaimed_bytes;
+  uint32_t used_bytes;
+};
+
+class StatsObserver
+{
+public:
+  StatsObserver() {
+  }
+  virtual ~StatsObserver() {
+  }
+
+  virtual void on_updated_stats(const stats_t& stats) {
+  }
+};
+
 class Pool
 {
 public:
-  Pool() {
+  Pool(
+    std::unique_ptr<StatsObserver>&& stats_observer
+  )
+    : stats_observer_(std::move(stats_observer))
+  {
     // Sentinel value that allow simplify the code at the cost of lost one chunk
+    //TODO Check if it makes sense
     chunk_ = new_chunk();
   }
 
@@ -206,6 +230,12 @@ public:
       tmp->~chunk_t();
       free(tmp);
     }
+
+    stats_.num_strings = 0;
+    stats_.num_chunks = 0;
+    stats_.reclaimed_bytes = 0;
+    stats_.used_bytes = 0;
+    stats_observer_->on_updated_stats(stats_);
   }
 
   const String add(const std::string& str) {
@@ -226,9 +256,12 @@ private:
 
   std::unordered_set<String> set_;
   chunk_t* chunk_;
+  stats_t stats_;
+  std::unique_ptr<StatsObserver> stats_observer_;
 
   const String store_string(const std::string& str) {
     spdlog::debug("Adding a new string of size {}", str.size());
+    stats_.num_strings += 1;
 
     chunk_t* back_chunk = chunk_;
     while (back_chunk->next != nullptr) {
@@ -248,6 +281,9 @@ private:
     size_t data_size = align(str.size());
     spdlog::trace("Moving the next_data pointer {} bytes", data_size);
     back_chunk->next->next_data += data_size;
+    stats_.used_bytes += data_size;
+
+    stats_observer_->on_updated_stats(stats_);
 
     return String(string);
   }
@@ -260,13 +296,13 @@ private:
 
     spdlog::debug("Compacting the chunk {}", (void*)chunk);
 
-    chunk->fragmented_size.store(0, std::memory_order_relaxed);
+    stats_.used_bytes -= chunk->fragmented_size.exchange(0, std::memory_order_acq_rel);
 
     spdlog::trace("Looking for the first string");
     chunk->next_data = chunk->data;
     while (chunk->first_string != nullptr) {
       string_t* s = chunk->first_string;
-      if (s->refcount.load(std::memory_order_relaxed) != 1) break;
+      if (s->refcount.load(std::memory_order_acq_rel) != 1) break;
       spdlog::trace("Removing the string {}", (void*)s);
       chunk->first_string = s->next;
       // This is the hacky/tricky logic that avoid call recursively to compact
@@ -275,6 +311,7 @@ private:
       // successfully the string at the end :magic:
       s->chunk = nullptr;
       set_.erase(String(s));
+      stats_.num_strings -= 1;
     }
 
     chunk->last_string = chunk->first_string;
@@ -284,11 +321,12 @@ private:
     while (next_string != nullptr) {
       string_t* s = next_string;
       next_string = s->next;
-      if (s->refcount.load(std::memory_order_relaxed) == 1) {
+      if (s->refcount.load(std::memory_order_acq_rel) == 1) {
         spdlog::trace("Removing the string {}", (void*)s);
         // The same as before ;)
         s->chunk = nullptr;
         set_.erase(String(s));
+        stats_.num_strings -= 1;
       } else {
         spdlog::trace("Compacting the string {}", (void*)s);
         chunk->last_string->next = s;
@@ -304,10 +342,17 @@ private:
     }
 
     if (chunk->last_string != nullptr) chunk->last_string->next = nullptr;
+
+    stats_.used_bytes += chunk->next_data - chunk->data;
+
+    stats_observer_->on_updated_stats(stats_);
   }
 
   chunk_t* new_chunk() {
     spdlog::trace("Making a new chunk");
+    stats_.num_chunks += 1;
+    stats_.reclaimed_bytes += CHUNK_DATA_SIZE;
+
     void* data = aligned_alloc(sizeof(size_t), sizeof(chunk_t));
     assert (data != nullptr);
     chunk_t* chunk = new (data) chunk_t;
@@ -317,6 +362,7 @@ private:
     chunk->first_string = nullptr;
     chunk->last_string = nullptr;
     chunk->next = nullptr;
+
     return chunk;
   }
 };

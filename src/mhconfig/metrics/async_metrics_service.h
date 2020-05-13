@@ -3,6 +3,7 @@
 
 #include "mhconfig/metrics/metrics_service.h"
 #include "mhconfig/worker/command/observe_metric_command.h"
+#include "mhconfig/worker/command/set_metric_command.h"
 
 namespace mhconfig
 {
@@ -19,7 +20,13 @@ namespace metrics
     virtual ~AsyncMetricsService();
 
     void observe(
-      MetricsService::MetricId id,
+      ObservableId id,
+      std::map<std::string, std::string>&& labels,
+      double value
+    ) override;
+
+    void set(
+      GaugeId id,
       std::map<std::string, std::string>&& labels,
       double value
     ) override;

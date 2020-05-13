@@ -100,7 +100,7 @@ struct config_namespace_t {
   uint64_t num_watchers{0};
   std::string root_path;
 
-  std::shared_ptr<string_pool::Pool> pool;
+  std::shared_ptr<::string_pool::Pool> pool;
 
   std::unordered_map<
     std::string,

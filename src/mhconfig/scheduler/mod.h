@@ -62,7 +62,7 @@ private:
     ).count();
 
     context_.metrics.observe(
-      metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
+      metrics::MetricsService::ObservableId::SCHEDULER_DURATION_NANOSECONDS,
       {{"type", command->name()}},
       duration_ns
     );

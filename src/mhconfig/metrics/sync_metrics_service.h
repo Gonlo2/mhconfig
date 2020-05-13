@@ -6,6 +6,7 @@
 #include "spdlog/async.h"
 
 #include <prometheus/summary.h>
+#include <prometheus/gauge.h>
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
 
@@ -26,11 +27,16 @@ namespace metrics
     void init();
 
     void observe(
-      MetricId id,
+      ObservableId id,
       std::map<std::string, std::string>&& labels,
       double value
     ) override;
 
+    void set(
+      GaugeId id,
+      std::map<std::string, std::string>&& labels,
+      double value
+    ) override;
   private:
     prometheus::Exposer exposer_;
     std::shared_ptr<prometheus::Registry> registry_;
@@ -45,6 +51,11 @@ namespace metrics
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_worker_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
+
+    prometheus::Family<prometheus::Gauge>* family_string_pool_num_strings_gauge_;
+    prometheus::Family<prometheus::Gauge>* family_string_pool_num_chunks_gauge_;
+    prometheus::Family<prometheus::Gauge>* family_string_pool_reclaimed_bytes_gauge_;
+    prometheus::Family<prometheus::Gauge>* family_string_pool_used_bytes_gauge_;
   };
 
 } /* metrics */

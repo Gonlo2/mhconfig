@@ -50,7 +50,7 @@ private:
     ).count();
 
     context_.metrics_service.observe(
-      metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
+      metrics::MetricsService::ObservableId::WORKER_DURATION_NANOSECONDS,
       {{"type", command->name()}},
       duration_ns
     );

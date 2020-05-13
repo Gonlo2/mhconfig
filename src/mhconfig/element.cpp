@@ -215,7 +215,7 @@ namespace mhconfig {
   namespace conversion
   {
     template <>
-    std::pair<bool, string_pool::String> as<string_pool::String>(NodeType type, const Literal& literal) {
+    std::pair<bool, ::string_pool::String> as<::string_pool::String>(NodeType type, const Literal& literal) {
       return std::make_pair(type == SCALAR_NODE, literal);
     }
 

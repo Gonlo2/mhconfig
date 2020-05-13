@@ -32,7 +32,7 @@ void make_elements_ranges_map(
 );
 
 struct key_position_t {
-  string_pool::String key;
+  ::string_pool::String key;
   uint32_t start;
   uint32_t size;
 };
@@ -48,7 +48,7 @@ public:
 
   bool init(
     ElementRef element,
-    std::shared_ptr<string_pool::Pool> pool
+    std::shared_ptr<::string_pool::Pool> pool
   );
 
   void add_elements(

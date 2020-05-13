@@ -9,7 +9,7 @@ namespace command
 
 OptimizeMergedConfigCommand::OptimizeMergedConfigCommand(
   std::shared_ptr<merged_config_t> merged_config,
-  std::shared_ptr<string_pool::Pool> pool
+  std::shared_ptr<::string_pool::Pool> pool
 )
   : Command(),
   merged_config_(merged_config),

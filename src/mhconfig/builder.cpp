@@ -8,14 +8,17 @@ namespace builder
 // Setup logic
 
 std::shared_ptr<config_namespace_t> index_files(
-  const std::string& root_path
+  const std::string& root_path,
+  metrics::MetricsService& metrics
 ) {
   auto config_namespace = std::make_shared<config_namespace_t>();
   config_namespace->ok = false;
   config_namespace->root_path = root_path;
   config_namespace->id = std::uniform_int_distribution<uint64_t>{0, 0xffffffffffffffff}(jmutils::prng_engine());
   config_namespace->last_access_timestamp = 0;
-  config_namespace->pool = std::make_shared<string_pool::Pool>();
+  config_namespace->pool = std::make_shared<::string_pool::Pool>(
+    std::make_unique<::mhconfig::string_pool::MetricsStatsObserver>(metrics, root_path)
+  );
 
   spdlog::debug("To index the files in the path '{}'", root_path);
 
@@ -109,7 +112,7 @@ std::shared_ptr<config_namespace_t> index_files(
 }
 
 load_raw_config_result_t load_raw_config(
-  std::shared_ptr<string_pool::Pool> pool,
+  std::shared_ptr<::string_pool::Pool> pool,
   const std::string& root_path,
   const std::string& path
 ) {
@@ -289,7 +292,7 @@ NodeType get_virtual_node_type(
 }
 
 ElementRef apply_tags(
-  std::shared_ptr<string_pool::Pool> pool,
+  std::shared_ptr<::string_pool::Pool> pool,
   ElementRef element,
   ElementRef root,
   const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
@@ -360,7 +363,7 @@ ElementRef apply_tags(
 }
 
 ElementRef apply_tag_format(
-  std::shared_ptr<string_pool::Pool> pool,
+  std::shared_ptr<::string_pool::Pool> pool,
   ElementRef element
 ) {
   if (!element->is_sequence() || (element->as_sequence().size() != 2)) {
@@ -530,7 +533,7 @@ ElementRef apply_tag_ref(
 
   auto referenced_element = search->second;
   for (size_t i = 1; i < path_len; ++i) {
-    referenced_element = referenced_element->get(path[i]->as<string_pool::String>());
+    referenced_element = referenced_element->get(path[i]->as<::string_pool::String>());
   }
 
   return referenced_element;
@@ -549,7 +552,7 @@ ElementRef apply_tag_sref(
   }
 
   for (const auto& element : element->as_sequence()) {
-    root = root->get(element->as<string_pool::String>());
+    root = root->get(element->as<::string_pool::String>());
   }
 
   if (!root->is_scalar()) {
@@ -567,7 +570,7 @@ ElementRef apply_tag_sref(
  * All the structure checks must be done here
  */
 ElementRef make_and_check_element(
-    std::shared_ptr<string_pool::Pool> pool,
+    std::shared_ptr<::string_pool::Pool> pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
@@ -599,7 +602,7 @@ ElementRef make_and_check_element(
 }
 
 ElementRef make_element(
-    std::shared_ptr<string_pool::Pool> pool,
+    std::shared_ptr<::string_pool::Pool> pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
@@ -632,7 +635,7 @@ ElementRef make_element(
         auto k = make_and_check_element(pool, it.first, reference_to);
         auto v = make_and_check_element(pool, it.second, reference_to);
 
-        (*map)[k->as<string_pool::String>()] = v;
+        (*map)[k->as<::string_pool::String>()] = v;
       }
       return std::make_shared<Element>(
         map,

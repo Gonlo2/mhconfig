@@ -24,7 +24,7 @@ class UpdateCommand : public Command
 public:
   UpdateCommand(
     uint64_t namespace_id,
-    std::shared_ptr<string_pool::Pool> pool,
+    std::shared_ptr<::string_pool::Pool> pool,
     std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request
   );
   virtual ~UpdateCommand();
@@ -39,7 +39,7 @@ public:
 
 private:
   uint64_t namespace_id_;
-  std::shared_ptr<string_pool::Pool> pool_;
+  std::shared_ptr<::string_pool::Pool> pool_;
   std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request_;
 
   bool add_items(

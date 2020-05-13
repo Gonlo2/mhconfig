@@ -1,5 +1,5 @@
-#ifndef MHCONFIG__WORKER__COMMAND__OBSERVE_METRIC_COMMAND_H
-#define MHCONFIG__WORKER__COMMAND__OBSERVE_METRIC_COMMAND_H
+#ifndef MHCONFIG__WORKER__COMMAND__SET_METRIC_COMMAND_H
+#define MHCONFIG__WORKER__COMMAND__SET_METRIC_COMMAND_H
 
 #include <memory>
 #include <string>
@@ -14,15 +14,15 @@ namespace worker
 namespace command
 {
 
-class ObserveMetricCommand : public Command
+class SetMetricCommand : public Command
 {
 public:
-  ObserveMetricCommand(
-    metrics::MetricsService::ObservableId id,
+  SetMetricCommand(
+    metrics::MetricsService::GaugeId id,
     std::map<std::string, std::string>&& labels,
     double value
   );
-  virtual ~ObserveMetricCommand();
+  virtual ~SetMetricCommand();
 
   std::string name() const override;
 
@@ -31,7 +31,7 @@ public:
   ) override;
 
 private:
-  metrics::MetricsService::ObservableId id_;
+  metrics::MetricsService::GaugeId id_;
   std::map<std::string, std::string> labels_;
   double value_;
 };
