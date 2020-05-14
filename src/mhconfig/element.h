@@ -46,7 +46,7 @@ namespace mhconfig {
     std::pair<bool, T> as(NodeType type, const Literal& literal);
   } /* conversion */
 
-  class Element
+  class Element final
   {
   public:
     Element();
@@ -61,7 +61,7 @@ namespace mhconfig {
     Element(const Element& rhs) = delete;
     Element(Element&& rhs) = delete;
 
-    virtual ~Element() {};
+    ~Element() {};
 
     NodeType type() const;
     const Literal& tag() const;

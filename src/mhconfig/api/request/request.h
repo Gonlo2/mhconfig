@@ -47,8 +47,8 @@ private:
     FINISH
   };
 
-  Status status_{Status::CREATE};
   jmutils::time::MonotonicTimePoint start_time_;
+  Status status_{Status::CREATE};
 
   const std::string status();
 

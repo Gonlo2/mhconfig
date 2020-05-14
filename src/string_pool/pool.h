@@ -36,12 +36,12 @@ struct chunk_t {
 };
 
 struct string_t {
-  size_t hash;
-  uint32_t size;
+  mutable std::atomic<uint64_t> refcount;
   char* data;
   chunk_t* chunk;
   string_t* next;
-  mutable std::atomic<uint64_t> refcount;
+  size_t hash;
+  uint32_t size;
 };
 
 inline void init_string(
@@ -61,7 +61,7 @@ string_t* alloc_string_ptr();
 bool make_small_string(const std::string& str, uint64_t& result);
 string_t* make_string_ptr(const std::string& str, chunk_t* chunk);
 
-class String
+class String final
 {
 public:
   friend bool operator==(const String& lhs, const String& rhs);
@@ -121,7 +121,7 @@ public:
     return *this;
   }
 
-  virtual ~String() noexcept;
+  ~String() noexcept;
 
   size_t hash() const {
     if (data_ & 1) {
@@ -191,6 +191,8 @@ private:
   // - two extra characters, probaby the undescore and the dash
   uint64_t data_;
 };
+
+static_assert(sizeof(String) == 8, "The size of the String must be 8 bytes");
 
 // Only it's supported if both string has the same format (small or ptr)
 inline bool operator==(const String& lhs, const String& rhs) {

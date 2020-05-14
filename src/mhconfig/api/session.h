@@ -103,14 +103,15 @@ public:
   }
 
 protected:
-  std::recursive_mutex mutex_;
-
   CustomService* service_;
   grpc::ServerCompletionQueue* cq_;
-  grpc::ServerContext ctx_;
 
 private:
   std::shared_ptr<Session> this_shared_{nullptr};
+
+protected:
+  std::recursive_mutex mutex_;
+  grpc::ServerContext ctx_;
 };
 
 } /* api */

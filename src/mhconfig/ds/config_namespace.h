@@ -82,12 +82,11 @@ namespace build {
   };
 
   struct wait_built_t {
-    bool is_main;
     std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
-
     std::shared_ptr<::mhconfig::api::request::GetRequest> request;
-    uint32_t specific_version;
     std::vector<build_element_t> elements_to_build;
+    uint32_t specific_version;
+    bool is_main;
   };
 }
 
