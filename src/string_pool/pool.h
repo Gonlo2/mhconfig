@@ -37,30 +37,28 @@ struct chunk_t {
 
 struct string_t {
   size_t hash;
-  uint32_t size : 31;
-  bool needs_to_be_destroyed : 1;
+  uint32_t size;
   char* data;
   chunk_t* chunk;
   string_t* next;
   mutable std::atomic<uint64_t> refcount;
 };
 
-
 inline void init_string(
   const std::string& str,
   char* data,
-  string_t* result,
-  bool needs_to_be_destroyed
+  string_t* result
 ) {
   result->hash = std::hash<std::string>{}(str);
   result->size = str.size();
-  result->needs_to_be_destroyed = needs_to_be_destroyed;
   result->data = data;
   result->next = nullptr;
   result->chunk = nullptr;
   result->refcount.store(0);
 }
 
+string_t* alloc_string_ptr();
+bool make_small_string(const std::string& str, uint64_t& result);
 string_t* make_string_ptr(const std::string& str, chunk_t* chunk);
 
 class String
@@ -69,83 +67,141 @@ public:
   friend bool operator==(const String& lhs, const String& rhs);
   friend bool operator==(const String& lhs, const std::string& rhs);
 
-  explicit String() noexcept : ptr_(nullptr) {
+  explicit String() noexcept {
+    data_ = 0;
   }
 
   explicit String(const std::string& str) noexcept {
-    void* data = aligned_alloc(sizeof(size_t), sizeof(string_t));
-    assert (data != nullptr);
-    ptr_ = new (data) string_t;
-    init_string(str, (char*) str.c_str(), ptr_, true);
-    ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  explicit String(const std::string& str, string_t* internal_struct) noexcept
-    : ptr_(internal_struct)
-  {
-    init_string(str, (char*) str.c_str(), ptr_, false);
-  }
-
-  String(string_t* ptr) noexcept : ptr_(ptr) {
-    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
-      ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
+    if (!make_small_string(str, data_)) {
+      void* data = alloc_string_ptr();
+      assert (data != nullptr);
+      string_t* ptr = new (data) string_t;
+      init_string(str, (char*) str.c_str(), ptr);
+      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
+      data_ = (uint64_t)ptr;
     }
   }
 
-  String(const String& o) noexcept : ptr_(o.ptr_) {
-    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
-      ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
+  String(uint64_t data) noexcept : data_(data) {
+    if ((data_ & 1) == 0) {
+      string_t* ptr = (string_t*) data_;
+      if (ptr != nullptr) {
+        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
+      }
     }
   }
 
-  String(String&& o) noexcept : ptr_(o.ptr_) {
-    o.ptr_ = nullptr;
+  String(const String& o) noexcept : data_(o.data_) {
+    if ((data_ & 1) == 0) {
+      string_t* ptr = (string_t*) data_;
+      if (ptr != nullptr) {
+        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
+  }
+
+  String(String&& o) noexcept : data_(o.data_) {
+    o.data_ = 0;
   }
 
   String& operator=(const String& o) noexcept {
-    ptr_ = o.ptr_;
-    if ((ptr_ != nullptr) && ptr_->needs_to_be_destroyed) {
-      ptr_->refcount.fetch_add(1, std::memory_order_relaxed);
+    data_ = o.data_;
+    if ((data_ & 1) == 0) {
+      string_t* ptr = (string_t*) data_;
+      if (ptr != nullptr) {
+        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
+      }
     }
     return *this;
   }
 
   String& operator=(String&& o) noexcept {
-    ptr_ = o.ptr_;
-    o.ptr_ = nullptr;
+    data_ = o.data_;
+    o.data_ = 0;
     return *this;
   }
 
   virtual ~String() noexcept;
 
   size_t hash() const {
-    return (ptr_ == nullptr) ? 0 : ptr_->hash;
+    if (data_ & 1) {
+      return data_;
+    } else {
+      string_t* ptr = (string_t*) data_;
+      return (ptr == nullptr) ? 0 : ptr->hash;
+    }
   }
 
   size_t size() const {
-    return (ptr_ == nullptr) ? 0 : ptr_->size;
+    if (data_ & 1) {
+      return (data_>>1) & 7;
+    } else {
+      string_t* ptr = (string_t*) data_;
+      return (ptr == nullptr) ? 0 : ptr->size;
+    }
   }
 
   std::string str() const {
-    if (ptr_ == nullptr) return std::string();
+    if (data_ & 1) {
+      size_t size = (data_>>1) & 7;
+      std::string result(size, 0);
+      uint64_t data = data_;
+      while (size--) {
+        data >>= 8;
+        result[size] = static_cast<int8_t>(data & 255);
+      }
+      return result;
+    } else {
+      string_t* ptr = (string_t*) data_;
+      if (ptr == nullptr) return std::string();
 
-    if (ptr_->chunk != nullptr) {
-      std::shared_lock lock(ptr_->chunk->mutex);
-      return std::string(ptr_->data, ptr_->size);
+      if (ptr->chunk != nullptr) {
+        std::shared_lock lock(ptr->chunk->mutex);
+        return std::string(ptr->data, ptr->size);
+      }
+
+      return std::string(ptr->data, ptr->size);
     }
-
-    return std::string(ptr_->data, ptr_->size);
   }
 
 private:
-  string_t* ptr_;
+  // This store also a pointer or a little string (up to 7 characters, this will
+  // be enought for more that the half of the english words). To know what kind
+  // of data it has we use the least significant bit, it has a zero in the case
+  // of a pointer to string_t or a one in the case of a little string. This is
+  // possible aligning the string_t data structures in even positions.
+  //
+  // The little string format follow the next schema
+  // --------------------------------------------------------------------
+  // | more significative           ...              less significative |
+  // --------------------------------------------------------------------
+  // |  ch1  |  ch2  |  ch3  |  ch4  |  ch5  |  ch6  |  ch7  | XXXXLLL1 |
+  // --------------------------------------------------------------------
+  // | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits |  8 bits  |
+  // --------------------------------------------------------------------
+  // Where
+  // - chX is the X string character if exists and garbage in other case
+  // - X are unused bits
+  // - LLL are the bits with the string size
+  //
+  //TODO check if make sense store up to 9 characters using only 6bits
+  // by character, to do it use the next words
+  // - the ascii words in upper and lower case (52 values)
+  // - the ascii numbers (10 values)
+  // - two extra characters, probaby the undescore and the dash
+  uint64_t data_;
 };
 
+// Only it's supported if both string has the same format (small or ptr)
 inline bool operator==(const String& lhs, const String& rhs) {
-  if (lhs.ptr_ == rhs.ptr_) return true;
-  if ((lhs.ptr_ == nullptr) || (rhs.ptr_ == nullptr)) return false;
-  if ((lhs.ptr_->hash != rhs.ptr_->hash) || (lhs.ptr_->size != rhs.ptr_->size)) return false;
-  return memcmp(lhs.ptr_->data, rhs.ptr_->data, lhs.ptr_->size) == 0;
+  if (lhs.data_ == rhs.data_) return true;
+  if (lhs.data_ & 1) return false;
+
+  string_t* l = (string_t*) lhs.data_;
+  string_t* r = (string_t*) rhs.data_;
+  if ((l == nullptr) || (r == nullptr)) return false;
+  if ((l->hash != r->hash) || (l->size != r->size)) return false;
+  return memcmp(l->data, r->data, l->size) == 0;
 }
 
 inline bool operator!=(const String& lhs, const String& rhs) {
@@ -153,9 +209,19 @@ inline bool operator!=(const String& lhs, const String& rhs) {
 }
 
 inline bool operator==(const String& lhs, const std::string& rhs) {
-  if (lhs.ptr_ == nullptr) return false;
-  if (lhs.ptr_->size != rhs.size()) return false;
-  return memcmp(lhs.ptr_->data, rhs.c_str(), lhs.ptr_->size) == 0;
+  if (lhs.data_ == 0) return false;
+  if (lhs.data_ & 1) {
+    if (((lhs.data_>>1)&7) != rhs.size()) return false;
+    uint64_t l = lhs.data_>>8;
+    for (size_t i = rhs.size(); i;) {
+      if (static_cast<int8_t>(l&255) != rhs[--i]) return false;
+    }
+    return true;
+  } else {
+    string_t* l = (string_t*) lhs.data_;
+    if (l->size != rhs.size()) return false;
+    return memcmp(l->data, rhs.c_str(), l->size) == 0;
+  }
 }
 
 inline bool operator!=(const String& lhs, const std::string& rhs) {
@@ -201,7 +267,7 @@ public:
   virtual ~StatsObserver() {
   }
 
-  virtual void on_updated_stats(const stats_t& stats) {
+  virtual void on_updated_stats(const stats_t& stats, bool force) {
   }
 };
 
@@ -213,20 +279,18 @@ public:
   )
     : stats_observer_(std::move(stats_observer))
   {
-    // Sentinel value that allow simplify the code at the cost of lost one chunk
-    //TODO Check if it makes sense
-    chunk_ = new_chunk();
+    head_ = new_chunk();
   }
 
   virtual ~Pool() {
-    while (chunk_ != nullptr) {
-      while (chunk_->first_string != nullptr) {
-        chunk_->first_string->chunk = nullptr;
-        chunk_->first_string = chunk_->first_string->next;
+    while (head_ != nullptr) {
+      while (head_->first_string != nullptr) {
+        head_->first_string->chunk = nullptr;
+        head_->first_string = head_->first_string->next;
       }
 
-      chunk_t* tmp = chunk_;
-      chunk_ = tmp->next;
+      chunk_t* tmp = head_;
+      head_ = tmp->next;
       tmp->~chunk_t();
       free(tmp);
     }
@@ -235,27 +299,32 @@ public:
     stats_.num_chunks = 0;
     stats_.reclaimed_bytes = 0;
     stats_.used_bytes = 0;
-    stats_observer_->on_updated_stats(stats_);
+    stats_observer_->on_updated_stats(stats_, true);
   }
 
   const String add(const std::string& str) {
-    std::unique_lock lock(chunk_->mutex);
+    uint64_t result;
+    if (!make_small_string(str, result)) {
+      std::unique_lock lock(mutex_);
 
-    string_t tmp_internal_string;
-    auto search = set_.find(String(str, &tmp_internal_string));
-    if (search != set_.end()) {
-      return *search;
+      auto search = set_.find(String(str));
+      if (search != set_.end()) {
+        return *search;
+      }
+
+      spdlog::debug("Adding a new string");
+      return *set_.insert(store_string(str)).first;
     }
 
-    spdlog::debug("Adding a new string");
-    return *set_.insert(store_string(str)).first;
+    return String(result);
   }
 
 private:
   friend class String;
 
   std::unordered_set<String> set_;
-  chunk_t* chunk_;
+  std::shared_mutex mutex_;
+  chunk_t* head_;
   stats_t stats_;
   std::unique_ptr<StatsObserver> stats_observer_;
 
@@ -263,35 +332,38 @@ private:
     spdlog::debug("Adding a new string of size {}", str.size());
     stats_.num_strings += 1;
 
-    chunk_t* back_chunk = chunk_;
-    while (back_chunk->next != nullptr) {
-      size_t s = (char*) back_chunk->next->next_data - (char*) &back_chunk->next->data;
-      spdlog::trace("The chunk {} used {} bytes", (uint64_t)back_chunk->next, s);
+    chunk_t* back_chunk = head_;
+    chunk_t* chunk = head_;
+    while (chunk != nullptr) {
+      size_t s = (char*) chunk->next_data - (char*) &chunk->data;
+      spdlog::trace("The chunk {} used {} bytes", (void*)chunk, s);
       if (s + str.size() <= CHUNK_DATA_SIZE) break;
-      back_chunk = back_chunk->next;
+      back_chunk = chunk;
+      chunk = chunk->next;
+    }
+    if (chunk == nullptr) {
+      chunk = back_chunk->next = new_chunk();
     }
 
-    if (back_chunk->next == nullptr) back_chunk->next = new_chunk();
+    std::unique_lock lock_chunk(chunk->mutex);
 
-    std::unique_lock lock_chunk(back_chunk->next->mutex);
-
-    string_t* string = make_string_ptr(str, back_chunk->next);
+    string_t* string = make_string_ptr(str, chunk);
     spdlog::trace("Made the string {} in {}", (void*)string, (void*)string->data);
 
     size_t data_size = align(str.size());
     spdlog::trace("Moving the next_data pointer {} bytes", data_size);
-    back_chunk->next->next_data += data_size;
+    chunk->next_data += data_size;
     stats_.used_bytes += data_size;
 
-    stats_observer_->on_updated_stats(stats_);
+    stats_observer_->on_updated_stats(stats_, false);
 
-    return String(string);
+    return String((uint64_t)string);
   }
 
   const void compact_chunk(chunk_t* chunk) {
     // First we block the accesses to the pool and the chunk to modify until the
     // compact process finish
-    std::unique_lock lock_pool(chunk_->mutex);
+    std::unique_lock lock_pool(mutex_);
     std::unique_lock lock_chunk(chunk->mutex);
 
     spdlog::debug("Compacting the chunk {}", (void*)chunk);
@@ -310,7 +382,7 @@ private:
       // the chunk the destructor will avoid the compacter branch and remove
       // successfully the string at the end :magic:
       s->chunk = nullptr;
-      set_.erase(String(s));
+      set_.erase(String((uint64_t)s));
       stats_.num_strings -= 1;
     }
 
@@ -325,7 +397,7 @@ private:
         spdlog::trace("Removing the string {}", (void*)s);
         // The same as before ;)
         s->chunk = nullptr;
-        set_.erase(String(s));
+        set_.erase(String((uint64_t)s));
         stats_.num_strings -= 1;
       } else {
         spdlog::trace("Compacting the string {}", (void*)s);
@@ -345,7 +417,7 @@ private:
 
     stats_.used_bytes += chunk->next_data - chunk->data;
 
-    stats_observer_->on_updated_stats(stats_);
+    stats_observer_->on_updated_stats(stats_, true);
   }
 
   chunk_t* new_chunk() {
