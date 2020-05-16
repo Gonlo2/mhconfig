@@ -13,14 +13,14 @@ def decode(elements, idx):
         idx += 1
         for _ in range(element.get('size', 0)):
             result[elements[idx].get('key', '')] = decode(elements, idx)
-            idx += elements[idx].get('siblingOffset', 0)
+            idx += elements[idx].get('siblingOffset', 0)+1
         return result
     elif type_ == 'SEQUENCE_NODE':
         result = []
         idx += 1
         for _ in range(element.get('size', 0)):
             result.append(decode(elements, idx))
-            idx += elements[idx].get('siblingOffset', 0)
+            idx += elements[idx].get('siblingOffset', 0)+1
         return result
     elif type_ == 'NULL_NODE':
         return None

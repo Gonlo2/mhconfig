@@ -48,7 +48,7 @@ uint32_t fill_elements(
 
         uint32_t sibling_offset = fill_elements(it.second, container, value);
         value->set_key(it.first.str());
-        value->set_sibling_offset(sibling_offset);
+        value->set_sibling_offset(sibling_offset-1);
 
         parent_sibling_offset += sibling_offset;
       }
@@ -67,7 +67,7 @@ uint32_t fill_elements(
         value = container->add_elements();
 
         uint32_t sibling_offset = fill_elements(x, container, value);
-        value->set_sibling_offset(sibling_offset);
+        value->set_sibling_offset(sibling_offset-1);
 
         parent_sibling_offset += sibling_offset;
       }
