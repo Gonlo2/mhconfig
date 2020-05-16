@@ -188,14 +188,14 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
           build_element.name
         );
         for (const auto& k : get_request_->overrides()) {
-          auto raw_config = get_raw_config(
+          with_raw_config(
             *document_metadata,
             k,
-            get_request_->version()
+            get_request_->version(),
+            [&build_element, &k](auto& raw_config) {
+              build_element.raw_config_by_override[k] = raw_config;
+            }
           );
-          if (raw_config != nullptr) {
-            build_element.raw_config_by_override[k] = raw_config;
-          }
         }
         merged_config->status = MergedConfigStatus::BUILDING;
         break;
@@ -323,22 +323,30 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   dfs_path_set.insert(document);
 
   for (uint32_t i = 0; i < overrides.size(); ++i) {
-    auto raw_config = get_raw_config(*document_metadata, overrides[i], version);
-    if (raw_config != nullptr) {
-      for (const auto& ref_document : raw_config->reference_to) {
-        referenced_documents[ref_document].insert(document);
-        bool is_a_dag = check_if_ref_graph_is_a_dag_rec(
-          config_namespace,
-          ref_document,
-          overrides,
-          version,
-          dfs_path,
-          dfs_path_set,
-          referenced_documents
-        );
-        if (!is_a_dag) return false;
+    bool is_a_dag = true;
+    with_raw_config(
+      *document_metadata,
+      overrides[i],
+      version,
+      [this, &config_namespace, &document, &overrides, version, &dfs_path,
+        &dfs_path_set, &referenced_documents, &is_a_dag
+      ](auto& raw_config) {
+        for (const auto& ref_document : raw_config->reference_to) {
+          referenced_documents[ref_document].insert(document);
+          is_a_dag = check_if_ref_graph_is_a_dag_rec(
+            config_namespace,
+            ref_document,
+            overrides,
+            version,
+            dfs_path,
+            dfs_path_set,
+            referenced_documents
+          );
+          if (!is_a_dag) return;
+        }
       }
-    }
+    );
+    if (!is_a_dag) return false;
   }
 
   dfs_path.pop_back();

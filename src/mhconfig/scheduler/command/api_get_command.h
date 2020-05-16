@@ -98,10 +98,14 @@ private:
     overrides_key.clear();
     overrides_key.reserve(overrides.size()*4);
     for (auto& override_: overrides) {
-      auto raw_config = get_raw_config(document_metadata, override_, version);
-      if (raw_config != nullptr) {
-        jmutils::push_uint32(overrides_key, raw_config->id);
-      }
+      with_raw_config(
+        document_metadata,
+        override_,
+        version,
+        [&overrides_key](auto& raw_config) {
+          jmutils::push_uint32(overrides_key, raw_config->id);
+        }
+      );
     }
   }
 

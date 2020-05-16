@@ -61,31 +61,30 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
       .find(item.document);
 
     if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-      auto raw_config = get_raw_config(
+      with_raw_config(
         *document_metadata_search->second,
         item.override_,
-        0
-      );
+        0,
+        [&config_namespace, &item](const auto& raw_config) {
+          for (const auto& reference_to : raw_config->reference_to) {
+            auto& referenced_by = config_namespace
+              .document_metadata_by_document[reference_to]
+              ->referenced_by;
 
-      if (raw_config != nullptr) {
-        for (const auto& reference_to : raw_config->reference_to) {
-          auto& referenced_by = config_namespace
-            .document_metadata_by_document[reference_to]
-            ->referenced_by;
+            spdlog::debug(
+              "Decreasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
+              item.document,
+              reference_to,
+              referenced_by[item.document].v,
+              item.override_
+            );
 
-          spdlog::debug(
-            "Decreasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
-            item.document,
-            reference_to,
-            referenced_by[item.document].v,
-            item.override_
-          );
-
-          if (referenced_by[item.document].v-- <= 1) {
-            referenced_by.erase(item.document);
+            if (referenced_by[item.document].v-- <= 1) {
+              referenced_by.erase(item.document);
+            }
           }
         }
-      }
+      );
     }
   }
 
@@ -109,33 +108,32 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
       affected_documents.erase(document);
     }
 
-    for (const auto document : affected_documents) {
+    for (const auto& document : affected_documents) {
       auto document_metadata = config_namespace
         .document_metadata_by_document[document];
 
-      auto raw_config = get_raw_config(
+      with_raw_config(
         *document_metadata,
         updated_documents_it.first,
-        0
+        0,
+        [&config_namespace, &document_metadata, &updated_documents_it, &document](const auto& raw_config) {
+          spdlog::debug(
+            "Updating affected raw config id (document: '{}', override: '{}', old_id: {}, new_id: {})",
+            document,
+            updated_documents_it.first,
+            raw_config->id,
+            config_namespace.next_raw_config_id
+          );
+
+          auto new_raw_config = std::make_shared<raw_config_t>();
+          new_raw_config->id = config_namespace.next_raw_config_id++;
+          new_raw_config->value = raw_config->value;
+          new_raw_config->reference_to = raw_config->reference_to;
+
+          document_metadata->override_by_key[updated_documents_it.first]
+            .raw_config_by_version[config_namespace.current_version] = new_raw_config;
+        }
       );
-
-      if (raw_config != nullptr) {
-        spdlog::debug(
-          "Updating affected raw config id (document: '{}', override: '{}', old_id: {}, new_id: {})",
-          document,
-          updated_documents_it.first,
-          raw_config->id,
-          config_namespace.next_raw_config_id
-        );
-
-        auto new_raw_config = std::make_shared<raw_config_t>();
-        new_raw_config->id = config_namespace.next_raw_config_id++;
-        new_raw_config->value = raw_config->value;
-        new_raw_config->reference_to = raw_config->reference_to;
-
-        document_metadata->override_by_key[updated_documents_it.first]
-          .raw_config_by_version[config_namespace.current_version] = new_raw_config;
-      }
 
 
       auto override_search = document_metadata->override_by_key
@@ -237,7 +235,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     }
   }
 
-  for (auto watcher : watchers_to_trigger) {
+  for (auto& watcher : watchers_to_trigger) {
     spdlog::debug(
       "The document '{}' changed and it has a watcher",
       watcher->document()

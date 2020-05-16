@@ -116,11 +116,55 @@ std::shared_ptr<merged_config_t> get_merged_config(
   const std::string& overrides_key
 );
 
-std::shared_ptr<raw_config_t> get_raw_config(
+template<typename F>
+void with_raw_config(
   const document_metadata_t& document_metadata,
   const std::string& override_,
-  uint32_t version
-);
+  uint32_t version,
+  F lambda
+) {
+  spdlog::trace(
+    "Obtaining the raw config of the override '{}' with version '{}'",
+    override_,
+    version
+  );
+
+  auto override_search = document_metadata.override_by_key
+    .find(override_);
+
+  if (override_search == document_metadata.override_by_key.end()) {
+    spdlog::trace("Don't exists the override '{}'", override_);
+    return;
+  }
+
+  auto& raw_config_by_version = override_search->second
+    .raw_config_by_version;
+
+  auto raw_config_search = (version == 0)
+    ? raw_config_by_version.end()
+    : raw_config_by_version.upper_bound(version);
+
+  if (raw_config_search == raw_config_by_version.begin()) {
+    spdlog::trace("Don't exists a version lower or equal to {}", version);
+    return;
+  }
+
+  --raw_config_search;
+  if (raw_config_search->second->value == nullptr) {
+    spdlog::trace(
+      "The raw_config value is deleted for the version {}",
+      raw_config_search->first
+    );
+    return;
+  }
+
+  spdlog::trace(
+    "Obtained a raw config with the version {}",
+    raw_config_search->first
+  );
+
+  lambda(raw_config_search->second);
+}
 
 } /* builder */
 } /* mhconfig */
