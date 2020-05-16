@@ -7,14 +7,6 @@ namespace api
 namespace config
 {
 
-namespace
-{
-  std::string& get_skey_buffer() {
-    thread_local static std::string buffer;
-    return buffer;
-  }
-}
-
 uint32_t make_elements_ranges_map_rec(
   mhconfig::ElementRef root,
   uint32_t& idx,
@@ -199,7 +191,7 @@ bool OptimizedMergedConfig::init(
 void OptimizedMergedConfig::add_elements(
   request::GetRequest* api_request
 ) {
-  std::string& skey = get_skey_buffer();
+  thread_local static std::string skey;
   skey.clear();
   //FIXME Ignore the first key
   for (uint32_t i = 1; i < api_request->key().size(); ++i) {

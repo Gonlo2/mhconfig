@@ -75,7 +75,8 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   // If we are here it's possible obtain the asked document so first of all we check
   // if exists a cached value of the document with the requested overrides.
   // To search it we create the overrides key
-  std::string overrides_key;
+  thread_local static std::string overrides_key;
+  overrides_key.clear();
   make_overrides_key(
     *document_metadata,
     get_request_->overrides(),
