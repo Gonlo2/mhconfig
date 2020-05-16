@@ -13,25 +13,19 @@ enable_language(C CXX)
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
   #set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -fsanitize=address -fsanitize=leak")
   set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall")
-  set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+  set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3 -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE")
+  set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO")
 endif()
 
 add_definitions(-std=c++17)
 
 set(Boost_USE_MULTITHREADED ON)
 
-### PAQUETES #######################################
-
 find_package(PkgConfig REQUIRED)
 find_package(prometheus-cpp REQUIRED)
 
-
 # location of header files
-include_directories(
-  ${PROJECT_BINARY_DIR}
-  ${PROJECT_SOURCE_DIR}/src
-)
+include_directories(${PROJECT_SOURCE_DIR}/src)
 
 file(
   GLOB_RECURSE

@@ -1,5 +1,5 @@
 # Pending taks
-- [ ] Replace the queue with a channel.
+- [ ] Stop gracefully the service.
 - [ ] Add tests.
 - [ ] Allow increase the number of waiting requests.
 - [ ] Reuse the requests.
@@ -9,6 +9,5 @@
   without u64 support like java.
 - [ ] Check if the service handle correctly empty overrides.
 - [ ] Create a proxy for the metrics to avoid preprocess the summary data online.
-- [ ] Allow remove the watchers.
 - [ ] Change proto definition to have at leat a key of one element.
 - [ ] Review the cmake configuration (too slow).

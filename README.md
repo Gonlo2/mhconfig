@@ -41,19 +41,19 @@ You could find the executable in `./build/mhconfig`
 To run the program execute
 
 ```bash
-./mhconfig <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers> <logger level>
+./mhconfig <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers>
 ```
-
-Where the logger level could be `trace`, `debug` or `info`.
 
 For example
 
 ```bash
-./mhconfig 0.0.0.0:2222 0.0.0.0:1111 13 13 info
+SPDLOG_LEVEL=debug ./mhconfig 0.0.0.0:2222 0.0.0.0:1111 13 13
 ```
 
 To test it you could implement a client using the protobuf file `./src/mhconfig/proto/mhconfig.proto` or using some tool
 like [grpcurl](https://github.com/fullstorydev/grpcurl) or [ghz](https://ghz.sh/).
+
+PS: the logger configuration format could be obtained from https://github.com/gabime/spdlog/releases/tag/v1.6.0
 
 
 ## Config
