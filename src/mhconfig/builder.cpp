@@ -26,7 +26,7 @@ std::shared_ptr<config_namespace_t> index_files(
   std::vector<std::string> paths;
   for (
     boost::filesystem::recursive_directory_iterator it(root_path, error_code), end;
-    it != end;
+    !error_code && (it != end);
     ++it
   ) {
     auto filename = it->path().filename().string();
