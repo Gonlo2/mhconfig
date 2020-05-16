@@ -3,6 +3,7 @@
 
 #include "mhconfig/api/config/merged_config.h"
 #include "mhconfig/api/config/common.h"
+#include "mhconfig/metrics/metrics_service.h"
 
 #include "spdlog/spdlog.h"
 #include "string_pool/pool.h"
@@ -48,7 +49,8 @@ public:
 
   bool init(
     ElementRef element,
-    std::shared_ptr<::string_pool::Pool> pool
+    std::shared_ptr<::string_pool::Pool> pool,
+    metrics::MetricsService& metrics_service
   );
 
   void add_elements(

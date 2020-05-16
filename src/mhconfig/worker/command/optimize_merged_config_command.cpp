@@ -34,7 +34,8 @@ bool OptimizeMergedConfigCommand::execute(
   auto optimized_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
   bool ok = optimized_merged_config->init(
     merged_config_->value,
-    pool_
+    pool_,
+    context.metrics_service
   );
   if (ok) {
     // This works only because the the api merged config object is modified only in the

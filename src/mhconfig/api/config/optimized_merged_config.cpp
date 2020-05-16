@@ -111,7 +111,8 @@ OptimizedMergedConfig::~OptimizedMergedConfig() {
 
 bool OptimizedMergedConfig::init(
   ElementRef element,
-  std::shared_ptr<::string_pool::Pool> pool
+  std::shared_ptr<::string_pool::Pool> pool,
+  metrics::MetricsService& metrics_service
 ) {
   std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> skeys_and_positions;
   make_elements_ranges_map(element, skeys_and_positions);
@@ -156,15 +157,28 @@ bool OptimizedMergedConfig::init(
   ) {
     msg->Swap(tmp_element);
     if (!tmp_get_response.SerializeToOstream(&ss)) {
-      spdlog::error("Some error take place serializing the msg '{}'", tmp_get_response.ShortDebugString());
+      spdlog::error(
+        "Some error take place serializing the msg '{}'",
+        tmp_get_response.ShortDebugString()
+      );
       return false;
     }
     uint32_t l = ss.tellp();
-    spdlog::trace("The size of the msg till '{}' is {}", tmp_get_response.ShortDebugString(), l);
+    spdlog::trace(
+      "The size of the msg till '{}' is {}",
+      tmp_get_response.ShortDebugString(),
+      l
+    );
     size_till_position.push_back(l);
   }
 
   data_ = ss.str();
+
+  metrics_service.observe(
+    metrics::MetricsService::ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+    {},
+    data_.size()
+  );
 
   position_.resize(skeys_and_positions.size());
   for (auto& it : skeys_and_positions) {

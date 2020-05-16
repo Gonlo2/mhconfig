@@ -105,8 +105,6 @@ public:
   virtual bool execute(
     scheduler_context_t& context
   );
-
-private:
 };
 
 } /* command */

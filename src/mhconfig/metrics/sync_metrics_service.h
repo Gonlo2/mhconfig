@@ -48,6 +48,7 @@ namespace metrics
     prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_worker_duration_summary_;
     prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
+    prometheus::Family<prometheus::Summary>* family_optimized_merged_config_used_bytes_summary_;
 
     prometheus::Family<prometheus::Gauge>* family_string_pool_num_strings_gauge_;
     prometheus::Family<prometheus::Gauge>* family_string_pool_num_chunks_gauge_;

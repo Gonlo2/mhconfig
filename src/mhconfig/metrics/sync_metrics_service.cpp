@@ -34,6 +34,12 @@ namespace metrics
       .Help("How many nanoseconds takes process a task by a worker thread")
       .Register(*registry_);
 
+    family_optimized_merged_config_used_bytes_summary_ = &prometheus::BuildSummary()
+      .Name("optimized_merged_config_used_bytes")
+      .Help("The number of used bytes in the optimized merged config")
+      .Register(*registry_);
+
+
     family_string_pool_num_strings_gauge_ = &prometheus::BuildGauge()
       .Name("string_pool_num_strings")
       .Help("The number of strings in the pool")
@@ -71,6 +77,10 @@ namespace metrics
         return;
       case ObservableId::WORKER_DURATION_NANOSECONDS:
         family_worker_duration_summary_->Add(labels, quantiles_)
+          .Observe(value);
+        return;
+      case ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES:
+        family_optimized_merged_config_used_bytes_summary_->Add(labels, quantiles_)
           .Observe(value);
         return;
     }
