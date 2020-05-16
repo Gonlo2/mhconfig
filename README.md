@@ -116,7 +116,7 @@ The overrides have some restrictions:
 
 * A scalar or null value can only be overwritten with another scalar or null value, if you want to overwrite it you have to use the `!override` tag to force it.
 * A map or a list can only be merged with another element of the same type, if you want to overwrite it you must use the `!override` tag.
-* The `!ref' tag can only be used if the resulting configuration does not have cycles, that is, you cannot refer to a configuration directly or indirectly uses the self configuration.
+* The `!ref` tag can only be used if the resulting configuration does not have cycles, that is, you cannot refer to a configuration directly or indirectly uses the self configuration.
 * You can only use the sref tag for scalars in the document.
 
 ## API
