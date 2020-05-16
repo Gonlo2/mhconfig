@@ -8,11 +8,11 @@ namespace command
 {
 
 ApiGetReplyCommand::ApiGetReplyCommand(
-  std::shared_ptr<::mhconfig::api::request::GetRequest> request,
+  std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
   std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
 )
   : Command(),
-  request_(request),
+  request_(std::move(request)),
   api_merged_config_(api_merged_config)
 {
 }

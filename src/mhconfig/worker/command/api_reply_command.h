@@ -20,7 +20,7 @@ class ApiReplyCommand : public Command
 {
 public:
   ApiReplyCommand(
-    std::shared_ptr<::mhconfig::api::Commitable> commitable
+    std::shared_ptr<::mhconfig::api::Commitable>&& commitable
   );
   virtual ~ApiReplyCommand();
 

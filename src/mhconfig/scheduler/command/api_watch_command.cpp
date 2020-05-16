@@ -42,7 +42,7 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
 
     worker_queue.push(
       std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-        output_message
+        std::move(output_message)
       )
     );
 
@@ -92,7 +92,7 @@ bool ApiWatchCommand::on_get_namespace_error(
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      output_message
+      std::move(output_message)
     )
   );
 

@@ -23,7 +23,7 @@ class ApiGetReplyCommand : public Command
 public:
 
   ApiGetReplyCommand(
-    std::shared_ptr<::mhconfig::api::request::GetRequest> request,
+    std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
     std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   );
   virtual ~ApiGetReplyCommand();

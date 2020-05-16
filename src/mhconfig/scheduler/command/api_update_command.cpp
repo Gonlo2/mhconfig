@@ -59,7 +59,7 @@ bool ApiUpdateCommand::on_get_namespace_error(
   update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      update_request_
+      std::move(update_request_)
     )
   );
 

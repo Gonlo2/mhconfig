@@ -286,7 +286,7 @@ void UpdateDocumentsCommand::send_api_response(
 ) {
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      update_request_
+      std::move(update_request_)
     )
   );
 }

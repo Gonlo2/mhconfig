@@ -110,7 +110,7 @@ void ApiGetCommand::send_api_response(
 ) {
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      get_request_
+      std::move(get_request_)
     )
   );
 }
@@ -121,7 +121,7 @@ void ApiGetCommand::send_api_get_response(
 ) {
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
-      get_request_,
+      std::move(get_request_),
       api_merged_config
     )
   );

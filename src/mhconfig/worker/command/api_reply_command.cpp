@@ -8,10 +8,10 @@ namespace command
 {
 
 ApiReplyCommand::ApiReplyCommand(
-  std::shared_ptr<::mhconfig::api::Commitable> commitable
+  std::shared_ptr<::mhconfig::api::Commitable>&& commitable
 )
   : Command(),
-  commitable_(commitable)
+  commitable_(std::move(commitable))
 {
 }
 

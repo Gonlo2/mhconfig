@@ -82,7 +82,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 
             worker_queue.push(
               std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
-                wait_built->request,
+                std::move(wait_built->request),
                 merged_config->api_merged_config
               )
             );
@@ -120,7 +120,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
-      wait_build_->request,
+      std::move(wait_build_->request),
       merged_config->api_merged_config
     )
   );
@@ -135,7 +135,7 @@ bool SetDocumentsCommand::on_get_namespace_error(
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      wait_build_->request
+      std::move(wait_build_->request)
     )
   );
 
