@@ -173,7 +173,7 @@ private:
   //
   // The little string format follow the next schema
   // --------------------------------------------------------------------
-  // | more significative           ...              less significative |
+  // | most significative           ...              less significative |
   // --------------------------------------------------------------------
   // |  ch7  |  ch6  |  ch5  |  ch4  |  ch3  |  ch2  |  ch1  | XXXXLLL1 |
   // --------------------------------------------------------------------
