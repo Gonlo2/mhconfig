@@ -27,7 +27,26 @@ inline void push_uint32(std::string& output, uint32_t n) {
 }
 
 inline void push_str(std::string& output, const std::string& str) {
-  push_uint32(output, str.size());
+  size_t l = str.size();
+  if (l < 0x80) {
+    output.push_back(static_cast<uint8_t>(l));
+  } else {
+    output.push_back(static_cast<uint8_t>(128 | (l&127)));
+    l >>= 7;
+    if (l < 0x4000) {
+      output.push_back(static_cast<uint8_t>(l));
+    } else {
+      output.push_back(static_cast<uint8_t>(128 | (l&127)));
+      l >>= 7;
+      if (l < 0x200000) {
+        output.push_back(static_cast<uint8_t>(l&255));
+      } else {
+        output.push_back(static_cast<uint8_t>(128 | (l&127)));
+        l >>= 7;
+        output.push_back(static_cast<uint8_t>(l&255));
+      }
+    }
+  }
   output += str;
 }
 
