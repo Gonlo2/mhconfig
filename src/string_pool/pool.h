@@ -281,10 +281,10 @@ namespace string_pool
 {
 
 struct stats_t {
-  uint32_t num_strings;
-  uint32_t num_chunks;
-  uint32_t reclaimed_bytes;
-  uint32_t used_bytes;
+  uint32_t num_strings{0};
+  uint32_t num_chunks{0};
+  uint32_t reclaimed_bytes{0};
+  uint32_t used_bytes{0};
 };
 
 class StatsObserver
