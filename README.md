@@ -194,6 +194,25 @@ To avoid sporadic requests to the service to detect configuration changes it's p
 documents, it this case a stream is created and the service will send the new configuration when some change take place.
 
 ```protobuf
+message WatchRequest {
+  // the id to assign to the watcher (this is assigned by the client).
+  uint32 uid = 1;
+  // if the purpose of the call is remove the watcher with the provided uid.
+  bool remove = 2;
+  // the root path of the namespace to obtain the configuration.
+  string root_path = 3;
+  // the list of overrides to apply from lower to higher priority.
+  repeated string overrides = 4;
+  // the last know version of the configuration, in the case of zero the server
+  // will reply the latest one, in other case the server will reply when exists
+  // a newer version that change the configuration. Please note that this means
+  // that the server can skip several versions if the server don't change the
+  // requested document directly or indirectly
+  uint32 version = 5;
+  // document to watch.
+  string document = 6;
+}
+
 message WatchResponse {
   // the id assigned to the watcher.
   uint32 uid = 1;
