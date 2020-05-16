@@ -192,14 +192,8 @@ bool WatchGetRequest::commit() {
 }
 
 
-WatchStreamImpl::WatchStreamImpl(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq,
-  metrics::MetricsService& metrics,
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-)
-  : Stream(service, cq, metrics),
-  scheduler_queue_(scheduler_queue)
+WatchStreamImpl::WatchStreamImpl()
+  : Stream()
 {
 }
 
@@ -210,15 +204,24 @@ const std::string WatchStreamImpl::name() const {
   return "WATCH";
 }
 
-std::shared_ptr<Session> WatchStreamImpl::clone() {
-  return make_session<WatchStreamImpl>(service_, cq_, metrics_, scheduler_queue_);
+void WatchStreamImpl::clone_and_subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  return make_session<WatchStreamImpl>()->subscribe(service, cq);
 }
 
-void WatchStreamImpl::subscribe() {
-  service_->RequestWatch(&ctx_, &stream_, cq_, cq_, tag());
+void WatchStreamImpl::subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  service->RequestWatch(&ctx_, &stream_, cq, cq, tag());
 }
 
-void WatchStreamImpl::request(std::unique_ptr<grpc::ByteBuffer>&& raw_req) {
+void WatchStreamImpl::request(
+  std::unique_ptr<grpc::ByteBuffer>&& raw_req,
+  SchedulerQueue::Sender* scheduler_sender
+) {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
   bool ok = parse_from_byte_buffer(*raw_req, *req);
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
@@ -236,10 +239,11 @@ void WatchStreamImpl::request(std::unique_ptr<grpc::ByteBuffer>&& raw_req) {
       spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), tag());
       auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
       if (inserted.second) {
-        auto api_watch_command = std::make_shared<scheduler::command::ApiWatchCommand>(
-          msg
+        scheduler_sender->push(
+          std::make_unique<scheduler::command::ApiWatchCommand>(
+            msg
+          )
         );
-        scheduler_queue_.push(api_watch_command);
       } else {
         auto out_msg = msg->make_output_message();
         out_msg->set_uid(msg->uid());

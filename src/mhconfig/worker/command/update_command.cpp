@@ -41,12 +41,13 @@ bool UpdateCommand::execute(
     update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
     update_request_->commit();
   } else {
-    auto update_command = std::make_shared<::mhconfig::scheduler::command::UpdateDocumentsCommand>(
-      namespace_id_,
-      update_request_,
-      items
+    context.scheduler_queue->push(
+      std::make_unique<::mhconfig::scheduler::command::UpdateDocumentsCommand>(
+        namespace_id_,
+        update_request_,
+        items
+      )
     );
-    context.scheduler_queue.push(update_command);
   }
 
   return true;

@@ -79,12 +79,13 @@ bool BuildCommand::execute(
     ref_elements_by_document[build_element.name] = config;
   }
 
-  auto set_documents_command = std::make_shared<::mhconfig::scheduler::command::SetDocumentsCommand>(
-    namespace_id_,
-    wait_build_,
-    built_elements_by_document
+  context.scheduler_queue->push(
+    std::make_unique<::mhconfig::scheduler::command::SetDocumentsCommand>(
+      namespace_id_,
+      wait_build_,
+      built_elements_by_document
+    )
   );
-  context.scheduler_queue.push(set_documents_command);
 
   return true;
 }

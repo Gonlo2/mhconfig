@@ -1,7 +1,7 @@
 #ifndef MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 #define MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 
-#include "jmutils/container/queue.h"
+#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/scheduler/command/command.h"
@@ -14,24 +14,22 @@ namespace api
 namespace request
 {
 
-using jmutils::container::Queue;
-
-
 class GetRequestImpl : public Request, public GetRequest, public std::enable_shared_from_this<GetRequestImpl>
 {
 public:
-  GetRequestImpl(
-      CustomService* service,
-      grpc::ServerCompletionQueue* cq_,
-      metrics::MetricsService& metrics,
-      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-  );
+  GetRequestImpl();
   virtual ~GetRequestImpl();
 
   const std::string name() const override;
 
-  std::shared_ptr<Session> clone() override;
-  void subscribe() override;
+  void clone_and_subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
+  void subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
 
   const std::string& root_path() const override;
   const uint32_t version() const override;
@@ -48,7 +46,6 @@ public:
 
 protected:
   grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   grpc::ByteBuffer raw_request_;
 
@@ -62,7 +59,9 @@ protected:
 
   mhconfig::ElementRef element_{nullptr};
 
-  void request() override;
+  void request(
+    SchedulerQueue::Sender* scheduler_sender
+  ) override;
   void finish() override;
 };
 

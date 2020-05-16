@@ -1,7 +1,7 @@
 #ifndef MHCONFIG__API__REQUEST__RUN_GC_REQUEST_H
 #define MHCONFIG__API__REQUEST__RUN_GC_REQUEST_H
 
-#include "mhconfig/api/session.h"
+#include "mhconfig/api/commitable.h"
 
 namespace mhconfig
 {

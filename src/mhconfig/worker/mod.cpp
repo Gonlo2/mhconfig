@@ -6,12 +6,11 @@ namespace worker
 {
 
 Worker::Worker(
-  Queue<command::CommandRef>& worker_queue,
-  size_t num_threads,
-  command::Command::context_t context
-) :
-  jmutils::parallelism::Worker<Worker, command::CommandRef>(worker_queue, num_threads),
-  context_(context)
+  WorkerQueue::ReceiverRef&& worker_queue,
+  command::Command::context_t&& context
+)
+  : worker_queue_(std::move(worker_queue)),
+  context_(std::move(context))
 {
 }
 

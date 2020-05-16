@@ -3,9 +3,10 @@
 
 #include <memory>
 
-#include "jmutils/container/queue.h"
+#include "jmutils/container/mpsc_queue.h"
+#include "jmutils/container/spmc_queue.h"
+
 #include "mhconfig/ds/config_namespace.h"
-#include "mhconfig/worker/command/command.h"
 #include "mhconfig/metrics/metrics_service.h"
 
 namespace mhconfig
@@ -17,7 +18,7 @@ namespace command
 {
 
 class Command;
-typedef std::shared_ptr<Command> CommandRef;
+typedef std::unique_ptr<Command> CommandRef;
 
 } /* command */
 } /* worker */
@@ -29,32 +30,33 @@ namespace command
 {
 
 class Command;
-typedef std::shared_ptr<Command> CommandRef;
+typedef std::unique_ptr<Command> CommandRef;
 
 } /* command */
 } /* scheduler */
 
+typedef jmutils::container::MPSCQueue<mhconfig::scheduler::command::CommandRef, 16> SchedulerQueue;
+typedef jmutils::container::SPMCQueue<mhconfig::worker::command::CommandRef, 16> WorkerQueue;
 
 namespace scheduler
 {
 
-using jmutils::container::Queue;
 using namespace mhconfig::ds::config_namespace;
 
 struct scheduler_context_t {
-  Queue<mhconfig::worker::command::CommandRef>& worker_queue;
-  metrics::MetricsService& metrics;
+  WorkerQueue& worker_queue;
+  std::unique_ptr<metrics::MetricsService> metrics;
 
   std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path;
   std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id;
   std::unordered_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path;
 
   scheduler_context_t(
-    Queue<mhconfig::worker::command::CommandRef>& worker_queue_,
-    metrics::MetricsService& metrics_
+    WorkerQueue& worker_queue_,
+    std::unique_ptr<metrics::MetricsService>&& metrics_
   )
     : worker_queue(worker_queue_),
-    metrics(metrics_)
+    metrics(std::move(metrics_))
   {}
 };
 
@@ -92,12 +94,12 @@ public:
 
   virtual NamespaceExecutionResult execute_on_namespace(
     config_namespace_t& config_namespace,
-    Queue<CommandRef>& scheduler_queue,
-    Queue<worker::command::CommandRef>& worker_queue
+    SchedulerQueue& scheduler_queue,
+    WorkerQueue& worker_queue
   );
 
   virtual bool on_get_namespace_error(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   );
 
   virtual bool execute(
@@ -116,23 +118,21 @@ namespace worker
 namespace command
 {
 
-using jmutils::container::Queue;
-
 class Command
 {
 public:
   struct context_t {
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue;
-    metrics::MetricsService& async_metrics_service;
+    SchedulerQueue::SenderRef scheduler_queue;
+    std::unique_ptr<metrics::MetricsService> async_metrics_service;
     metrics::MetricsService& metrics_service;
 
     context_t(
-      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_,
-      metrics::MetricsService& async_metrics_service_,
+      SchedulerQueue::SenderRef&& scheduler_queue_,
+      std::unique_ptr<metrics::MetricsService> async_metrics_service_,
       metrics::MetricsService& metrics_service_
     )
-      : scheduler_queue(scheduler_queue_),
-      async_metrics_service(async_metrics_service_),
+      : scheduler_queue(std::move(scheduler_queue_)),
+      async_metrics_service(std::move(async_metrics_service_)),
       metrics_service(metrics_service_)
     {}
   };

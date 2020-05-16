@@ -97,11 +97,12 @@ void RunGcCommand::remove_merge_configs(
           if (from[i]->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
             ++number_of_removed_merged_configs;
           } else {
-            auto optimize_merged_config_command = std::make_shared<::mhconfig::worker::command::OptimizeMergedConfigCommand>(
-              from[i],
-              it.second->pool
+            context.worker_queue.push(
+              std::make_unique<::mhconfig::worker::command::OptimizeMergedConfigCommand>(
+                from[i],
+                it.second->pool
+              )
             );
-            context.worker_queue.push(optimize_merged_config_command);
 
             to.push_back(from[i]);
           }

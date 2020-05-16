@@ -7,14 +7,9 @@ namespace api
 namespace request
 {
 
-RunGCRequestImpl::RunGCRequestImpl(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    metrics::MetricsService& metrics,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : Request(service, cq_, metrics),
-    responder_(&ctx_),
-    scheduler_queue_(scheduler_queue)
+RunGCRequestImpl::RunGCRequestImpl()
+  : Request(),
+    responder_(&ctx_)
 {
 }
 
@@ -25,24 +20,33 @@ const std::string RunGCRequestImpl::name() const {
   return "RUN_GC";
 }
 
-std::shared_ptr<Session> RunGCRequestImpl::clone() {
-  return make_session<RunGCRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
+void RunGCRequestImpl::clone_and_subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  return make_session<RunGCRequestImpl>()->subscribe(service, cq);
 }
 
-void RunGCRequestImpl::subscribe() {
-  service_->RequestRunGC(&ctx_, &request_, &responder_, cq_, cq_, tag());
+void RunGCRequestImpl::subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  service->RequestRunGC(&ctx_, &request_, &responder_, cq, cq, tag());
 }
 
 bool RunGCRequestImpl::commit() {
   return reply();
 }
 
-void RunGCRequestImpl::request() {
-  auto api_run_gc_command = std::make_shared<scheduler::command::RunGcCommand>(
-    type(),
-    max_live_in_seconds()
+void RunGCRequestImpl::request(
+  SchedulerQueue::Sender* scheduler_sender
+) {
+  scheduler_sender->push(
+    std::make_unique<scheduler::command::RunGcCommand>(
+      type(),
+      max_live_in_seconds()
+    )
   );
-  scheduler_queue_.push(api_run_gc_command);
 
   reply();
 }

@@ -6,12 +6,12 @@ namespace scheduler
 {
 
 Scheduler::Scheduler(
-  Queue<command::CommandRef>& scheduler_queue,
-  Queue<mhconfig::worker::command::CommandRef>& worker_queue,
-  metrics::MetricsService& metrics
-) :
-  jmutils::parallelism::Worker<Scheduler, command::CommandRef>(scheduler_queue, 1),
-  context_(worker_queue, metrics)
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue,
+  std::unique_ptr<metrics::MetricsService>&& metrics
+)
+  : scheduler_queue_(scheduler_queue),
+  context_(worker_queue, std::move(metrics))
 {
 }
 

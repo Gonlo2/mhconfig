@@ -8,14 +8,9 @@ namespace request
 {
 
 
-GetRequestImpl::GetRequestImpl(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    metrics::MetricsService& metrics,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : Request(service, cq_, metrics),
-    responder_(&ctx_),
-    scheduler_queue_(scheduler_queue)
+GetRequestImpl::GetRequestImpl()
+  : Request(),
+  responder_(&ctx_)
 {
 }
 
@@ -83,24 +78,33 @@ bool GetRequestImpl::commit() {
   return reply();
 }
 
-std::shared_ptr<Session> GetRequestImpl::clone() {
-  return make_session<GetRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
+void GetRequestImpl::clone_and_subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  make_session<GetRequestImpl>()->subscribe(service, cq);
 }
 
-void GetRequestImpl::subscribe() {
-  service_->RequestGet(&ctx_, &raw_request_, &responder_, cq_, cq_, tag());
+void GetRequestImpl::subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  service->RequestGet(&ctx_, &raw_request_, &responder_, cq, cq, tag());
 }
 
-void GetRequestImpl::request() {
+void GetRequestImpl::request(
+  SchedulerQueue::Sender* scheduler_sender
+) {
   bool ok = parse_from_byte_buffer(raw_request_, request_);
   if (ok) {
     overrides_ = to_vector(request_.overrides());
     key_ = to_vector(request_.key());
 
-    auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
-      shared_from_this()
+    scheduler_sender->push(
+      std::make_unique<scheduler::command::ApiGetCommand>(
+        shared_from_this()
+      )
     );
-    scheduler_queue_.push(api_get_command);
   } else {
     set_element(UNDEFINED_ELEMENT);
     reply();

@@ -2,20 +2,17 @@
 #define MHCONFIG__METRICS__ASYNC_METRICS_SERVICE_H
 
 #include "mhconfig/metrics/metrics_service.h"
-#include "mhconfig/worker/command/observe_metric_command.h"
-#include "mhconfig/worker/command/set_metric_command.h"
+#include "mhconfig/metrics/metrics_worker.h"
 
 namespace mhconfig
 {
 namespace metrics
 {
-  using jmutils::container::Queue;
-
   class AsyncMetricsService : public MetricsService
   {
   public:
     AsyncMetricsService(
-      Queue<worker::command::CommandRef>& worker_queue
+      std::shared_ptr<MetricsQueue::Sender> sender
     );
     virtual ~AsyncMetricsService();
 
@@ -32,7 +29,7 @@ namespace metrics
     ) override;
 
   private:
-    Queue<worker::command::CommandRef>& worker_queue_;
+    std::shared_ptr<MetricsQueue::Sender> sender_;
   };
 
 } /* metrics */

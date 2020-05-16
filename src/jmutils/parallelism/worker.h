@@ -18,11 +18,8 @@ template <typename Parent, typename Command>
 class Worker
 {
 public:
-  Worker(
-    jmutils::container::Queue<Command>& input_queue,
-    size_t num_threads
-  ) : input_queue_(input_queue),
-    num_threads_(num_threads)
+  Worker()
+    : thread_(nullptr)
   {
   }
 
@@ -32,39 +29,23 @@ public:
   Worker(const Worker& o) = delete;
 
   Worker(Worker&& o)
-    : input_queue_(o.input_queue_),
-    num_threads_(o.num_threads_),
-    threads_(std::move(o.threads_))
+    : thread_(std::move(o.thread_))
   {
   }
 
   bool start() {
-    if (!pre_start()) return false;
-
-    threads_.reserve(num_threads_);
-    for (size_t i = num_threads_; i; --i) {
-      spdlog::debug("Starting the thread {}", i);
-      threads_.push_back(std::make_unique<std::thread>(&Worker::run, this));
-    }
-
+    thread_ = std::make_unique<std::thread>(&Worker::run, this);
     return true;
   }
 
   void join() {
-    for (auto& thread: threads_) thread->join();
-  }
-
-protected:
-  jmutils::container::Queue<Command>& input_queue_;
-
-  virtual bool pre_start() {
-    return true;
+    if (thread_ != nullptr) {
+      thread_->join();
+    }
   }
 
 private:
-  size_t num_threads_;
-
-  std::vector<std::unique_ptr<std::thread>> threads_;
+  std::unique_ptr<std::thread> thread_;
 
   void run() {
     spdlog::debug("Started the worker");
@@ -73,16 +54,22 @@ private:
 
     while (true) {
       spdlog::debug("The worker is waiting for a command");
-      auto command = input_queue_.pop();
+      Command command;
+      static_cast<Parent*>(this)->pop(command);
 
+      std::string command_name = command->name();
       if (static_cast<Parent*>(this)->metricate(command, sequential_id)) {
         auto start_time = jmutils::time::monotonic_now();
-        execute_command(command);
+        execute_command(command_name, std::move(command));
         auto end_time = jmutils::time::monotonic_now();
 
-        static_cast<Parent*>(this)->loop_stats(command, start_time, end_time);
+        static_cast<Parent*>(this)->loop_stats(
+          command_name,
+          start_time,
+          end_time
+        );
       } else {
-        execute_command(command);
+        execute_command(command_name, std::move(command));
       }
 
       sequential_id = (sequential_id+1) & 0xefffffff;
@@ -91,24 +78,25 @@ private:
     spdlog::debug("Finished the worker");
   }
 
-  inline bool execute_command(Command& command) {
+  inline bool execute_command(std::string& name, Command&& command) {
     try {
-      spdlog::debug("Received a {} command", command->name());
-      bool ok = static_cast<Parent*>(this)->process_command(command);
+      spdlog::debug("Received a {} command", name);
+      bool ok = static_cast<Parent*>(this)
+        ->process_command(std::move(command));
       if (!ok) {
-        spdlog::error("Can't process a {} command", command->name());
+        spdlog::error("Can't process a {} command", name);
       }
       return ok;
     } catch (const std::exception &e) {
       spdlog::error(
         "Some error take place processing the command {}: {}",
-        command->name(),
+        name,
         e.what()
       );
     } catch (...) {
       spdlog::error(
         "Some unknown error take place processing the command {}",
-        command->name()
+        name
       );
     }
 

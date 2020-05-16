@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "mhconfig/api/session.h"
+#include "mhconfig/api/commitable.h"
 #include "mhconfig/element.h"
 
 namespace mhconfig

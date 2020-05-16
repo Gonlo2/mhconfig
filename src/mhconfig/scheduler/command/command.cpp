@@ -28,14 +28,14 @@ const std::shared_ptr<config_namespace_t> Command::config_namespace() const {
 
 NamespaceExecutionResult Command::execute_on_namespace(
   config_namespace_t& config_namespace,
-  Queue<CommandRef>& scheduler_queue,
-  Queue<worker::command::CommandRef>& worker_queue
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue
 ) {
   return NamespaceExecutionResult::ERROR;
 }
 
 bool Command::on_get_namespace_error(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   return false;
 }

@@ -42,12 +42,12 @@ public:
 
   NamespaceExecutionResult execute_on_namespace(
     config_namespace_t& config_namespace,
-    Queue<CommandRef>& scheduler_queue,
-    Queue<worker::command::CommandRef>& worker_queue
+    SchedulerQueue& scheduler_queue,
+    WorkerQueue& worker_queue
   ) override;
 
   bool on_get_namespace_error(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   ) override;
 
 private:
@@ -56,7 +56,7 @@ private:
   std::vector<load_raw_config_result_t> items_;
 
   void send_api_response(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   );
 
   void get_affected_documents(

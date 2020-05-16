@@ -38,12 +38,12 @@ public:
 
   NamespaceExecutionResult execute_on_namespace(
     config_namespace_t& config_namespace,
-    Queue<CommandRef>& scheduler_queue,
-    Queue<worker::command::CommandRef>& worker_queue
+    SchedulerQueue& scheduler_queue,
+    WorkerQueue& worker_queue
   ) override;
 
   bool on_get_namespace_error(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   ) override;
 
 private:

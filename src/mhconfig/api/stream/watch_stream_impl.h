@@ -1,12 +1,12 @@
 #ifndef MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 #define MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 
+#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_watch_command.h"
-
-#include "jmutils/container/queue.h"
 
 #include "spdlog/spdlog.h"
 
@@ -16,8 +16,6 @@ namespace api
 {
 namespace stream
 {
-
-using jmutils::container::Queue;
 
 class WatchStreamImpl;
 class WatchInputMessageImpl;
@@ -111,26 +109,29 @@ class WatchStreamImpl
     public std::enable_shared_from_this<WatchStreamImpl>
 {
 public:
-  WatchStreamImpl(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq,
-    metrics::MetricsService& metrics,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-  );
+  WatchStreamImpl();
   virtual ~WatchStreamImpl();
 
   const std::string name() const override;
 
-  std::shared_ptr<Session> clone() override;
-  void subscribe() override;
+  void clone_and_subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
+  void subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
 
 protected:
   friend class WatchOutputMessageImpl;
 
-  void request(std::unique_ptr<grpc::ByteBuffer>&& raw_req) override;
+  void request(
+    std::unique_ptr<grpc::ByteBuffer>&& raw_req,
+    SchedulerQueue::Sender* scheduler_sender
+  ) override;
 
 private:
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
   std::unordered_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
 };
 

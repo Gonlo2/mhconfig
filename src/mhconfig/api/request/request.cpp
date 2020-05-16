@@ -7,20 +7,18 @@ namespace api
 namespace request
 {
 
-Request::Request(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq,
-  metrics::MetricsService& metrics
-)
-  : Session(service, cq),
-    metrics_(metrics)
-{
+Request::Request() {
 }
 
 Request::~Request() {
 }
 
-std::shared_ptr<Session> Request::proceed() {
+std::shared_ptr<Session> Request::proceed(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq,
+  SchedulerQueue::Sender* scheduler_sender,
+  metrics::MetricsService& metrics
+) {
   std::lock_guard<std::recursive_mutex> mlock(mutex_);
   if (is_destroyed()) {
     spdlog::debug("Isn't possible call to proceed in a destroyed request");
@@ -30,13 +28,13 @@ std::shared_ptr<Session> Request::proceed() {
     if (status_ == Status::CREATE) {
       status_ = Status::PROCESS;
 
-      auto new_request = clone();
-      new_request->subscribe();
+      clone_and_subscribe(service, cq);
 
       if ((((uintptr_t)tag()) & 0xfff) == 0) {
         start_time_ = jmutils::time::monotonic_now();
       }
-      request();
+
+      request(scheduler_sender);
     } else if (status_ == Status::FINISH) {
       if ((((uintptr_t)tag()) & 0xfff) == 0) {
         auto end_time = jmutils::time::monotonic_now();
@@ -45,7 +43,7 @@ std::shared_ptr<Session> Request::proceed() {
           end_time - start_time_
         ).count();
 
-        metrics_.observe(
+        metrics.observe(
           metrics::MetricsService::ObservableId::API_DURATION_NANOSECONDS,
           {{"type", name()}},
           duration_ns

@@ -29,50 +29,19 @@ public:
   Queue(const Queue&) = delete;
   Queue(Queue&&) = delete;
 
-  T pop() {
+  void pop(T& value) {
     std::unique_lock<std::mutex> mlock(mutex_);
-    while (queue_.empty()) cond_.wait(mlock);
+    cond_.wait(mlock, [this]{ return !queue_.empty(); });
 
-    T item = queue_.front();
+    std::swap(queue_.front(), value);
     queue_.pop();
-    return item;
   }
 
-  std::pair<bool, T> pop_before(
-    const std::chrono::high_resolution_clock::time_point& t
-  ) {
-    std::pair<bool, T> result;
-
+  void push(T&& item) {
     std::unique_lock<std::mutex> mlock(mutex_);
-
-    while (queue_.empty()) {
-      if (cond_.wait_until(mlock, t) == std::cv_status::timeout) break;
-    }
-
-    result.first = !queue_.empty();
-    if (result.first) {
-      result.second = queue_.front();
-      queue_.pop();
-    }
-
-    return result;
-  }
-
-  void push(T item) {
-    std::unique_lock<std::mutex> mlock(mutex_);
-    queue_.push(item);
+    queue_.push(std::move(item));
     mlock.unlock();
     cond_.notify_one();
-  }
-
-  template <typename Container>
-  void push_all(Container items) {
-    std::unique_lock<std::mutex> mlock(mutex_);
-    for (const auto& x : items) queue_.push(x);
-    mlock.unlock();
-    for (size_t i = 0; i < items.size(); ++i) {
-      cond_.notify_one();
-    }
   }
 
 protected:

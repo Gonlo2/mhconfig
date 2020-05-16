@@ -28,10 +28,11 @@ bool SetupCommand::execute(
 ) {
   auto config_namespace = mhconfig::builder::index_files(
     path_,
-    context.async_metrics_service
+    context.metrics_service
   );
-  auto add_namespace_command = std::make_shared<scheduler::command::AddNamespaceCommand>(config_namespace);
-  context.scheduler_queue.push(add_namespace_command);
+  context.scheduler_queue->push(
+    std::make_unique<scheduler::command::AddNamespaceCommand>(config_namespace)
+  );
   return true;
 }
 

@@ -23,21 +23,22 @@ namespace request
 class Request : public Session
 {
 public:
-  Request(
-      CustomService* service,
-      grpc::ServerCompletionQueue* cq,
-      metrics::MetricsService& metrics
-  );
+  Request();
   virtual ~Request();
 
-  std::shared_ptr<Session> proceed() override;
+  std::shared_ptr<Session> proceed(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq,
+    SchedulerQueue::Sender* scheduler_sender,
+    metrics::MetricsService& metrics
+  ) override;
 
   bool reply();
 
 protected:
-  metrics::MetricsService& metrics_;
-
-  virtual void request() = 0;
+  virtual void request(
+    SchedulerQueue::Sender* scheduler_sender
+  ) = 0;
   virtual void finish() = 0;
 
 private:

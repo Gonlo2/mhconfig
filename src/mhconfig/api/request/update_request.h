@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "mhconfig/api/request/request.h"
+#include "mhconfig/api/commitable.h"
 
 namespace mhconfig
 {

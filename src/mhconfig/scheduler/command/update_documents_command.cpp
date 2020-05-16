@@ -36,8 +36,8 @@ uint64_t UpdateDocumentsCommand::namespace_id() const {
 
 NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
   config_namespace_t& config_namespace,
-  Queue<CommandRef>& scheduler_queue,
-  Queue<worker::command::CommandRef>& worker_queue
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue
 ) {
   update_request_->set_namespace_id(config_namespace.id);
 
@@ -245,13 +245,14 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     auto output_message = watcher->make_output_message();
     output_message->set_uid(watcher->uid());
 
-    auto api_get_command = std::make_shared<scheduler::command::ApiGetCommand>(
-      std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
-        watcher,
-        output_message
+    scheduler_queue.push(
+      std::make_unique<scheduler::command::ApiGetCommand>(
+        std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
+          watcher,
+          output_message
+        )
       )
     );
-    scheduler_queue.push(api_get_command);
   }
 
   update_request_->set_status(::mhconfig::api::request::update_request::OK);
@@ -274,7 +275,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
 }
 
 bool UpdateDocumentsCommand::on_get_namespace_error(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   update_request_->set_status(::mhconfig::api::request::update_request::ERROR);
   send_api_response(worker_queue);
@@ -283,12 +284,13 @@ bool UpdateDocumentsCommand::on_get_namespace_error(
 }
 
 void UpdateDocumentsCommand::send_api_response(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
-  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    update_request_
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+      update_request_
+    )
   );
-  worker_queue.push(api_reply_command);
 }
 
 void UpdateDocumentsCommand::get_affected_documents(

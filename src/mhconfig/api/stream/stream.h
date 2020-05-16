@@ -25,14 +25,9 @@ template <typename Req, typename Resp, typename OutMsg>
 class Stream : public Session
 {
 public:
-  Stream(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq,
-    metrics::MetricsService& metrics
-  )
-    : Session(service, cq),
-      metrics_(metrics),
-      stream_(&ctx_)
+  Stream()
+    : Session(),
+    stream_(&ctx_)
   {
   }
 
@@ -43,7 +38,12 @@ public:
 
   //TODO move this function to the private sections and make the
   //class Service friend of this
-  std::shared_ptr<Session> proceed() override {
+  std::shared_ptr<Session> proceed(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq,
+    SchedulerQueue::Sender* scheduler_sender,
+    metrics::MetricsService& metrics
+  ) override {
     std::lock_guard<std::recursive_mutex> mlock(mutex_);
     if (is_destroyed()) {
       spdlog::debug("Isn't possible call to proceed in a destroyed request");
@@ -53,13 +53,12 @@ public:
       if (status_ == Status::CREATE) {
         status_ = Status::PROCESS;
 
-        auto new_request = clone();
-        new_request->subscribe();
+        clone_and_subscribe(service, cq);
 
         //TODO add request metrics
         prepare_next_request();
       } else if (status_ == Status::PROCESS) {
-        request(std::move(next_req_));
+        request(std::move(next_req_), scheduler_sender);
         prepare_next_request();
         send_message_if_neccesary();
       } else if (status_ == Status::WRITING) {
@@ -84,11 +83,13 @@ public:
   }
 
 protected:
-  metrics::MetricsService& metrics_;
   grpc::ServerAsyncReaderWriter<Resp, Req> stream_;
 
   //TODO Use this with CRTP
-  virtual void request(std::unique_ptr<Req>&& req) = 0;
+  virtual void request(
+    std::unique_ptr<Req>&& req,
+    SchedulerQueue::Sender* scheduler_sender
+  ) = 0;
 
   bool send(std::shared_ptr<OutMsg> message, bool finish) {
     std::lock_guard<std::recursive_mutex> mlock(mutex_);
@@ -166,19 +167,6 @@ private:
     return "unknown";
   }
 
-};
-
-class OutputMessage : public Commitable
-{
-public:
-  OutputMessage() {
-  }
-  virtual ~OutputMessage() {
-  }
-
-  bool commit() override final;
-
-  virtual bool send(bool finish = false) = 0;
 };
 
 } /* stream */

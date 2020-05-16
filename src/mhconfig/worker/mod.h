@@ -15,23 +15,27 @@ namespace mhconfig
 namespace worker
 {
 
-using jmutils::container::Queue;
-
 class Worker : public ::jmutils::parallelism::Worker<Worker, command::CommandRef>
 {
 public:
   Worker(
-    Queue<command::CommandRef>& worker_queue,
-    size_t num_threads,
-    command::Command::context_t context
+    WorkerQueue::ReceiverRef&& worker_queue,
+    command::Command::context_t&& context
   );
 
   virtual ~Worker();
 
 private:
-  friend class jmutils::parallelism::Worker<Worker, command::CommandRef>;
+  friend class ::jmutils::parallelism::Worker<Worker, command::CommandRef>;
 
+  WorkerQueue::ReceiverRef worker_queue_;
   command::Command::context_t context_;
+
+  inline void pop(
+    command::CommandRef& command
+  ) {
+    worker_queue_->pop(command);
+  }
 
   inline bool metricate(
     command::CommandRef& command,
@@ -41,7 +45,7 @@ private:
   }
 
   inline void loop_stats(
-    command::CommandRef& command,
+    std::string& command_name,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
   ) {
@@ -49,15 +53,15 @@ private:
       end_time - start_time
     ).count();
 
-    context_.metrics_service.observe(
+    context_.async_metrics_service->observe(
       metrics::MetricsService::ObservableId::WORKER_DURATION_NANOSECONDS,
-      {{"type", command->name()}},
+      {{"type", command_name}},
       duration_ns
     );
   }
 
   inline bool process_command(
-    command::CommandRef command
+    command::CommandRef&& command
   ) {
     return command->execute(context_);
   }

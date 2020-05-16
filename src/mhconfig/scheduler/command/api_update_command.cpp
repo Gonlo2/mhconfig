@@ -39,27 +39,29 @@ const std::string& ApiUpdateCommand::namespace_path() const {
 
 NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
   config_namespace_t& config_namespace,
-  Queue<CommandRef>& scheduler_queue,
-  Queue<worker::command::CommandRef>& worker_queue
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue
 ) {
-  auto update_command = std::make_shared<::mhconfig::worker::command::UpdateCommand>(
-    config_namespace.id,
-    config_namespace.pool,
-    update_request_
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::UpdateCommand>(
+      config_namespace.id,
+      config_namespace.pool,
+      update_request_
+    )
   );
-  worker_queue.push(update_command);
 
   return NamespaceExecutionResult::OK;
 }
 
 bool ApiUpdateCommand::on_get_namespace_error(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
-  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    update_request_
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+      update_request_
+    )
   );
-  worker_queue.push(api_reply_command);
 
   return true;
 }

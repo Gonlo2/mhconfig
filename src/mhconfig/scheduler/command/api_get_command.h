@@ -35,29 +35,29 @@ public:
 
   NamespaceExecutionResult execute_on_namespace(
     config_namespace_t& config_namespace,
-    Queue<CommandRef>& scheduler_queue,
-    Queue<worker::command::CommandRef>& worker_queue
+    SchedulerQueue& scheduler_queue,
+    WorkerQueue& worker_queue
   ) override;
 
   bool on_get_namespace_error(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   ) override;
 
 private:
   std::shared_ptr<::mhconfig::api::request::GetRequest> get_request_;
 
   void send_api_response(
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   );
 
   void send_api_get_response(
-    Queue<worker::command::CommandRef>& worker_queue,
+    WorkerQueue& worker_queue,
     std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
   );
 
   NamespaceExecutionResult prepare_build_request(
     config_namespace_t& config_namespace,
-    Queue<worker::command::CommandRef>& worker_queue
+    WorkerQueue& worker_queue
   );
 
   std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(

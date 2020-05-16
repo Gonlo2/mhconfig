@@ -5,7 +5,7 @@
 #include <string>
 
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
-#include "mhconfig/api/session.h"
+#include "mhconfig/scheduler/command/command.h"
 
 namespace mhconfig
 {
@@ -31,17 +31,6 @@ bool parse_from_byte_buffer(
   grpc::protobuf::Message& message
 );
 
-class Commitable
-{
-public:
-  Commitable() {
-  }
-  virtual ~Commitable() {
-  }
-
-  virtual bool commit() = 0;
-};
-
 template<typename T, typename... Args>
 inline std::shared_ptr<T> make_session(Args&&... args)
 {
@@ -53,13 +42,7 @@ inline std::shared_ptr<T> make_session(Args&&... args)
 class Session
 {
 public:
-  Session(
-      CustomService* service,
-      grpc::ServerCompletionQueue* cq
-  ) :
-      service_(service),
-      cq_(cq)
-  {
+  Session() {
   }
 
   virtual ~Session() {
@@ -78,12 +61,23 @@ public:
 
   //TODO move this functions to the protected sections and make the
   //class Service friend of this
-  virtual std::shared_ptr<Session> clone() = 0;
-  virtual void subscribe() = 0;
+  virtual void clone_and_subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) = 0;
+  virtual void subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) = 0;
 
   //TODO move this function to the private sections and make the
   //class Service friend of this
-  virtual std::shared_ptr<Session> proceed() = 0;
+  virtual std::shared_ptr<Session> proceed(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq,
+    SchedulerQueue::Sender* scheduler_sender,
+    metrics::MetricsService& metrics
+  ) = 0;
 
   inline void* tag() {
     return (this_shared_ == nullptr) ? 0 : this_shared_.get();

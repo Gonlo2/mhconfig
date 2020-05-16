@@ -36,8 +36,8 @@ uint64_t SetDocumentsCommand::namespace_id() const {
 
 NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
   config_namespace_t& config_namespace,
-  Queue<CommandRef>& scheduler_queue,
-  Queue<worker::command::CommandRef>& worker_queue
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue
 ) {
   spdlog::debug(
     "Processing the build response with id {}",
@@ -80,23 +80,25 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
               (void*) wait_built->request.get()
             );
 
-            auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
-              wait_built->request,
-              merged_config->api_merged_config
+            worker_queue.push(
+              std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
+                wait_built->request,
+                merged_config->api_merged_config
+              )
             );
-            worker_queue.push(api_get_reply_command);
           } else {
             spdlog::debug(
               "Sending the get request with id {} to built",
               (void*) wait_built->request.get()
             );
 
-            auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
-              config_namespace.id,
-              config_namespace.pool,
-              wait_built
+            worker_queue.push(
+              std::make_unique<::mhconfig::worker::command::BuildCommand>(
+                config_namespace.id,
+                config_namespace.pool,
+                wait_built
+              )
             );
-            worker_queue.push(build_command);
           }
 
           jmutils::swap_delete(wait_builts_search->second, i);
@@ -116,24 +118,26 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     built_elements_by_document_[wait_build_->request->key()[0]].overrides_key
   );
 
-  auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
-    wait_build_->request,
-    merged_config->api_merged_config
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
+      wait_build_->request,
+      merged_config->api_merged_config
+    )
   );
-  worker_queue.push(api_get_reply_command);
 
   return NamespaceExecutionResult::OK;
 }
 
 bool SetDocumentsCommand::on_get_namespace_error(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   wait_build_->request->set_element(UNDEFINED_ELEMENT);
 
-  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    wait_build_->request
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+      wait_build_->request
+    )
   );
-  worker_queue.push(api_reply_command);
 
   return true;
 }

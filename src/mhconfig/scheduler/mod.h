@@ -8,6 +8,7 @@
 #include "jmutils/time.h"
 #include "jmutils/parallelism/worker.h"
 #include "string_pool/pool.h"
+#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/scheduler/command/command.h"
@@ -18,18 +19,16 @@ namespace mhconfig
 namespace scheduler
 {
 
-using jmutils::container::Queue;
 using namespace mhconfig::api::request;
 using namespace mhconfig::ds::config_namespace;
-
 
 class Scheduler : public jmutils::parallelism::Worker<Scheduler, command::CommandRef>
 {
 public:
   Scheduler(
-    Queue<command::CommandRef>& scheduler_queue,
-    Queue<mhconfig::worker::command::CommandRef>& worker_queue,
-    metrics::MetricsService& metrics
+    SchedulerQueue& scheduler_queue,
+    WorkerQueue& worker_queue,
+    std::unique_ptr<metrics::MetricsService>&& metrics
   );
 
   virtual ~Scheduler();
@@ -43,7 +42,14 @@ private:
     ERROR
   };
 
+  SchedulerQueue& scheduler_queue_;
   scheduler_context_t context_;
+
+  inline void pop(
+    command::CommandRef& command
+  ) {
+    scheduler_queue_.pop(command);
+  }
 
   inline bool metricate(
     command::CommandRef& command,
@@ -53,7 +59,7 @@ private:
   }
 
   inline void loop_stats(
-    command::CommandRef& command,
+    std::string& command_name,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
   ) {
@@ -61,15 +67,15 @@ private:
       end_time - start_time
     ).count();
 
-    context_.metrics.observe(
+    context_.metrics->observe(
       metrics::MetricsService::ObservableId::SCHEDULER_DURATION_NANOSECONDS,
-      {{"type", command->name()}},
+      {{"type", command_name}},
       duration_ns
     );
   }
 
   inline bool process_command(
-    command::CommandRef command
+    command::CommandRef&& command
   ) {
     switch (command->command_type()) {
       case command::CommandType::ADD_NAMESPACE: {
@@ -84,7 +90,9 @@ private:
         auto search = context_.commands_waiting_for_namespace_by_path
           .find(command->namespace_path());
 
-        input_queue_.push_all(search->second);
+        for (auto& x: search->second) {
+          scheduler_queue_.push(std::move(x));
+        }
         context_.commands_waiting_for_namespace_by_path.erase(search);
 
         return true;
@@ -96,7 +104,7 @@ private:
           case ConfigNamespaceState::OK: {
             auto execution_result = command->execute_on_namespace(
               *result.second,
-              input_queue_,
+              scheduler_queue_,
               context_.worker_queue
             );
             switch (execution_result) {
@@ -132,7 +140,7 @@ private:
 
         auto execution_result = command->execute_on_namespace(
           *search->second,
-          input_queue_,
+          scheduler_queue_,
           context_.worker_queue
         );
         switch (execution_result) {
@@ -156,7 +164,7 @@ private:
   }
 
   inline std::pair<ConfigNamespaceState, std::shared_ptr<config_namespace_t>> get_or_build_namespace(
-    command::CommandRef command
+    command::CommandRef& command
   ) {
     // First we search for the namespace
     auto search = context_.namespace_by_path.find(command->namespace_path());
@@ -166,15 +174,17 @@ private:
         .find(command->namespace_path());
 
       if (search_commands_waiting == context_.commands_waiting_for_namespace_by_path.end()) {
-        auto setup_command = std::make_shared<::mhconfig::worker::command::SetupCommand>(
-          command->namespace_path()
+        context_.worker_queue.push(
+          std::make_unique<::mhconfig::worker::command::SetupCommand>(
+            command->namespace_path()
+          )
         );
-        context_.worker_queue.push(setup_command);
 
-        context_.commands_waiting_for_namespace_by_path[command->namespace_path()].push_back(command);
+        context_.commands_waiting_for_namespace_by_path[command->namespace_path()]
+          .push_back(std::move(command));
       } else {
         // In other case we wait for the namespace
-        search_commands_waiting->second.push_back(command);
+        search_commands_waiting->second.push_back(std::move(command));
       }
 
       // In this case we need to wait

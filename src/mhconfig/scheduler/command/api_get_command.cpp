@@ -31,8 +31,8 @@ const std::string& ApiGetCommand::namespace_path() const {
 
 NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   config_namespace_t& config_namespace,
-  Queue<CommandRef>& scheduler_queue,
-  Queue<worker::command::CommandRef>& worker_queue
+  SchedulerQueue& scheduler_queue,
+  WorkerQueue& worker_queue
 ) {
   // First we set the basic request fields
   get_request_->set_version(
@@ -105,28 +105,30 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
 }
 
 void ApiGetCommand::send_api_response(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
-  auto api_reply_command = std::make_shared<::mhconfig::worker::command::ApiReplyCommand>(
-    get_request_
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+      get_request_
+    )
   );
-  worker_queue.push(api_reply_command);
 }
 
 void ApiGetCommand::send_api_get_response(
-  Queue<worker::command::CommandRef>& worker_queue,
+  WorkerQueue& worker_queue,
   std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
 ) {
-  auto api_get_reply_command = std::make_shared<::mhconfig::worker::command::ApiGetReplyCommand>(
-    get_request_,
-    api_merged_config
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
+      get_request_,
+      api_merged_config
+    )
   );
-  worker_queue.push(api_get_reply_command);
 }
 
 NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   config_namespace_t& config_namespace,
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   // The references are allowed only if the graph is a DAG,
   // so we check it here
@@ -224,12 +226,13 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
       "Sending the get request with id {} to built",
       (void*)wait_built->request.get()
     );
-    auto build_command = std::make_shared<::mhconfig::worker::command::BuildCommand>(
-      config_namespace.id,
-      config_namespace.pool,
-      wait_built
+    worker_queue.push(
+      std::make_unique<::mhconfig::worker::command::BuildCommand>(
+        config_namespace.id,
+        config_namespace.pool,
+        wait_built
+      )
     );
-    worker_queue.push(build_command);
   } else {
     spdlog::debug(
       "The document '{}' need wait to {} building documents",
@@ -385,7 +388,7 @@ void ApiGetCommand::do_topological_sort_over_ref_graph_rec(
 }
 
 bool ApiGetCommand::on_get_namespace_error(
-  Queue<worker::command::CommandRef>& worker_queue
+  WorkerQueue& worker_queue
 ) {
   get_request_->set_status(
     ::mhconfig::api::request::get_request::Status::ERROR

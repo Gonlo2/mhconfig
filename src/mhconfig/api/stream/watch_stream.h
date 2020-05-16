@@ -1,7 +1,7 @@
 #ifndef MHCONFIG__API__STREAM__WATCH_STREAM_H
 #define MHCONFIG__API__STREAM__WATCH_STREAM_H
 
-#include "mhconfig/api/stream/stream.h"
+#include "mhconfig/api/stream/output_message.h"
 #include "mhconfig/element.h"
 
 namespace mhconfig

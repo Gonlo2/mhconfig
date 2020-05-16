@@ -8,14 +8,10 @@ namespace api
 
 Service::Service(
   const std::string& server_address,
-  size_t num_threads,
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-  metrics::MetricsService& metrics
+  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& thread_vars
 ) :
   server_address_(server_address),
-  num_threads_(num_threads),
-  scheduler_queue_(scheduler_queue),
-  metrics_(metrics)
+  thread_vars_(std::move(thread_vars))
 {
 }
 
@@ -39,8 +35,8 @@ bool Service::start() {
   builder.AddListeningPort(server_address_, grpc::InsecureServerCredentials());
   builder.RegisterService(&service_);
 
-  cqs_.reserve(num_threads_);
-  for (size_t i = 0; i < num_threads_; ++i) {
+  cqs_.reserve(thread_vars_.size());
+  for (size_t i = 0; i < thread_vars_.size(); ++i) {
     cqs_.emplace_back(builder.AddCompletionQueue());
   }
 
@@ -48,10 +44,16 @@ bool Service::start() {
 
   spdlog::info("Server listening on '{}'", server_address_);
 
-  threads_.reserve(num_threads_);
-  for (auto& cq: cqs_) {
+  threads_.reserve(thread_vars_.size());
+  for (size_t i = 0; i < thread_vars_.size(); ++i) {
     threads_.push_back(
-      std::make_unique<std::thread>(&Service::handle_requests, this, cq.get())
+      std::make_unique<std::thread>(
+        &Service::handle_requests,
+        this,
+        cqs_[i].get(),
+        thread_vars_[i].first,
+        thread_vars_[i].second
+      )
     );
   }
 
@@ -64,46 +66,10 @@ void Service::join() {
   }
 }
 
-void Service::subscribe_requests(
-  grpc::ServerCompletionQueue* cq
-) {
-  for (size_t i = 0; i < 100; ++i) { //TODO configure the number of requests
-    auto get_request = make_session<request::GetRequestImpl>(
-      &service_,
-      cq,
-      metrics_,
-      scheduler_queue_
-    );
-    get_request->subscribe();
-
-    auto update_request = make_session<request::UpdateRequestImpl>(
-      &service_,
-      cq,
-      metrics_,
-      scheduler_queue_
-    );
-    update_request->subscribe();
-
-    auto run_gc_request = make_session<request::RunGCRequestImpl>(
-      &service_,
-      cq,
-      metrics_,
-      scheduler_queue_
-    );
-    run_gc_request->subscribe();
-
-    auto watch_stream = make_session<stream::WatchStreamImpl>(
-      &service_,
-      cq,
-      metrics_,
-      scheduler_queue_
-    );
-    watch_stream->subscribe();
-  }
-}
-
 void Service::handle_requests(
-  grpc::ServerCompletionQueue* cq
+  grpc::ServerCompletionQueue* cq,
+  SchedulerQueue::SenderRef scheduler_sender,
+  metrics::AsyncMetricsService metrics
 ) {
   subscribe_requests(cq);
 
@@ -119,7 +85,12 @@ void Service::handle_requests(
         spdlog::trace("Obtained the completion queue event {}", tag);
         auto session = static_cast<Session*>(tag);
         if (ok) {
-          auto _ = session->proceed();
+          auto _ = session->proceed(
+            &service_,
+            cq,
+            scheduler_sender.get(),
+            metrics
+          );
         } else {
           spdlog::debug("The completion queue event {} isn't ok, destroying it", tag);
           auto _ = session->destroy();
@@ -132,6 +103,24 @@ void Service::handle_requests(
       }
     }
   } while (got_event);
+}
+
+void Service::subscribe_requests(
+  grpc::ServerCompletionQueue* cq
+) {
+  for (size_t i = 0; i < 100; ++i) { //TODO configure the number of requests
+    auto get_request = make_session<request::GetRequestImpl>();
+    get_request->subscribe(&service_, cq);
+
+    auto update_request = make_session<request::UpdateRequestImpl>();
+    update_request->subscribe(&service_, cq);
+
+    auto run_gc_request = make_session<request::RunGCRequestImpl>();
+    run_gc_request->subscribe(&service_, cq);
+
+    auto watch_stream = make_session<stream::WatchStreamImpl>();
+    watch_stream->subscribe(&service_, cq);
+  }
 }
 
 

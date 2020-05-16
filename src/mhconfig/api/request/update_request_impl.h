@@ -14,24 +14,22 @@ namespace api
 namespace request
 {
 
-using jmutils::container::Queue;
-
-
 class UpdateRequestImpl : public Request, public UpdateRequest, public std::enable_shared_from_this<UpdateRequestImpl>
 {
 public:
-  UpdateRequestImpl(
-      CustomService* service,
-      grpc::ServerCompletionQueue* cq_,
-      metrics::MetricsService& metrics,
-      Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-  );
+  UpdateRequestImpl();
   virtual ~UpdateRequestImpl();
 
   const std::string name() const override;
 
-  std::shared_ptr<Session> clone() override;
-  void subscribe() override;
+  void clone_and_subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
+  void subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) override;
 
   const std::string& root_path() const override;
   const std::vector<std::string>& relative_paths() const override;
@@ -44,14 +42,15 @@ public:
 
 protected:
   grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
 
   mhconfig::proto::UpdateRequest request_;
   mhconfig::proto::UpdateResponse response_;
 
   std::vector<std::string> relative_paths_;
 
-  void request() override;
+  void request(
+    SchedulerQueue::Sender* scheduler_sender
+  ) override;
   void finish() override;
 };
 

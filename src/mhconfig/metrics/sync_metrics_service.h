@@ -2,8 +2,6 @@
 #define MHCONFIG__METRICS__SYNC_METRICS_SERVICE_H
 
 #include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
-#include "spdlog/async.h"
 
 #include <prometheus/summary.h>
 #include <prometheus/gauge.h>
@@ -11,7 +9,6 @@
 #include <prometheus/registry.h>
 
 #include "mhconfig/metrics/metrics_service.h"
-#include "mhconfig/worker/command/observe_metric_command.h"
 
 namespace mhconfig
 {

@@ -13,10 +13,11 @@
 #include <grpcpp/server_context.h>
 #include <grpcpp/security/server_credentials.h>
 
-#include "jmutils/container/queue.h"
-//#include "mhconfig/worker/common.h"
+#include "mhconfig/common.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
+#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/metrics/async_metrics_service.h"
 
 #include "mhconfig/api/session.h"
 #include "mhconfig/api/request/get_request_impl.h"
@@ -33,16 +34,12 @@ namespace mhconfig
 namespace api
 {
 
-using jmutils::container::Queue;
-
 class Service final
 {
 public:
   Service(
     const std::string& server_address,
-    size_t num_threads,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue,
-    metrics::MetricsService& metrics
+    std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& senders
   );
 
   virtual ~Service();
@@ -52,23 +49,21 @@ public:
 
 private:
   std::string server_address_;
-  size_t num_threads_;
-  Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue_;
-
+  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>> thread_vars_;
   std::vector<std::unique_ptr<std::thread>> threads_;
 
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
   std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_;
 
-  metrics::MetricsService& metrics_;
-
   void subscribe_requests(
     grpc::ServerCompletionQueue* cq
   );
 
   void handle_requests(
-    grpc::ServerCompletionQueue* cq
+    grpc::ServerCompletionQueue* cq,
+    SchedulerQueue::SenderRef scheduler_sender,
+    metrics::AsyncMetricsService metrics
   );
 };
 

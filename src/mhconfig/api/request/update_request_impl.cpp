@@ -8,14 +8,9 @@ namespace request
 {
 
 
-UpdateRequestImpl::UpdateRequestImpl(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq_,
-    metrics::MetricsService& metrics,
-    Queue<mhconfig::scheduler::command::CommandRef>& scheduler_queue
-) : Request(service, cq_, metrics),
-    responder_(&ctx_),
-    scheduler_queue_(scheduler_queue)
+UpdateRequestImpl::UpdateRequestImpl()
+  : Request(),
+  responder_(&ctx_)
 {
 }
 
@@ -58,21 +53,30 @@ bool UpdateRequestImpl::commit() {
   return reply();
 }
 
-std::shared_ptr<Session> UpdateRequestImpl::clone() {
-  return make_session<UpdateRequestImpl>(service_, cq_, metrics_, scheduler_queue_);
+void UpdateRequestImpl::clone_and_subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  return make_session<UpdateRequestImpl>()->subscribe(service, cq);
 }
 
-void UpdateRequestImpl::subscribe() {
-  service_->RequestUpdate(&ctx_, &request_, &responder_, cq_, cq_, tag());
+void UpdateRequestImpl::subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  service->RequestUpdate(&ctx_, &request_, &responder_, cq, cq, tag());
 }
 
-void UpdateRequestImpl::request() {
+void UpdateRequestImpl::request(
+  SchedulerQueue::Sender* scheduler_sender
+) {
   relative_paths_ = to_vector(request_.relative_paths());
 
-  auto api_update_command = std::make_shared<scheduler::command::ApiUpdateCommand>(
-    shared_from_this()
+  scheduler_sender->push(
+    std::make_unique<scheduler::command::ApiUpdateCommand>(
+      shared_from_this()
+    )
   );
-  scheduler_queue_.push(api_update_command);
 }
 
 void UpdateRequestImpl::finish() {
