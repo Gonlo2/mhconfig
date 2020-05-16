@@ -127,7 +127,8 @@ bool OptimizedMergedConfig::init(
   cmph_config_t *config = cmph_config_new(source);
   spdlog::trace("Created a cmph config in {}", (void*)config);
   cmph_config_set_graphsize(config, 0.99);
-  cmph_config_set_algo(config, CMPH_CHD);  //TODO Check and change the algorithm
+  //TODO Check and change the algorithm if it's neccesary
+  cmph_config_set_algo(config, CMPH_CHD);
   hash_ = cmph_new(config);
   if (hash_ == nullptr) {
     spdlog::trace("Can't create the cmph hash");
@@ -176,14 +177,6 @@ bool OptimizedMergedConfig::init(
     position_[idx].key = pool->add(it.first);
     position_[idx].start = size_till_position[it.second.first];
     position_[idx].size = size_till_position[it.second.second] - position_[idx].start;
-
-    spdlog::trace(
-      "The size range of the key '{}' is (hash: {}, idx: {}, size: {})",
-      it.first,
-      idx,
-      position_[idx].start,
-      position_[idx].size
-    );
   }
 
   return true;
@@ -200,12 +193,10 @@ void OptimizedMergedConfig::add_elements(
   }
 
   uint32_t idx = cmph_search(hash_, skey.c_str(), (cmph_uint32)skey.size());
-  spdlog::trace("The cmph value of '{}' is {}", skey, idx);
-
   if (position_[idx].key == skey) {
     spdlog::trace(
-      "Found the range of the key '{}' ({}, {})",
-      skey,
+      "Found the range of the key of the request {} ({}, {})",
+      (void*)api_request,
       position_[idx].start,
       position_[idx].size
     );
@@ -214,7 +205,7 @@ void OptimizedMergedConfig::add_elements(
       position_[idx].size
     );
   } else {
-    spdlog::trace("Can't find the key '{}'", skey);
+    spdlog::trace("Can't find the key '{}'", (void*)api_request);
     api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
   }
 }

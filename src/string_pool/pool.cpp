@@ -18,8 +18,8 @@ bool make_small_string(const std::string& str, uint64_t& result) {
   if (str.size() > 7) return false;
 
   result = 0;
-  for (uint8_t c : str) {
-    result |= c;
+  for (ssize_t i = str.size()-1; i >= 0; --i) {
+    result |= str[i];
     result <<= 8;
   }
   result |= str.size()<<1;

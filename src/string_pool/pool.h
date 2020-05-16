@@ -144,11 +144,11 @@ public:
   std::string str() const {
     if (data_ & 1) {
       size_t size = (data_>>1) & 7;
-      std::string result(size, 0);
+      std::string result;
       uint64_t data = data_;
       while (size--) {
         data >>= 8;
-        result[size] = static_cast<int8_t>(data & 255);
+        result.push_back(static_cast<int8_t>(data & 255));
       }
       return result;
     } else {
@@ -175,12 +175,12 @@ private:
   // --------------------------------------------------------------------
   // | more significative           ...              less significative |
   // --------------------------------------------------------------------
-  // |  ch1  |  ch2  |  ch3  |  ch4  |  ch5  |  ch6  |  ch7  | XXXXLLL1 |
+  // |  ch7  |  ch6  |  ch5  |  ch4  |  ch3  |  ch2  |  ch1  | XXXXLLL1 |
   // --------------------------------------------------------------------
   // | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits |  8 bits  |
   // --------------------------------------------------------------------
   // Where
-  // - chX is the X string character if exists and garbage in other case
+  // - chX is the X string character if exists and zero in other case
   // - X are unused bits
   // - LLL are the bits with the string size
   //
@@ -203,6 +203,25 @@ inline bool operator==(const String& lhs, const String& rhs) {
   string_t* r = (string_t*) rhs.data_;
   if ((l == nullptr) || (r == nullptr)) return false;
   if ((l->hash != r->hash) || (l->size != r->size)) return false;
+
+  if (l->chunk == r->chunk) {
+    if (l->chunk != nullptr) {
+      std::shared_lock lock(l->chunk->mutex);
+      return memcmp(l->data, r->data, l->size) == 0;
+    }
+    return memcmp(l->data, r->data, l->size) == 0;
+  } else if (l->chunk != nullptr) {
+    std::shared_lock llock(l->chunk->mutex);
+    if (r->chunk != nullptr) {
+      std::shared_lock rlock(r->chunk->mutex);
+      return memcmp(l->data, r->data, l->size) == 0;
+    }
+    return memcmp(l->data, r->data, l->size) == 0;
+  } else if (r->chunk != nullptr) {
+    std::shared_lock rlock(r->chunk->mutex);
+    return memcmp(l->data, r->data, l->size) == 0;
+  }
+
   return memcmp(l->data, r->data, l->size) == 0;
 }
 
@@ -214,14 +233,21 @@ inline bool operator==(const String& lhs, const std::string& rhs) {
   if (lhs.data_ == 0) return false;
   if (lhs.data_ & 1) {
     if (((lhs.data_>>1)&7) != rhs.size()) return false;
-    uint64_t l = lhs.data_>>8;
-    for (size_t i = rhs.size(); i;) {
-      if (static_cast<int8_t>(l&255) != rhs[--i]) return false;
+    uint64_t l = lhs.data_;
+    for (auto c: rhs) {
+      l >>= 8;
+      if (static_cast<int8_t>(l&255) != c) return false;
     }
     return true;
   } else {
     string_t* l = (string_t*) lhs.data_;
     if (l->size != rhs.size()) return false;
+
+    if (l->chunk != nullptr) {
+      std::shared_lock rlock(l->chunk->mutex);
+      return memcmp(l->data, rhs.c_str(), l->size) == 0;
+    }
+
     return memcmp(l->data, rhs.c_str(), l->size) == 0;
   }
 }
