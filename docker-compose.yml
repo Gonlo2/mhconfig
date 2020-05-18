@@ -6,7 +6,7 @@ volumes:
 
 services:
   cpp-builder:
-    image: cpp-builder-2:0.1
+    image: cpp-builder:0.1
     network_mode: host
     ulimits:
       nproc: 65535

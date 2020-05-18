@@ -8,6 +8,10 @@ workflows:
   build:
   - build_src
 
+  tests:
+  - build_tests
+  - run_tests
+
   release:
   - build_src_release
 
@@ -31,7 +35,7 @@ tasks:
     - [cd, "build"]
     - [cp, "/source/CMakeLists.txt", .]
     - [cmake, -DCMAKE_BUILD_TYPE=Debug, ..]
-    - [make, -j8]
+    - [make, -j8, mhconfig]
 
   build_src_release: !docker
     image: cpp-builder
@@ -42,4 +46,21 @@ tasks:
     - [cd, "build"]
     - [cp, "/source/CMakeLists.txt", .]
     - [cmake, -DCMAKE_BUILD_TYPE=Release, ..]
-    - [make, -j8]
+    - [make, -j8, mhconfig]
+
+  build_tests: !docker
+    image: cpp-builder
+    commands:
+    - [cd, "/source"]
+    - [protoc, "-I=src/", "--grpc_out=src/", "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin", "src/mhconfig/proto/mhconfig.proto"]
+    - [protoc, "-I=src/", "--cpp_out=src/", "src/mhconfig/proto/mhconfig.proto"]
+    - [cd, "build"]
+    - [cp, "/source/CMakeLists.txt", .]
+    - [cmake, -DCMAKE_BUILD_TYPE=Debug, ..]
+    - [make, -j8, tests]
+
+  run_tests: !docker
+    image: cpp-builder
+    commands:
+    - [cd, "/source/build"]
+    - [./tests]

@@ -104,6 +104,7 @@ fi
 
 prepare_cmph
 prepare_grpc
+prepare_third_party catch2
 prepare_third_party fmt
 prepare_third_party spdlog
 prepare_third_party prometheus-cpp

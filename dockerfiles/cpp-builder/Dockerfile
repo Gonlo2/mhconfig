@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   tcpdump \
   vim \
   sudo \
+  ccache \
   python-pip && \
   pip install --upgrade setuptools && \
   pip install conan

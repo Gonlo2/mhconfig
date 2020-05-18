@@ -82,7 +82,7 @@ public:
     }
   }
 
-  String(uint64_t data) noexcept : data_(data) {
+  explicit String(uint64_t data) noexcept : data_(data) {
     if ((data_ & 1) == 0) {
       string_t* ptr = (string_t*) data_;
       if (ptr != nullptr) {
@@ -302,6 +302,12 @@ public:
 class Pool
 {
 public:
+  Pool()
+    : stats_observer_(nullptr)
+  {
+    head_ = new_chunk();
+  }
+
   Pool(
     std::unique_ptr<StatsObserver>&& stats_observer
   )
@@ -309,6 +315,7 @@ public:
   {
     head_ = new_chunk();
   }
+
 
   virtual ~Pool() {
     while (head_ != nullptr) {
@@ -327,7 +334,10 @@ public:
     stats_.num_chunks = 0;
     stats_.reclaimed_bytes = 0;
     stats_.used_bytes = 0;
-    stats_observer_->on_updated_stats(stats_, true);
+
+    if (stats_observer_ != nullptr) {
+      stats_observer_->on_updated_stats(stats_, true);
+    }
   }
 
   const String add(const std::string& str) {
@@ -346,6 +356,20 @@ public:
 
     return String(result);
   }
+
+  const stats_t& stats() const {
+    return stats_;
+  }
+
+  void compact() {
+    std::unique_lock lock_chunk(mutex_);
+    spdlog::debug("Compacting the chunks");
+
+    for (chunk_t* chunk = head_; chunk != nullptr; chunk = chunk->next) {
+      compact_chunk(chunk);
+    }
+  }
+
 
 private:
   friend class String;
@@ -383,15 +407,14 @@ private:
     chunk->next_data += data_size;
     stats_.used_bytes += data_size;
 
-    stats_observer_->on_updated_stats(stats_, false);
+    if (stats_observer_ != nullptr) {
+      stats_observer_->on_updated_stats(stats_, false);
+    }
 
     return String((uint64_t)string);
   }
 
-  const void compact_chunk(chunk_t* chunk) {
-    // First we block the accesses to the pool and the chunk to modify until the
-    // compact process finish
-    std::unique_lock lock_pool(mutex_);
+  void compact_chunk(chunk_t* chunk) {
     std::unique_lock lock_chunk(chunk->mutex);
 
     spdlog::debug("Compacting the chunk {}", (void*)chunk);
@@ -445,7 +468,9 @@ private:
 
     stats_.used_bytes += chunk->next_data - chunk->data;
 
-    stats_observer_->on_updated_stats(stats_, true);
+    if (stats_observer_ != nullptr) {
+      stats_observer_->on_updated_stats(stats_, true);
+    }
   }
 
   chunk_t* new_chunk() {

@@ -66,9 +66,10 @@ String::~String() {
       );
 
       // Take in mind that the compacter process will reclaim also the space of the
-      // string_t pointer, since we can't destroy it until we remove the string
-      // from the hashset
+      // string_t pointer, since we can't destroy it until we have removed
+      // the string from the hashset
       if (fragmented_size > (CHUNK_DATA_SIZE>>1)) {
+        std::unique_lock lock_pool(ptr->chunk->pool->mutex_);
         ptr->chunk->pool->compact_chunk(ptr->chunk);
       }
     }
