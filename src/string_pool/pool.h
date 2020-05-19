@@ -14,8 +14,13 @@
 namespace string_pool
 {
 
-inline size_t align(size_t size) {
-  return (size + 7) & ~7;
+namespace {
+  inline size_t align(size_t size) {
+    return (size + 7) & ~7;
+  }
+
+  const static char* CODED_VALUE_TO_ASCII_CHAR = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
+  const static char ASCII_CHAR_TO_CODED_VALUE[] = {127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 63, 127, 127, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 127, 127, 127, 127, 127, 127, 127, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 127, 127, 127, 127, 62, 127, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127};
 }
 
 struct string_t;
@@ -83,20 +88,16 @@ public:
   }
 
   explicit String(uint64_t data) noexcept : data_(data) {
-    if ((data_ & 1) == 0) {
+    if (!is_small() && (data_ != 0)) {
       string_t* ptr = (string_t*) data_;
-      if (ptr != nullptr) {
-        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-      }
+      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
     }
   }
 
   String(const String& o) noexcept : data_(o.data_) {
-    if ((data_ & 1) == 0) {
+    if (!is_small() && (data_ != 0)) {
       string_t* ptr = (string_t*) data_;
-      if (ptr != nullptr) {
-        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-      }
+      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
     }
   }
 
@@ -106,11 +107,9 @@ public:
 
   String& operator=(const String& o) noexcept {
     data_ = o.data_;
-    if ((data_ & 1) == 0) {
+    if (!is_small() && (data_ != 0)) {
       string_t* ptr = (string_t*) data_;
-      if (ptr != nullptr) {
-        ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-      }
+      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
     }
     return *this;
   }
@@ -124,44 +123,55 @@ public:
   ~String() noexcept;
 
   size_t hash() const {
-    if (data_ & 1) {
+    if (is_small() || (data_ == 0)) {
       return data_;
-    } else {
-      string_t* ptr = (string_t*) data_;
-      return (ptr == nullptr) ? 0 : ptr->hash;
     }
+    string_t* ptr = (string_t*) data_;
+    return ptr->hash;
   }
 
   size_t size() const {
-    if (data_ & 1) {
-      return (data_>>1) & 7;
-    } else {
-      string_t* ptr = (string_t*) data_;
-      return (ptr == nullptr) ? 0 : ptr->size;
+    if (is_small() || (data_ == 0)) {
+      return (data_ & 2)
+        ? ((data_>>2) & 3) + 8
+        : (data_>>2) & 7;
     }
+    string_t* ptr = (string_t*) data_;
+    return ptr->size;
   }
 
   std::string str() const {
-    if (data_ & 1) {
-      size_t size = (data_>>1) & 7;
+    if (is_small() || (data_ == 0)) {
       std::string result;
       uint64_t data = data_;
-      while (size--) {
-        data >>= 8;
-        result.push_back(static_cast<int8_t>(data & 255));
+      if (data_ & 2) {
+        size_t size = ((data_>>2) & 3) + 8;
+        data >>= 4;
+        while (size--) {
+          result.push_back(CODED_VALUE_TO_ASCII_CHAR[data & 63]);
+          data >>= 6;
+        }
+      } else {
+        size_t size = (data_>>2) & 7;
+        while (size--) {
+          data >>= 8;
+          result.push_back(static_cast<char>(data & 255));
+        }
       }
       return result;
-    } else {
-      string_t* ptr = (string_t*) data_;
-      if (ptr == nullptr) return std::string();
+    }
 
-      if (ptr->chunk != nullptr) {
-        std::shared_lock lock(ptr->chunk->mutex);
-        return std::string(ptr->data, ptr->size);
-      }
-
+    string_t* ptr = (string_t*) data_;
+    if (ptr->chunk != nullptr) {
+      std::shared_lock lock(ptr->chunk->mutex);
       return std::string(ptr->data, ptr->size);
     }
+
+    return std::string(ptr->data, ptr->size);
+  }
+
+  inline bool is_small() const {
+    return data_ & 1;
   }
 
 private:
@@ -171,24 +181,32 @@ private:
   // of a pointer to string_t or a one in the case of a little string. This is
   // possible aligning the string_t data structures in even positions.
   //
-  // The little string format follow the next schema
-  // --------------------------------------------------------------------
-  // | most significative           ...              less significative |
-  // --------------------------------------------------------------------
-  // |  ch7  |  ch6  |  ch5  |  ch4  |  ch3  |  ch2  |  ch1  | XXXXLLL1 |
-  // --------------------------------------------------------------------
-  // | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits | 8bits |  8 bits  |
-  // --------------------------------------------------------------------
+  // The little string format follow the next schema if it has [0,8) characters
+  // ---------------------------------------------------------------------------
+  // | most significative             64 bits               less significative |
+  // ---------------------------------------------------------------------------
+  // | GGGGGGGG FFFFFFFF EEEEEEEE DDDDDDDD CCCCCCCC BBBBBBBB AAAAAAAA ***LLL01 |
+  // ---------------------------------------------------------------------------
   // Where
-  // - chX is the X string character if exists and zero in other case
-  // - X are unused bits
+  // - A, B, C, D, E, F, G are the string character if exists or zero in other case
+  // - * are unused bits
   // - LLL are the bits with the string size
+  // - 01 indicate that the data contain a small string with [0,8) characters
   //
-  //TODO check if make sense store up to 9 characters using only 6bits
-  // by character, to do it use the next words
-  // - the ascii words in upper and lower case (52 values)
-  // - the ascii numbers (10 values)
-  // - two extra characters, probaby the undescore and the dash
+  // Also exists a small+ string format with the next schema if it has [0,11)
+  // characters and some special restrictions are met
+  // ---------------------------------------------------------------------------
+  // | most significative             64 bits               less significative |
+  // ---------------------------------------------------------------------------
+  // | JJJJJJII IIIIHHHH HHGGGGGG FFFFFFEE EEEEDDDD DDCCCCCC BBBBBBAA AAAALL11 |
+  // ---------------------------------------------------------------------------
+  // Where
+  // - A, B, C, D, E, F, G, H, I, J are the coded string character (6 bits)
+  // if exists or zero in other case
+  // - LL are the bits with the string size minus eight (the size 11 is impossible)
+  // - 11 indicate that the data contain a small+ string with [0,11) characters
+  //
+  // The coded string include the ascii words [a,z], [A,Z], [0,9], undescore and dash
   uint64_t data_;
 };
 
@@ -197,7 +215,7 @@ static_assert(sizeof(String) == 8, "The size of the String must be 8 bytes");
 // Only it's supported if both string has the same format (small or ptr)
 inline bool operator==(const String& lhs, const String& rhs) {
   if (lhs.data_ == rhs.data_) return true;
-  if (lhs.data_ & 1) return false;
+  if (lhs.is_small() || rhs.is_small()) return false;
 
   string_t* l = (string_t*) lhs.data_;
   string_t* r = (string_t*) rhs.data_;
@@ -231,12 +249,21 @@ inline bool operator!=(const String& lhs, const String& rhs) {
 
 inline bool operator==(const String& lhs, const std::string& rhs) {
   if (lhs.data_ == 0) return false;
-  if (lhs.data_ & 1) {
-    if (((lhs.data_>>1)&7) != rhs.size()) return false;
-    uint64_t l = lhs.data_;
-    for (auto c: rhs) {
-      l >>= 8;
-      if (static_cast<int8_t>(l&255) != c) return false;
+  if (lhs.is_small()) {
+    uint64_t data = lhs.data_;
+    if (data & 2) {
+      if ((((data>>2) & 3) + 8) != rhs.size()) return false;
+      data >>= 4;
+      for (char c: rhs) {
+        if (CODED_VALUE_TO_ASCII_CHAR[data & 63] != c) return false;
+        data >>= 6;
+      }
+    } else {
+      if (((data>>2) & 7) != rhs.size()) return false;
+      for (char c: rhs) {
+        data >>= 8;
+        if (static_cast<char>(data & 255) != c) return false;
+      }
     }
     return true;
   } else {
@@ -341,11 +368,14 @@ public:
   }
 
   const String add(const std::string& str) {
-    uint64_t result;
-    if (!make_small_string(str, result)) {
+    String s(str);
+    if (!s.is_small()) {
+      //TODO Rethink the string build part to avoid create the str and
+      //change the unique mutex with a shared one to allow parallel
+      //calls if the string already exists in the set
       std::unique_lock lock(mutex_);
 
-      auto search = set_.find(String(str));
+      auto search = set_.find(s);
       if (search != set_.end()) {
         return *search;
       }
@@ -354,7 +384,7 @@ public:
       return *set_.insert(store_string(str)).first;
     }
 
-    return String(result);
+    return s;
   }
 
   const stats_t& stats() const {

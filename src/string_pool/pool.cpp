@@ -15,17 +15,30 @@ string_t* alloc_string_ptr() {
 }
 
 bool make_small_string(const std::string& str, uint64_t& result) {
-  if (str.size() > 7) return false;
+  if (str.size() <= 7) {
+    result = 0;
+    for (ssize_t i = str.size()-1; i >= 0; --i) {
+      result |= str[i];
+      result <<= 8;
+    }
+    result |= (str.size()<<2) | 1;
 
-  result = 0;
-  for (ssize_t i = str.size()-1; i >= 0; --i) {
-    result |= str[i];
-    result <<= 8;
+    return true;
+  } else if (str.size() <= 10) {
+    result = 0;
+    for (ssize_t i = str.size()-1; i >= 0; --i) {
+      result <<= 6;
+      char c = ASCII_CHAR_TO_CODED_VALUE[static_cast<uint8_t>(str[i])];
+      if (c == 127) return false;
+      result |= c;
+    }
+    result <<= 4;
+    result |= ((str.size()-8)<<2) | 3;
+
+    return true;
   }
-  result |= str.size()<<1;
-  result |= 1;
 
-  return true;
+  return false;
 }
 
 string_t* make_string_ptr(const std::string& str, chunk_t* chunk) {
@@ -46,7 +59,7 @@ string_t* make_string_ptr(const std::string& str, chunk_t* chunk) {
 }
 
 String::~String() {
-  if (((data_ & 1) == 0) && (data_ != 0)) {
+  if (!is_small() && (data_ != 0)) {
     string_t* ptr = (string_t*) data_;
     uint64_t refcount = ptr->refcount.fetch_sub(1, std::memory_order_acq_rel);
     // This logic is tricky, if this is the last reference we could drop the string

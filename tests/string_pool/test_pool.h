@@ -12,18 +12,47 @@ TEST_CASE("String", "[string]") {
     String hello("hello");
     REQUIRE(hello == "hello");
     REQUIRE(hello.str() == "hello");
-    REQUIRE(hello.hash() == 122511465736203ul);
+    REQUIRE(hello.hash() == 122511465736213ul);
     REQUIRE(hello != "test");
     REQUIRE(hello.size() == 5);
+    REQUIRE(hello.is_small() == true);
   }
 
   SECTION("Small string from uint64_t") {
-    String hello(122511465736203ul);
+    String hello(122511465736213ul);
     REQUIRE(hello == "hello");
     REQUIRE(hello.str() == "hello");
-    REQUIRE(hello.hash() == 122511465736203ul);
+    REQUIRE(hello.hash() == 122511465736213ul);
     REQUIRE(hello != "test");
     REQUIRE(hello.size() == 5);
+    REQUIRE(hello.is_small() == true);
+  }
+
+  SECTION("Small+ string from std::string") {
+    String remembered("remembered");
+    REQUIRE(remembered == "remembered");
+    REQUIRE(remembered.str() == "remembered");
+    REQUIRE(remembered.hash() == 883906214080811291ull);
+    REQUIRE(remembered != "¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬");
+    REQUIRE(remembered.size() == 10);
+    REQUIRE(remembered.is_small() == true);
+  }
+
+  SECTION("Small+ string from uint64_t") {
+    String remembered(883906214080811291ull);
+    REQUIRE(remembered == "remembered");
+    REQUIRE(remembered.str() == "remembered");
+    REQUIRE(remembered.hash() == 883906214080811291ull);
+    REQUIRE(remembered != "¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬¬");
+    REQUIRE(remembered.size() == 10);
+    REQUIRE(remembered.is_small() == true);
+  }
+
+  SECTION("Potential small+ string from std::string") {
+    String remembered("127.0.0.1");
+    REQUIRE(remembered == "127.0.0.1");
+    REQUIRE(remembered.size() == 9);
+    REQUIRE(remembered.is_small() == false);
   }
 
   SECTION("Large string from std::string") {
@@ -34,6 +63,7 @@ TEST_CASE("String", "[string]") {
     REQUIRE(s.hash() == 10109368953727484612ul);
     REQUIRE(s != "..................................................");
     REQUIRE(s.size() == 295);
+    REQUIRE(s.is_small() == false);
   }
 }
 
