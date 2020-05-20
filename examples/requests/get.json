@@ -1,6 +1,6 @@
 {
   "root_path": "XXX",
   "overrides": ["low-priority-override", "high-priority-override"],
-  "key": ["test"],
+  "document": "test",
   "version": 0
 }

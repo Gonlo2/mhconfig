@@ -34,6 +34,7 @@ public:
   const std::string& root_path() const override;
   const uint32_t version() const override;
   const std::vector<std::string>& overrides() const override;
+  const std::string& document() const override;
   const std::vector<std::string>& key() const override;
 
   void set_status(get_request::Status status) override;

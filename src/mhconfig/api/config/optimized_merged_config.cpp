@@ -193,9 +193,8 @@ void OptimizedMergedConfig::add_elements(
 ) {
   thread_local static std::string skey;
   skey.clear();
-  //FIXME Ignore the first key
-  for (uint32_t i = 1; i < api_request->key().size(); ++i) {
-    jmutils::push_str(skey, api_request->key()[i]);
+  for (const auto& s: api_request->key()) {
+    jmutils::push_str(skey, s);
   }
 
   uint32_t idx = cmph_search(hash_, skey.c_str(), (cmph_uint32)skey.size());

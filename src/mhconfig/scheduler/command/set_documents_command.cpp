@@ -114,8 +114,8 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 
   auto merged_config = ::mhconfig::builder::get_merged_config(
     config_namespace,
-    wait_build_->request->key()[0],
-    built_elements_by_document_[wait_build_->request->key()[0]].overrides_key
+    wait_build_->request->document(),
+    built_elements_by_document_[wait_build_->request->document()].overrides_key
   );
 
   worker_queue.push(

@@ -21,8 +21,9 @@ message GetRequest {
   // the version of the configuration to retrieve, it retrieve the latest
   // version with a zero value and the proper version otherwise.
   uint32 version = 3;
-  // the key to retrieve and it must have at least one element.
-  repeated string key = 4;
+  // the document and the key to retrieve
+  string document = 4;
+  repeated string key = 5;
 }
 
 message GetResponse {

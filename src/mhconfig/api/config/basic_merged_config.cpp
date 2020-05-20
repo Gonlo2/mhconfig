@@ -19,13 +19,8 @@ void BasicMergedConfig::add_elements(
   request::GetRequest* api_request
 ) {
   ElementRef element = element_;
-  //for (const auto& x: key) {
-    //element = element_->get(::string_pool::String(x));
-  //}
-
-  //FIXME Ignore the first key
-  for (uint32_t i = 1; i < api_request->key().size(); ++i) {
-    element = element->get(::string_pool::String(api_request->key()[i]));
+  for (const auto& s: api_request->key()) {
+    element = element->get(::string_pool::String(s));
   }
 
   api_request->set_element(element);

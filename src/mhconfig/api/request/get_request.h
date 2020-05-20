@@ -34,6 +34,7 @@ public:
   virtual const std::string& root_path() const = 0;
   virtual const uint32_t version() const = 0;
   virtual const std::vector<std::string>& overrides() const = 0;
+  virtual const std::string& document() const = 0;
   virtual const std::vector<std::string>& key() const = 0;
 
   virtual void set_status(get_request::Status status) = 0;

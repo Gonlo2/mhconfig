@@ -33,6 +33,10 @@ const std::vector<std::string>& GetRequestImpl::overrides() const {
   return overrides_;
 }
 
+const std::string& GetRequestImpl::document() const {
+  return request_.document();
+}
+
 const std::vector<std::string>& GetRequestImpl::key() const {
   return key_;
 }

@@ -42,12 +42,12 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
 
   // We check if exists the asked document
   auto search = config_namespace.document_metadata_by_document
-    .find(get_request_->key()[0]);
+    .find(get_request_->document());
 
   if (search == config_namespace.document_metadata_by_document.end()) {
     spdlog::warn(
       "Can't found a config file with the name '{}'",
-      get_request_->key()[0]
+      get_request_->document()
     );
 
     get_request_->set_element(UNDEFINED_ELEMENT);
@@ -85,12 +85,12 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   );
   auto merged_config = ::mhconfig::builder::get_merged_config(
     config_namespace,
-    get_request_->key()[0],
+    get_request_->document(),
     overrides_key
   );
 
   if ((merged_config != nullptr) && (merged_config->status == MergedConfigStatus::OK)) {
-    spdlog::debug("The built document '{}' has been found", get_request_->key()[0]);
+    spdlog::debug("The built document '{}' has been found", get_request_->document());
 
     merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
 
@@ -98,7 +98,7 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
     return NamespaceExecutionResult::OK;
   }
 
-  spdlog::debug("Preparing build for document '{}'", get_request_->key()[0]);
+  spdlog::debug("Preparing build for document '{}'", get_request_->document());
   return prepare_build_request(
     config_namespace,
     worker_queue
@@ -135,7 +135,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   // so we check it here
   auto is_a_dag_result = check_if_ref_graph_is_a_dag(
     config_namespace,
-    get_request_->key()[0],
+    get_request_->document(),
     get_request_->overrides(),
     get_request_->version()
   );
@@ -237,7 +237,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   } else {
     spdlog::debug(
       "The document '{}' need wait to {} building documents",
-      get_request_->key()[0],
+      get_request_->document(),
       wait_built->pending_element_position_by_name.size()
     );
   }

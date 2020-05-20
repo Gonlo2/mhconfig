@@ -132,7 +132,6 @@ WatchGetRequest::WatchGetRequest(
   : input_message_(input_message),
   output_message_(output_message)
 {
-  key_.push_back(input_message_->document());
 }
 
 WatchGetRequest::~WatchGetRequest() {
@@ -148,6 +147,10 @@ const uint32_t WatchGetRequest::version() const {
 
 const std::vector<std::string>& WatchGetRequest::overrides() const {
   return input_message_->overrides();
+}
+
+const std::string& WatchGetRequest::document() const {
+  return input_message_->document();
 }
 
 const std::vector<std::string>& WatchGetRequest::key() const {
