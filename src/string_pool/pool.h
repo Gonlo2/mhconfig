@@ -54,12 +54,12 @@ inline void init_string(
   char* data,
   string_t* result
 ) {
+  result->refcount.store(0);
+  result->data = data;
+  result->chunk = nullptr;
+  result->next = nullptr;
   result->hash = std::hash<std::string>{}(str);
   result->size = str.size();
-  result->data = data;
-  result->next = nullptr;
-  result->chunk = nullptr;
-  result->refcount.store(0);
 }
 
 string_t* alloc_string_ptr();
@@ -452,54 +452,67 @@ private:
     stats_.used_bytes -= chunk->fragmented_size.exchange(0, std::memory_order_acq_rel);
 
     spdlog::trace("Looking for the first string");
+    string_t* next_string = chunk->first_string;
+    string_t* last_string = nullptr;
     chunk->next_data = chunk->data;
-    while (chunk->first_string != nullptr) {
-      string_t* s = chunk->first_string;
-      if (s->refcount.load(std::memory_order_acq_rel) != 1) break;
-      spdlog::trace("Removing the string {}", (void*)s);
-      chunk->first_string = s->next;
-      // This is the hacky/tricky logic that avoid call recursively to compact
-      // the same chunk after erase the new string, since we defined as null
-      // the chunk the destructor will avoid the compacter branch and remove
-      // successfully the string at the end :magic:
-      s->chunk = nullptr;
-      set_.erase(String((uint64_t)s));
-      stats_.num_strings -= 1;
-    }
-
-    chunk->last_string = chunk->first_string;
-
-    spdlog::trace("Compacting the strings");
-    string_t* next_string = chunk->last_string;
+    chunk->first_string = nullptr;
     while (next_string != nullptr) {
-      string_t* s = next_string;
-      next_string = s->next;
-      if (s->refcount.load(std::memory_order_acq_rel) == 1) {
-        spdlog::trace("Removing the string {}", (void*)s);
-        // The same as before ;)
-        s->chunk = nullptr;
-        set_.erase(String((uint64_t)s));
-        stats_.num_strings -= 1;
+      string_t* current_string = next_string;
+      next_string = next_string->next;
+      if (current_string->refcount.load(std::memory_order_acq_rel) == 1) {
+        remove_string(current_string);
       } else {
-        spdlog::trace("Compacting the string {}", (void*)s);
-        chunk->last_string->next = s;
-        chunk->last_string = s;
-        char* from = s->data;
-        char* to = chunk->next_data;
-        s->data = to;
-        size_t data_size = align(s->size);
-        chunk->next_data += data_size;
-        // We compact the data in place \o/
-        while (to != chunk->next_data) *to++ = *from++;
+        chunk->first_string = current_string;
+        last_string = current_string;
+        reallocate_string(chunk, current_string);
+        break;
       }
     }
 
-    if (chunk->last_string != nullptr) chunk->last_string->next = nullptr;
+    spdlog::trace("Reallocating the strings");
+    while (next_string != nullptr) {
+      string_t* current_string = next_string;
+      next_string = next_string->next;
+      if (current_string->refcount.load(std::memory_order_acq_rel) == 1) {
+        remove_string(current_string);
+      } else {
+        last_string->next = current_string;
+        last_string = current_string;
+        reallocate_string(chunk, current_string);
+      }
+    }
+
+    if (last_string != nullptr) last_string->next = nullptr;
+    chunk->last_string = last_string;
 
     stats_.used_bytes += chunk->next_data - chunk->data;
 
     if (stats_observer_ != nullptr) {
       stats_observer_->on_updated_stats(stats_, true);
+    }
+  }
+
+  void remove_string(string_t* s) {
+    spdlog::trace("Removing the string {}", (void*)s);
+    // This is the hacky/tricky logic that avoid call recursively to compact
+    // the same chunk after erase the new string, since we defined as null
+    // the chunk the destructor will avoid the compacter branch and remove
+    // successfully the string at the end :magic:
+    s->chunk = nullptr;
+    set_.erase(String((uint64_t)s));
+    stats_.num_strings -= 1;
+  }
+
+  void reallocate_string(chunk_t* chunk, string_t* s) {
+    spdlog::trace("Reallocating the string {}", (void*)s);
+    char* from = s->data;
+    char* to = chunk->next_data;
+    s->data = to;
+    size_t data_size = align(s->size);
+    chunk->next_data += data_size;
+    if (from != to) {
+      // We compact the data in place \o/
+      while (to != chunk->next_data) *to++ = *from++;
     }
   }
 
