@@ -72,103 +72,35 @@ public:
   friend bool operator==(const String& lhs, const String& rhs);
   friend bool operator==(const String& lhs, const std::string& rhs);
 
-  explicit String() noexcept {
-    data_ = 0;
-  }
+  explicit String() noexcept;
+  explicit String(const std::string& str) noexcept;
+  explicit String(uint64_t data) noexcept;
 
-  explicit String(const std::string& str) noexcept {
-    if (!make_small_string(str, data_)) {
-      void* data = alloc_string_ptr();
-      assert (data != nullptr);
-      string_t* ptr = new (data) string_t;
-      init_string(str, (char*) str.c_str(), ptr);
-      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-      data_ = (uint64_t)ptr;
-    }
-  }
+  String(const String& o) noexcept;
+  String(String&& o) noexcept;
 
-  explicit String(uint64_t data) noexcept : data_(data) {
-    if (!is_small() && (data_ != 0)) {
-      string_t* ptr = (string_t*) data_;
-      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-    }
-  }
-
-  String(const String& o) noexcept : data_(o.data_) {
-    if (!is_small() && (data_ != 0)) {
-      string_t* ptr = (string_t*) data_;
-      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-    }
-  }
-
-  String(String&& o) noexcept : data_(o.data_) {
-    o.data_ = 0;
-  }
-
-  String& operator=(const String& o) noexcept {
-    data_ = o.data_;
-    if (!is_small() && (data_ != 0)) {
-      string_t* ptr = (string_t*) data_;
-      ptr->refcount.fetch_add(1, std::memory_order_relaxed);
-    }
-    return *this;
-  }
-
-  String& operator=(String&& o) noexcept {
-    data_ = o.data_;
-    o.data_ = 0;
-    return *this;
-  }
+  String& operator=(const String& o) noexcept;
+  String& operator=(String&& o) noexcept;
 
   ~String() noexcept;
 
-  size_t hash() const {
+  inline size_t hash() const {
     if (is_small() || (data_ == 0)) {
       return data_;
     }
-    string_t* ptr = (string_t*) data_;
-    return ptr->hash;
+    return ((string_t*) data_)->hash;
   }
 
-  size_t size() const {
+  inline size_t size() const {
     if (is_small() || (data_ == 0)) {
       return (data_ & 2)
         ? ((data_>>2) & 3) + 8
         : (data_>>2) & 7;
     }
-    string_t* ptr = (string_t*) data_;
-    return ptr->size;
+    return ((string_t*) data_)->size;
   }
 
-  std::string str() const {
-    if (is_small() || (data_ == 0)) {
-      std::string result;
-      uint64_t data = data_;
-      if (data_ & 2) {
-        size_t size = ((data_>>2) & 3) + 8;
-        data >>= 4;
-        while (size--) {
-          result.push_back(CODED_VALUE_TO_ASCII_CHAR[data & 63]);
-          data >>= 6;
-        }
-      } else {
-        size_t size = (data_>>2) & 7;
-        while (size--) {
-          data >>= 8;
-          result.push_back(static_cast<char>(data & 255));
-        }
-      }
-      return result;
-    }
-
-    string_t* ptr = (string_t*) data_;
-    if (ptr->chunk != nullptr) {
-      std::shared_lock lock(ptr->chunk->mutex);
-      return std::string(ptr->data, ptr->size);
-    }
-
-    return std::string(ptr->data, ptr->size);
-  }
+  std::string str() const;
 
   inline bool is_small() const {
     return data_ & 1;
@@ -242,6 +174,7 @@ inline bool operator==(const String& lhs, const String& rhs) {
 
   return memcmp(l->data, r->data, l->size) == 0;
 }
+
 
 inline bool operator!=(const String& lhs, const String& rhs) {
   return !(lhs == rhs);
@@ -326,80 +259,23 @@ public:
   }
 };
 
-class Pool
+class Pool final
 {
 public:
-  Pool()
-    : stats_observer_(nullptr)
-  {
-    head_ = new_chunk();
-  }
+  Pool();
+  Pool(std::unique_ptr<StatsObserver>&& stats_observer);
 
-  Pool(
-    std::unique_ptr<StatsObserver>&& stats_observer
-  )
-    : stats_observer_(std::move(stats_observer))
-  {
-    head_ = new_chunk();
-  }
+  ~Pool();
 
+  Pool(const Pool& o) = delete;
+  Pool(Pool&& o) = delete;
 
-  virtual ~Pool() {
-    while (head_ != nullptr) {
-      while (head_->first_string != nullptr) {
-        head_->first_string->chunk = nullptr;
-        head_->first_string = head_->first_string->next;
-      }
+  Pool& operator=(const Pool& o) = delete;
+  Pool& operator=(Pool&& o) = delete;
 
-      chunk_t* tmp = head_;
-      head_ = tmp->next;
-      tmp->~chunk_t();
-      free(tmp);
-    }
-
-    stats_.num_strings = 0;
-    stats_.num_chunks = 0;
-    stats_.reclaimed_bytes = 0;
-    stats_.used_bytes = 0;
-
-    if (stats_observer_ != nullptr) {
-      stats_observer_->on_updated_stats(stats_, true);
-    }
-  }
-
-  const String add(const std::string& str) {
-    String s(str);
-    if (!s.is_small()) {
-      //TODO Rethink the string build part to avoid create the str and
-      //change the unique mutex with a shared one to allow parallel
-      //calls if the string already exists in the set
-      std::unique_lock lock(mutex_);
-
-      auto search = set_.find(s);
-      if (search != set_.end()) {
-        return *search;
-      }
-
-      spdlog::debug("Adding a new string");
-      return *set_.insert(store_string(str)).first;
-    }
-
-    return s;
-  }
-
-  const stats_t& stats() const {
-    return stats_;
-  }
-
-  void compact() {
-    std::unique_lock lock_chunk(mutex_);
-    spdlog::debug("Compacting the chunks");
-
-    for (chunk_t* chunk = head_; chunk != nullptr; chunk = chunk->next) {
-      compact_chunk(chunk);
-    }
-  }
-
+  const String add(const std::string& str);
+  const stats_t& stats() const;
+  void compact();
 
 private:
   friend class String;
@@ -410,129 +286,13 @@ private:
   stats_t stats_;
   std::unique_ptr<StatsObserver> stats_observer_;
 
-  const String store_string(const std::string& str) {
-    spdlog::debug("Adding a new string of size {}", str.size());
-    stats_.num_strings += 1;
+  const String store_string(const std::string& str);
 
-    chunk_t* back_chunk = head_;
-    chunk_t* chunk = head_;
-    while (chunk != nullptr) {
-      size_t s = (char*) chunk->next_data - (char*) &chunk->data;
-      spdlog::trace("The chunk {} used {} bytes", (void*)chunk, s);
-      if (s + str.size() <= CHUNK_DATA_SIZE) break;
-      back_chunk = chunk;
-      chunk = chunk->next;
-    }
-    if (chunk == nullptr) {
-      chunk = back_chunk->next = new_chunk();
-    }
+  void compact_chunk(chunk_t* chunk);
+  void remove_string(string_t* s);
+  void reallocate_string(chunk_t* chunk, string_t* s);
 
-    std::unique_lock lock_chunk(chunk->mutex);
-
-    string_t* string = make_string_ptr(str, chunk);
-    spdlog::trace("Made the string {} in {}", (void*)string, (void*)string->data);
-
-    size_t data_size = align(str.size());
-    spdlog::trace("Moving the next_data pointer {} bytes", data_size);
-    chunk->next_data += data_size;
-    stats_.used_bytes += data_size;
-
-    if (stats_observer_ != nullptr) {
-      stats_observer_->on_updated_stats(stats_, false);
-    }
-
-    return String((uint64_t)string);
-  }
-
-  void compact_chunk(chunk_t* chunk) {
-    std::unique_lock lock_chunk(chunk->mutex);
-
-    spdlog::debug("Compacting the chunk {}", (void*)chunk);
-
-    stats_.used_bytes -= chunk->fragmented_size.exchange(0, std::memory_order_acq_rel);
-
-    spdlog::trace("Looking for the first string");
-    string_t* next_string = chunk->first_string;
-    string_t* last_string = nullptr;
-    chunk->next_data = chunk->data;
-    chunk->first_string = nullptr;
-    while (next_string != nullptr) {
-      string_t* current_string = next_string;
-      next_string = next_string->next;
-      if (current_string->refcount.load(std::memory_order_acq_rel) == 1) {
-        remove_string(current_string);
-      } else {
-        chunk->first_string = current_string;
-        last_string = current_string;
-        reallocate_string(chunk, current_string);
-        break;
-      }
-    }
-
-    spdlog::trace("Reallocating the strings");
-    while (next_string != nullptr) {
-      string_t* current_string = next_string;
-      next_string = next_string->next;
-      if (current_string->refcount.load(std::memory_order_acq_rel) == 1) {
-        remove_string(current_string);
-      } else {
-        last_string->next = current_string;
-        last_string = current_string;
-        reallocate_string(chunk, current_string);
-      }
-    }
-
-    if (last_string != nullptr) last_string->next = nullptr;
-    chunk->last_string = last_string;
-
-    stats_.used_bytes += chunk->next_data - chunk->data;
-
-    if (stats_observer_ != nullptr) {
-      stats_observer_->on_updated_stats(stats_, true);
-    }
-  }
-
-  void remove_string(string_t* s) {
-    spdlog::trace("Removing the string {}", (void*)s);
-    // This is the hacky/tricky logic that avoid call recursively to compact
-    // the same chunk after erase the new string, since we defined as null
-    // the chunk the destructor will avoid the compacter branch and remove
-    // successfully the string at the end :magic:
-    s->chunk = nullptr;
-    set_.erase(String((uint64_t)s));
-    stats_.num_strings -= 1;
-  }
-
-  void reallocate_string(chunk_t* chunk, string_t* s) {
-    spdlog::trace("Reallocating the string {}", (void*)s);
-    char* from = s->data;
-    char* to = chunk->next_data;
-    s->data = to;
-    size_t data_size = align(s->size);
-    chunk->next_data += data_size;
-    if (from != to) {
-      // We compact the data in place \o/
-      while (to != chunk->next_data) *to++ = *from++;
-    }
-  }
-
-  chunk_t* new_chunk() {
-    spdlog::trace("Making a new chunk");
-    stats_.num_chunks += 1;
-    stats_.reclaimed_bytes += CHUNK_DATA_SIZE;
-
-    void* data = aligned_alloc(sizeof(size_t), sizeof(chunk_t));
-    assert (data != nullptr);
-    chunk_t* chunk = new (data) chunk_t;
-    chunk->fragmented_size.store(0);
-    chunk->next_data = (char*) &chunk->data;
-    chunk->pool = this;
-    chunk->first_string = nullptr;
-    chunk->last_string = nullptr;
-    chunk->next = nullptr;
-
-    return chunk;
-  }
+  chunk_t* new_chunk();
 };
 
 } /* string_pool */
