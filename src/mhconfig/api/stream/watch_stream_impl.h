@@ -24,7 +24,7 @@ class WatchOutputMessageImpl : public WatchOutputMessage, public std::enable_sha
 {
 public:
   WatchOutputMessageImpl(
-    std::shared_ptr<WatchStreamImpl> stream
+    std::weak_ptr<WatchStreamImpl>& stream
   );
   virtual ~WatchOutputMessageImpl();
 
@@ -43,7 +43,7 @@ protected:
   grpc::ByteBuffer response_;
 
 private:
-  std::shared_ptr<WatchStreamImpl> stream_;
+  std::weak_ptr<WatchStreamImpl> stream_;
   mhconfig::proto::WatchResponse proto_response_;
   std::stringstream elements_data_;
 
@@ -55,7 +55,7 @@ class WatchInputMessageImpl : public WatchInputMessage
 public:
   WatchInputMessageImpl(
     std::unique_ptr<mhconfig::proto::WatchRequest>&& request,
-    std::shared_ptr<WatchStreamImpl> stream
+    std::weak_ptr<WatchStreamImpl>&& stream
   );
   virtual ~WatchInputMessageImpl();
 
@@ -72,7 +72,7 @@ public:
 
 private:
   std::unique_ptr<mhconfig::proto::WatchRequest> request_;
-  std::shared_ptr<WatchStreamImpl> stream_;
+  std::weak_ptr<WatchStreamImpl> stream_;
 
   std::vector<std::string> overrides_;
 };
@@ -127,8 +127,6 @@ public:
   ) override;
 
   bool unregister(uint32_t uid);
-
-  std::shared_ptr<Session> destroy() override;
 
 protected:
   friend class WatchOutputMessageImpl;

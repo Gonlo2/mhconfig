@@ -73,7 +73,7 @@ public:
     return nullptr;
   }
 
-  virtual std::shared_ptr<Session> destroy() override {
+  std::shared_ptr<Session> destroy() override final {
     std::lock_guard<std::recursive_mutex> mlock(mutex_);
     ctx_.TryCancel();  //TODO This is the correct way to handle this?
     while (!messages_to_send_.empty()) {

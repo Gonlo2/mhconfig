@@ -8,7 +8,7 @@ namespace stream
 {
 
 WatchOutputMessageImpl::WatchOutputMessageImpl(
-  std::shared_ptr<WatchStreamImpl> stream
+  std::weak_ptr<WatchStreamImpl>& stream
 )
   : stream_(stream)
 {
@@ -68,26 +68,23 @@ void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
 }
 
 bool WatchOutputMessageImpl::send(bool finish) {
-  bool ok = proto_response_.SerializeToOstream(&elements_data_);
-  if (ok) {
-    slice_ = grpc::Slice(elements_data_.str());
-    response_ = grpc::ByteBuffer(&slice_, 1);
-
-    return stream_->send(shared_from_this(), finish);
+  if (auto stream = stream_.lock()) {
+    if (proto_response_.SerializeToOstream(&elements_data_)) {
+      slice_ = grpc::Slice(elements_data_.str());
+      response_ = grpc::ByteBuffer(&slice_, 1);
+      return stream->send(shared_from_this(), finish);
+    }
   }
-
-  //TODO add support to close the stream without a message
-  return stream_->send(shared_from_this(), true);
   return false;
 }
 
 
 WatchInputMessageImpl::WatchInputMessageImpl(
   std::unique_ptr<mhconfig::proto::WatchRequest>&& request,
-  std::shared_ptr<WatchStreamImpl> stream
+  std::weak_ptr<WatchStreamImpl>&& stream
 )
   : request_(std::move(request)),
-    stream_(stream)
+    stream_(std::move(stream))
 {
   overrides_ = to_vector(request_->overrides());
 }
@@ -121,11 +118,13 @@ const std::string& WatchInputMessageImpl::document() const {
 }
 
 void WatchInputMessageImpl::unregister() {
-  if (stream_->unregister(uid())) {
-    auto output_message = make_output_message();
-    output_message->set_uid(uid());
-    output_message->set_status(watch::Status::REMOVED);
-    output_message->send();
+  if (auto stream = stream_.lock()) {
+    if (stream->unregister(uid())) {
+      auto output_message = make_output_message();
+      output_message->set_uid(uid());
+      output_message->set_status(watch::Status::REMOVED);
+      output_message->send();
+    }
   }
 }
 
@@ -233,12 +232,6 @@ void WatchStreamImpl::subscribe(
 bool WatchStreamImpl::unregister(uint32_t uid) {
   std::lock_guard<std::recursive_mutex> mlock(mutex_);
   return watcher_by_id_.erase(uid);
-}
-
-std::shared_ptr<Session> WatchStreamImpl::destroy() {
-  std::lock_guard<std::recursive_mutex> mlock(mutex_);
-  watcher_by_id_.clear();
-  return Session::destroy();
 }
 
 void WatchStreamImpl::request(
