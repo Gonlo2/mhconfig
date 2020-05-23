@@ -37,7 +37,7 @@ bool Service::start() {
 
   cqs_.reserve(thread_vars_.size());
   for (size_t i = 0; i < thread_vars_.size(); ++i) {
-    cqs_.emplace_back(builder.AddCompletionQueue());
+    cqs_.push_back(std::move(builder.AddCompletionQueue()));
   }
 
   server_ = builder.BuildAndStart();

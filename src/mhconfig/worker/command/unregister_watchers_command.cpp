@@ -8,9 +8,9 @@ namespace command
 {
 
 UnregisterWatchersCommand::UnregisterWatchersCommand(
-  std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>&& watchers_to_remove
+  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>>&& watchers
 )
-  : watchers_to_remove_(std::move(watchers_to_remove))
+  : watchers_(std::move(watchers))
 {
 }
 
@@ -24,8 +24,10 @@ std::string UnregisterWatchersCommand::name() const {
 bool UnregisterWatchersCommand::execute(
   context_t& context
 ) {
-  for (auto& watcher : watchers_to_remove_) {
-    watcher->unregister();
+  for (auto& weak_ptr : watchers_) {
+    if (auto watcher = weak_ptr.lock()) {
+      watcher->unregister();
+    }
   }
   return true;
 }

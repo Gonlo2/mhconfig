@@ -235,6 +235,12 @@ bool WatchStreamImpl::unregister(uint32_t uid) {
   return watcher_by_id_.erase(uid);
 }
 
+std::shared_ptr<Session> WatchStreamImpl::destroy() {
+  std::lock_guard<std::recursive_mutex> mlock(mutex_);
+  watcher_by_id_.clear();
+  return Session::destroy();
+}
+
 void WatchStreamImpl::request(
   std::unique_ptr<grpc::ByteBuffer>&& raw_req,
   SchedulerQueue::Sender* scheduler_sender

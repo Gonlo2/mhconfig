@@ -107,7 +107,7 @@ private:
   std::vector<std::string> key_;
 };
 
-class WatchStreamImpl
+class WatchStreamImpl final
   : public Stream<grpc::ByteBuffer, grpc::ByteBuffer, WatchOutputMessageImpl>,
     public std::enable_shared_from_this<WatchStreamImpl>
 {
@@ -127,6 +127,9 @@ public:
   ) override;
 
   bool unregister(uint32_t uid);
+
+  std::shared_ptr<Session> destroy() override;
+
 protected:
   friend class WatchOutputMessageImpl;
 

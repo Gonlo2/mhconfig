@@ -154,6 +154,14 @@ void RunGcCommand::remove_dead_pointers(
   size_t number_of_processed_pointers = 0;
   for (auto& it : context.namespace_by_path) {
     number_of_processed_pointers += it.second
+      ->watchers.size();
+
+    number_of_removed_dead_pointers += remove_expired_watchers(
+      it.second->watchers
+    );
+
+
+    number_of_processed_pointers += it.second
       ->merged_config_by_overrides_key.size();
 
     for (
@@ -192,9 +200,19 @@ void RunGcCommand::remove_namespaces(
     auto it = context.namespace_by_id.begin();
     it != context.namespace_by_id.end();
   ) {
+    remove_expired_watchers(it->second->watchers);
+
+    spdlog::trace(
+      "Checking the namespace '{}' with id {} (timestamp: {}, num_watchers: {})",
+      it->second->root_path,
+      it->first,
+      it->second->last_access_timestamp,
+      it->second->watchers.size()
+    );
+
     if (
       (it->second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp)
-      && (it->second->num_watchers == 0)
+      && it->second->watchers.empty()
     ) {
       spdlog::debug(
         "Removing the namespace '{}' with id {}",
@@ -223,7 +241,6 @@ void RunGcCommand::remove_namespaces(
     number_of_processed_namespaces
   );
 }
-
 
 void RunGcCommand::remove_versions(
   scheduler_context_t& context
@@ -264,15 +281,7 @@ void RunGcCommand::remove_versions(
           it_3 != override_by_key.end();
         ) {
           auto& watchers = it_3->second.watchers;
-          //TODO add some stats
-          for (size_t i = 0; i < watchers.size();) {
-            if (watchers[i].expired()) {
-              jmutils::swap_delete(watchers, i);
-              --(config_namespace->num_watchers);
-            } else {
-              ++i;
-            }
-          }
+          remove_expired_watchers(watchers);
 
           auto& raw_config_by_version = it_3->second.raw_config_by_version;
 
@@ -301,7 +310,7 @@ void RunGcCommand::remove_versions(
             it_4 = raw_config_by_version.erase(it_4);
           }
 
-          if (raw_config_by_version.empty() && it_3->second.watchers.empty()) {
+          if (raw_config_by_version.empty() && watchers.empty()) {
             spdlog::debug(
               "Removed override '{}' in the namespace '{}'",
               it_3->first,

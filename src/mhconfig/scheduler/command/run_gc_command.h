@@ -63,6 +63,22 @@ private:
     scheduler_context_t& context
   );
 
+  inline size_t remove_expired_watchers(
+    std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers
+  ) {
+    size_t removed = 0;
+    for (size_t i = 0; i < watchers.size();) {
+      if (watchers[i].expired()) {
+        spdlog::trace("Removing a watcher");
+        jmutils::swap_delete(watchers, i);
+        ++removed;
+      } else {
+        ++i;
+      }
+    }
+    return removed;
+  }
+
 };
 
 } /* command */

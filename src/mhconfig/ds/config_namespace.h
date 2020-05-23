@@ -95,7 +95,7 @@ struct config_namespace_t {
   uint32_t current_version{1};
   uint64_t id;
   uint64_t last_access_timestamp;
-  uint64_t num_watchers{0};
+  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
   std::string root_path;
 
   std::shared_ptr<::string_pool::Pool> pool;

@@ -17,7 +17,7 @@ class UnregisterWatchersCommand : public Command
 {
 public:
   UnregisterWatchersCommand(
-    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>&& watchers_to_remove
+    std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>>&& watchers
   );
   virtual ~UnregisterWatchersCommand();
 
@@ -28,7 +28,7 @@ public:
   ) override;
 
 private:
-  std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_to_remove_;
+  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_;
 };
 
 } /* command */

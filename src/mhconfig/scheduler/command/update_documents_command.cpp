@@ -147,7 +147,6 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
             ++i;
           } else {
             jmutils::swap_delete(watchers, i);
-            --(config_namespace.num_watchers);
           }
         }
       }
@@ -228,7 +227,6 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
             ++i;
           } else {
             jmutils::swap_delete(watchers, i);
-            --config_namespace.num_watchers;
           }
         }
       }

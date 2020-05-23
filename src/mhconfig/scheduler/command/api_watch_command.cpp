@@ -57,12 +57,12 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   for (const auto& override_: message_->overrides()) {
     auto& override_metadata = document_metadata->override_by_key[override_];
     //TODO Check if the overrides are distinct
-    override_metadata.watchers.emplace_back(message_);
+    override_metadata.watchers.push_back(message_);
     notify |= !override_metadata.raw_config_by_version.empty()
       && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
   }
 
-  config_namespace.num_watchers += message_->overrides().size();
+  config_namespace.watchers.push_back(message_);
 
   // If the asked merged config is already deprecated we notify the watcher
   if (notify) {
