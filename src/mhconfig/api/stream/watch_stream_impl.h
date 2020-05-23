@@ -66,6 +66,8 @@ public:
   const uint32_t version() const override;
   const std::string& document() const override;
 
+  void unregister() override;
+
   std::shared_ptr<WatchOutputMessage> make_output_message() override;
 
 private:
@@ -124,6 +126,7 @@ public:
     grpc::ServerCompletionQueue* cq
   ) override;
 
+  bool unregister(uint32_t uid);
 protected:
   friend class WatchOutputMessageImpl;
 

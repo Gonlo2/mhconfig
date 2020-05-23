@@ -13,6 +13,7 @@
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/setup_command.h"
+#include "mhconfig/worker/command/unregister_watchers_command.h"
 
 namespace mhconfig
 {

@@ -120,6 +120,15 @@ const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
 }
 
+void WatchInputMessageImpl::unregister() {
+  if (stream_->unregister(uid())) {
+    auto output_message = make_output_message();
+    output_message->set_uid(uid());
+    output_message->set_status(watch::Status::REMOVED);
+    output_message->send();
+  }
+}
+
 std::shared_ptr<WatchOutputMessage> WatchInputMessageImpl::make_output_message() {
   return std::make_shared<WatchOutputMessageImpl>(stream_);
 }
@@ -219,6 +228,11 @@ void WatchStreamImpl::subscribe(
   grpc::ServerCompletionQueue* cq
 ) {
   service->RequestWatch(&ctx_, &stream_, cq, cq, tag());
+}
+
+bool WatchStreamImpl::unregister(uint32_t uid) {
+  std::lock_guard<std::recursive_mutex> mlock(mutex_);
+  return watcher_by_id_.erase(uid);
 }
 
 void WatchStreamImpl::request(

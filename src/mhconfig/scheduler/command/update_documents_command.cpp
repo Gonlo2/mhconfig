@@ -235,24 +235,6 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     }
   }
 
-  for (auto& watcher : watchers_to_trigger) {
-    spdlog::debug(
-      "The document '{}' changed and it has a watcher",
-      watcher->document()
-    );
-    auto output_message = watcher->make_output_message();
-    output_message->set_uid(watcher->uid());
-
-    scheduler_queue.push(
-      std::make_unique<scheduler::command::ApiGetCommand>(
-        std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
-          watcher,
-          output_message
-        )
-      )
-    );
-  }
-
   update_request_->set_status(::mhconfig::api::request::update_request::OK);
   update_request_->set_version(config_namespace.current_version);
   send_api_response(worker_queue);
@@ -267,6 +249,24 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
       config_namespace.root_path
     );
     return NamespaceExecutionResult::SOFTDELETE_NAMESPACE;
+  } else {
+    for (auto& watcher : watchers_to_trigger) {
+      spdlog::debug(
+        "The document '{}' changed and it has a watcher",
+        watcher->document()
+      );
+      auto output_message = watcher->make_output_message();
+      output_message->set_uid(watcher->uid());
+
+      scheduler_queue.push(
+        std::make_unique<scheduler::command::ApiGetCommand>(
+          std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
+            watcher,
+            output_message
+          )
+        )
+      );
+    }
   }
 
   return NamespaceExecutionResult::OK;
