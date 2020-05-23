@@ -15,3 +15,7 @@ build/
 # ignore the grpc/protobuf sources
 *.pb.h
 *.pb.cc
+*_pb2.py
+*_pb2_grpc.py
+# python cache
+*.pyc
