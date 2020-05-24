@@ -65,6 +65,16 @@ TEST_CASE("String", "[string]") {
     REQUIRE(s.size() == 295);
     REQUIRE(s.is_small() == false);
   }
+
+  SECTION("Small string from std::string in utf8") {
+    String hello("¬¬");
+    REQUIRE(hello == "¬¬");
+    REQUIRE(hello.str() == "¬¬");
+    REQUIRE(hello.hash() == 742000476689ul);
+    REQUIRE(hello != "test");
+    REQUIRE(hello.size() == 4);
+    REQUIRE(hello.is_small() == true);
+  }
 }
 
 TEST_CASE("String pool", "[string-pool]") {

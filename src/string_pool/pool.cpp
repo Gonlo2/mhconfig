@@ -15,7 +15,7 @@ bool make_small_string(const std::string& str, uint64_t& result) {
   if (str.size() <= 7) {
     result = 0;
     for (ssize_t i = str.size()-1; i >= 0; --i) {
-      result |= str[i];
+      result |= static_cast<uint8_t>(str[i]);
       result <<= 8;
     }
     result |= (str.size()<<2) | 1;
