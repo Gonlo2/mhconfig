@@ -8,9 +8,10 @@ namespace request
 {
 
 RunGCRequestImpl::RunGCRequestImpl()
-  : Request(),
-    responder_(&ctx_)
+  : responder_(&ctx_)
 {
+  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::RunGCRequest>(&arena_);
+  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::RunGCResponse>(&arena_);
 }
 
 RunGCRequestImpl::~RunGCRequestImpl() {
@@ -31,7 +32,7 @@ void RunGCRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestRunGC(&ctx_, &request_, &responder_, cq, cq, tag());
+  service->RequestRunGC(&ctx_, request_, &responder_, cq, cq, tag());
 }
 
 bool RunGCRequestImpl::commit() {
@@ -52,7 +53,7 @@ void RunGCRequestImpl::request(
 }
 
 run_gc::Type RunGCRequestImpl::type() {
-  switch (request_.type()) {
+  switch (request_->type()) {
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
       return scheduler::command::run_gc::Type::CACHE_GENERATION_0;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
@@ -69,11 +70,11 @@ run_gc::Type RunGCRequestImpl::type() {
 }
 
 uint32_t RunGCRequestImpl::max_live_in_seconds() {
-  return request_.max_live_in_seconds();
+  return request_->max_live_in_seconds();
 }
 
 void RunGCRequestImpl::finish() {
-  responder_.Finish(response_, grpc::Status::OK, tag());
+  responder_.Finish(*response_, grpc::Status::OK, tag());
 }
 
 

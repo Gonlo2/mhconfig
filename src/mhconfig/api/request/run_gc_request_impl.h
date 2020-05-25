@@ -36,10 +36,11 @@ public:
   bool commit() override;
 
 protected:
+  google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<mhconfig::proto::RunGCResponse> responder_;
 
-  mhconfig::proto::RunGCRequest request_;
-  mhconfig::proto::RunGCResponse response_;
+  mhconfig::proto::RunGCRequest* request_;
+  mhconfig::proto::RunGCResponse* response_;
 
   void request(
     SchedulerQueue::Sender* scheduler_sender

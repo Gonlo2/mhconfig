@@ -41,10 +41,11 @@ public:
   bool commit() override;
 
 protected:
+  google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;
 
-  mhconfig::proto::UpdateRequest request_;
-  mhconfig::proto::UpdateResponse response_;
+  mhconfig::proto::UpdateRequest* request_;
+  mhconfig::proto::UpdateResponse* response_;
 
   std::vector<std::string> relative_paths_;
 

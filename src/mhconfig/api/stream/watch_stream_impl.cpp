@@ -12,64 +12,69 @@ WatchOutputMessageImpl::WatchOutputMessageImpl(
 )
   : stream_(stream)
 {
+  proto_response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::WatchResponse>(&arena_);
 }
 
 WatchOutputMessageImpl::~WatchOutputMessageImpl() {
 }
 
 void WatchOutputMessageImpl::set_uid(uint32_t uid) {
-  proto_response_.set_uid(uid);
+  proto_response_->set_uid(uid);
 }
 
 void WatchOutputMessageImpl::set_status(watch::Status status) {
   switch (status) {
     case watch::Status::OK:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
       break;
     case watch::Status::ERROR:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
       break;
     case watch::Status::INVALID_VERSION:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
       break;
     case watch::Status::REF_GRAPH_IS_NOT_DAG:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
       break;
     case watch::Status::UID_IN_USE:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
       break;
     case watch::Status::UNKNOWN_UID:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
       break;
     case watch::Status::REMOVED:
-      proto_response_.set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
       break;
   }
 }
 
 void WatchOutputMessageImpl::set_namespace_id(uint64_t namespace_id) {
-  proto_response_.set_namespace_id(namespace_id);
+  proto_response_->set_namespace_id(namespace_id);
 }
 
 void WatchOutputMessageImpl::set_version(uint32_t version) {
-  proto_response_.set_version(version);
+  proto_response_->set_version(version);
 }
 
 void WatchOutputMessageImpl::set_element(mhconfig::ElementRef element) {
   elements_data_.clear();
-  proto_response_.clear_elements();
-  mhconfig::api::config::fill_elements(element, &proto_response_, proto_response_.add_elements());
+  proto_response_->clear_elements();
+  mhconfig::api::config::fill_elements(
+    element,
+    proto_response_,
+    proto_response_->add_elements()
+  );
 }
 
 void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
   elements_data_.clear();
   elements_data_.write(data, len);
-  proto_response_.clear_elements();
+  proto_response_->clear_elements();
 }
 
 bool WatchOutputMessageImpl::send(bool finish) {
   if (auto stream = stream_.lock()) {
-    if (proto_response_.SerializeToOstream(&elements_data_)) {
+    if (proto_response_->SerializeToOstream(&elements_data_)) {
       slice_ = grpc::Slice(elements_data_.str());
       response_ = grpc::ByteBuffer(&slice_, 1);
       return stream->send(shared_from_this(), finish);
@@ -88,7 +93,6 @@ WatchInputMessageImpl::WatchInputMessageImpl(
 {
   overrides_ = to_vector(request_->overrides());
 }
-
 
 WatchInputMessageImpl::~WatchInputMessageImpl() {
 }
@@ -234,14 +238,21 @@ bool WatchStreamImpl::unregister(uint32_t uid) {
   return watcher_by_id_.erase(uid);
 }
 
+void WatchStreamImpl::prepare_next_request() {
+  next_req_.Clear();
+  stream_.Read(&next_req_, tag());
+}
+
 void WatchStreamImpl::request(
-  std::unique_ptr<grpc::ByteBuffer>&& raw_req,
   SchedulerQueue::Sender* scheduler_sender
 ) {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
-  bool ok = parse_from_byte_buffer(*raw_req, *req);
+  auto status = grpc::SerializationTraits<mhconfig::proto::WatchRequest>::Deserialize(
+    &next_req_,
+    req.get()
+  );
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
-  if (ok) {
+  if (status.ok()) {
     if (msg->remove()) {
       spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), tag());
       size_t removed_elements = watcher_by_id_.erase(msg->uid());

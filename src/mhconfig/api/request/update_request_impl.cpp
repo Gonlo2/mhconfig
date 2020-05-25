@@ -9,9 +9,10 @@ namespace request
 
 
 UpdateRequestImpl::UpdateRequestImpl()
-  : Request(),
-  responder_(&ctx_)
+  : responder_(&ctx_)
 {
+  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::UpdateRequest>(&arena_);
+  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::UpdateResponse>(&arena_);
 }
 
 UpdateRequestImpl::~UpdateRequestImpl() {
@@ -22,7 +23,7 @@ const std::string UpdateRequestImpl::name() const {
 }
 
 const std::string& UpdateRequestImpl::root_path() const {
-  return request_.root_path();
+  return request_->root_path();
 }
 
 const std::vector<std::string>& UpdateRequestImpl::relative_paths() const {
@@ -31,22 +32,22 @@ const std::vector<std::string>& UpdateRequestImpl::relative_paths() const {
 
 
 void UpdateRequestImpl::set_namespace_id(uint64_t namespace_id) {
-  response_.set_namespace_id(namespace_id);
+  response_->set_namespace_id(namespace_id);
 }
 
 void UpdateRequestImpl::set_status(update_request::Status status) {
   switch (status) {
     case update_request::Status::OK:
-      response_.set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_OK);
+      response_->set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_OK);
       break;
     case update_request::Status::ERROR:
-      response_.set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_ERROR);
+      response_->set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_ERROR);
       break;
   }
 }
 
 void UpdateRequestImpl::set_version(uint32_t version) {
-  response_.set_version(version);
+  response_->set_version(version);
 }
 
 bool UpdateRequestImpl::commit() {
@@ -64,13 +65,13 @@ void UpdateRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestUpdate(&ctx_, &request_, &responder_, cq, cq, tag());
+  service->RequestUpdate(&ctx_, request_, &responder_, cq, cq, tag());
 }
 
 void UpdateRequestImpl::request(
   SchedulerQueue::Sender* scheduler_sender
 ) {
-  relative_paths_ = to_vector(request_.relative_paths());
+  relative_paths_ = to_vector(request_->relative_paths());
 
   scheduler_sender->push(
     std::make_unique<scheduler::command::ApiUpdateCommand>(
@@ -80,7 +81,7 @@ void UpdateRequestImpl::request(
 }
 
 void UpdateRequestImpl::finish() {
-  responder_.Finish(response_, grpc::Status::OK, tag());
+  responder_.Finish(*response_, grpc::Status::OK, tag());
 }
 
 

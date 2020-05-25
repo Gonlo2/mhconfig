@@ -8,6 +8,8 @@
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_watch_command.h"
 
+#include <grpcpp/impl/codegen/serialization_traits.h>
+
 #include "spdlog/spdlog.h"
 
 namespace mhconfig
@@ -43,8 +45,9 @@ protected:
   grpc::ByteBuffer response_;
 
 private:
+  google::protobuf::Arena arena_;
+  mhconfig::proto::WatchResponse* proto_response_;
   std::weak_ptr<WatchStreamImpl> stream_;
-  mhconfig::proto::WatchResponse proto_response_;
   std::stringstream elements_data_;
 
   grpc::Slice slice_;
@@ -131,12 +134,14 @@ public:
 protected:
   friend class WatchOutputMessageImpl;
 
+  void prepare_next_request() override;
+
   void request(
-    std::unique_ptr<grpc::ByteBuffer>&& raw_req,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
 
 private:
+  grpc::ByteBuffer next_req_;
   std::unordered_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
 };
 

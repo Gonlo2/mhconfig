@@ -26,11 +26,6 @@ std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_re
   return result;
 }
 
-bool parse_from_byte_buffer(
-  const grpc::ByteBuffer& buffer,
-  grpc::protobuf::Message& message
-);
-
 template<typename T, typename... Args>
 inline std::shared_ptr<T> make_session(Args&&... args)
 {

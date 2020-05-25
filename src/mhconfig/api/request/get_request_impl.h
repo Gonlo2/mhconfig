@@ -7,6 +7,8 @@
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_get_command.h"
 
+#include <grpcpp/impl/codegen/serialization_traits.h>
+
 namespace mhconfig
 {
 namespace api
@@ -46,12 +48,13 @@ public:
   bool commit() override;
 
 protected:
+  google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;
 
   grpc::ByteBuffer raw_request_;
 
-  mhconfig::proto::GetRequest request_;
-  mhconfig::proto::GetResponse response_;
+  mhconfig::proto::GetRequest* request_;
+  mhconfig::proto::GetResponse* response_;
 
   std::stringstream elements_data_;
 

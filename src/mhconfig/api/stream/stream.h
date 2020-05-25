@@ -59,7 +59,7 @@ public:
         //TODO add request metrics
         prepare_next_request();
       } else if (status_ == Status::PROCESS) {
-        request(std::move(next_req_), scheduler_sender);
+        request(scheduler_sender);
         prepare_next_request();
         send_message_if_neccesary();
       } else if (status_ == Status::WRITING) {
@@ -87,8 +87,10 @@ protected:
   grpc::ServerAsyncReaderWriter<Resp, Req> stream_;
 
   //TODO Use this with CRTP
+  virtual void prepare_next_request() = 0;
+
+  //TODO Use this with CRTP
   virtual void request(
-    std::unique_ptr<Req>&& req,
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
 
@@ -127,13 +129,7 @@ private:
   Status status_{Status::CREATE};
 
   std::queue<std::shared_ptr<OutMsg>> messages_to_send_;
-  std::unique_ptr<Req> next_req_;
   bool going_to_finish_{false};
-
-  void prepare_next_request() {
-    next_req_ = std::make_unique<Req>();
-    stream_.Read(next_req_.get(), tag());
-  }
 
   void send_message_if_neccesary() {
     if (!messages_to_send_.empty()) {

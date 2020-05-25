@@ -12,6 +12,7 @@
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 #include <grpcpp/security/server_credentials.h>
+#include <google/protobuf/arena.h>
 
 #include "mhconfig/common.h"
 #include "mhconfig/scheduler/command/command.h"
@@ -55,6 +56,7 @@ private:
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
   std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_;
+
 
   void subscribe_requests(
     grpc::ServerCompletionQueue* cq

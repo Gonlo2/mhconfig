@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package mhconfig.proto;
 
+option cc_enable_arenas = true;
+
 service MHConfig {
   // Public methods
   rpc Get(GetRequest) returns (GetResponse);
