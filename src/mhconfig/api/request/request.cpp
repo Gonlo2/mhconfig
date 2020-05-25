@@ -17,7 +17,8 @@ std::shared_ptr<Session> Request::proceed(
   CustomService* service,
   grpc::ServerCompletionQueue* cq,
   SchedulerQueue::Sender* scheduler_sender,
-  metrics::MetricsService& metrics
+  metrics::MetricsService& metrics,
+  uint_fast32_t& sequential_id
 ) {
   std::lock_guard<std::recursive_mutex> mlock(mutex_);
   if (is_destroyed()) {
@@ -28,15 +29,17 @@ std::shared_ptr<Session> Request::proceed(
     if (status_ == Status::CREATE) {
       status_ = Status::PROCESS;
 
-      clone_and_subscribe(service, cq);
-
-      if ((((uintptr_t)tag()) & 0xfff) == 0) {
+      metricate_ = (sequential_id & 0xff) == 0;
+      sequential_id = (sequential_id+1) & 0xefffffff;
+      if (metricate_) {
         start_time_ = jmutils::time::monotonic_now();
       }
 
+      clone_and_subscribe(service, cq);
+
       request(scheduler_sender);
     } else if (status_ == Status::FINISH) {
-      if ((((uintptr_t)tag()) & 0xfff) == 0) {
+      if (metricate_) {
         auto end_time = jmutils::time::monotonic_now();
 
         double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

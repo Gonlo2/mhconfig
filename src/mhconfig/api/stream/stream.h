@@ -42,7 +42,8 @@ public:
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService& metrics,
+    uint_fast32_t& sequential_id
   ) override {
     std::lock_guard<std::recursive_mutex> mlock(mutex_);
     if (is_destroyed()) {

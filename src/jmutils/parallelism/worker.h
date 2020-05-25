@@ -50,7 +50,7 @@ private:
   void run() {
     spdlog::debug("Started the worker");
 
-    uint_fast32_t sequential_id{0};
+    uint_fast32_t sequential_id = 0;
 
     while (true) {
       spdlog::debug("The worker is waiting for a command");

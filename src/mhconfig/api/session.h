@@ -76,7 +76,8 @@ public:
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService& metrics,
+    uint_fast32_t& sequential_id
   ) = 0;
 
   inline void* tag() {

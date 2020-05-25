@@ -76,6 +76,7 @@ void Service::handle_requests(
   void* tag;
   bool got_event;
   bool ok;
+  uint_fast32_t sequential_id = 0;
   do {
     got_event = cq->Next(&tag, &ok);
     if (!got_event) {
@@ -89,7 +90,8 @@ void Service::handle_requests(
             &service_,
             cq,
             scheduler_sender.get(),
-            metrics
+            metrics,
+            sequential_id
           );
         } else {
           spdlog::debug("The completion queue event {} isn't ok, destroying it", tag);

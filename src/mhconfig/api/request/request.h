@@ -30,7 +30,8 @@ public:
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService& metrics,
+    uint_fast32_t& sequential_id
   ) override;
 
   bool reply();
@@ -50,6 +51,7 @@ private:
 
   jmutils::time::MonotonicTimePoint start_time_;
   Status status_{Status::CREATE};
+  bool metricate_;
 
   const std::string status();
 
