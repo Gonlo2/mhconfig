@@ -131,7 +131,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 bool SetDocumentsCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
-  wait_build_->request->set_element(UNDEFINED_ELEMENT);
+  wait_build_->request->set_element(UNDEFINED_ELEMENT.get());
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(

@@ -67,7 +67,7 @@ void GetRequestImpl::set_version(uint32_t version) {
   response_->set_version(version);
 }
 
-void GetRequestImpl::set_element(mhconfig::ElementRef element) {
+void GetRequestImpl::set_element(mhconfig::Element* element) {
   elements_data_.clear();
   response_->clear_elements();
   mhconfig::api::config::fill_elements(element, response_, response_->add_elements());
@@ -114,7 +114,7 @@ void GetRequestImpl::request(
       )
     );
   } else {
-    set_element(UNDEFINED_ELEMENT);
+    set_element(UNDEFINED_ELEMENT.get());
     reply();
   }
 }

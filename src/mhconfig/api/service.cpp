@@ -110,7 +110,7 @@ void Service::handle_requests(
 void Service::subscribe_requests(
   grpc::ServerCompletionQueue* cq
 ) {
-  for (size_t i = 0; i < 100; ++i) { //TODO configure the number of requests
+  for (size_t i = 0; i < 32; ++i) { //TODO configure the number of requests
     auto get_request = make_session<request::GetRequestImpl>();
     get_request->subscribe(&service_, cq);
 

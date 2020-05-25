@@ -35,8 +35,8 @@ typedef std::unique_ptr<Command> CommandRef;
 } /* command */
 } /* scheduler */
 
-typedef jmutils::container::MPSCQueue<mhconfig::scheduler::command::CommandRef, 16> SchedulerQueue;
-typedef jmutils::container::SPMCQueue<mhconfig::worker::command::CommandRef, 16> WorkerQueue;
+typedef jmutils::container::MPSCQueue<mhconfig::scheduler::command::CommandRef, 12> SchedulerQueue;
+typedef jmutils::container::SPMCQueue<mhconfig::worker::command::CommandRef, 12> WorkerQueue;
 
 namespace scheduler
 {

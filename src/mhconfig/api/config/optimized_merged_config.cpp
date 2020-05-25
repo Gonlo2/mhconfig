@@ -8,7 +8,7 @@ namespace config
 {
 
 uint32_t make_elements_ranges_map_rec(
-  mhconfig::ElementRef root,
+  mhconfig::Element* root,
   uint32_t& idx,
   const std::string& skey,
   bool add,
@@ -32,7 +32,7 @@ uint32_t make_elements_ranges_map_rec(
         jmutils::push_str(new_skey, it.first.str());
 
         uint32_t sibling_offset = make_elements_ranges_map_rec(
-          it.second,
+          it.second.get(),
           idx,
           new_skey,
           add,
@@ -55,7 +55,7 @@ uint32_t make_elements_ranges_map_rec(
 
       for (const auto x : root->as_sequence()) {
         parent_sibling_offset += make_elements_ranges_map_rec(
-          x,
+          x.get(),
           idx,
           skey,
           false,
@@ -73,7 +73,7 @@ uint32_t make_elements_ranges_map_rec(
 
 
 void make_elements_ranges_map(
-  mhconfig::ElementRef root,
+  mhconfig::Element* root,
   std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>>& output
 ) {
   uint32_t idx = 0;
@@ -102,7 +102,7 @@ OptimizedMergedConfig::~OptimizedMergedConfig() {
 }
 
 bool OptimizedMergedConfig::init(
-  ElementRef element,
+  Element* element,
   std::shared_ptr<::string_pool::Pool> pool,
   metrics::MetricsService& metrics_service
 ) {
@@ -211,7 +211,7 @@ void OptimizedMergedConfig::add_elements(
     );
   } else {
     spdlog::trace("Can't find the key '{}'", (void*)api_request);
-    api_request->set_element(mhconfig::UNDEFINED_ELEMENT);
+    api_request->set_element(mhconfig::UNDEFINED_ELEMENT.get());
   }
 }
 

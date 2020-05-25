@@ -34,7 +34,7 @@ public:
   void set_status(watch::Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
-  void set_element(mhconfig::ElementRef element) override;
+  void set_element(mhconfig::Element* element) override;
   void set_element_bytes(const char* data, size_t len) override;
 
   bool send(bool finish = false) override;
@@ -98,7 +98,7 @@ public:
   void set_status(::mhconfig::api::request::get_request::Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
-  void set_element(mhconfig::ElementRef element) override;
+  void set_element(mhconfig::Element* element) override;
   void set_element_bytes(const char* data, size_t len) override;
 
   bool commit() override;

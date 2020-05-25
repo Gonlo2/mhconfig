@@ -56,7 +56,7 @@ void WatchOutputMessageImpl::set_version(uint32_t version) {
   proto_response_->set_version(version);
 }
 
-void WatchOutputMessageImpl::set_element(mhconfig::ElementRef element) {
+void WatchOutputMessageImpl::set_element(mhconfig::Element* element) {
   elements_data_.clear();
   proto_response_->clear_elements();
   mhconfig::api::config::fill_elements(
@@ -194,7 +194,7 @@ void WatchGetRequest::set_version(uint32_t version) {
   output_message_->set_version(version);
 }
 
-void WatchGetRequest::set_element(mhconfig::ElementRef element) {
+void WatchGetRequest::set_element(mhconfig::Element* element) {
   output_message_->set_element(element);
 }
 

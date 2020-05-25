@@ -50,7 +50,7 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
       get_request_->document()
     );
 
-    get_request_->set_element(UNDEFINED_ELEMENT);
+    get_request_->set_element(UNDEFINED_ELEMENT.get());
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
   }

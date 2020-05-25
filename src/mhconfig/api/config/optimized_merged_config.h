@@ -20,7 +20,7 @@ namespace config
 {
 
 uint32_t make_elements_ranges_map_rec(
-  mhconfig::ElementRef root,
+  mhconfig::Element* root,
   uint32_t& idx,
   const std::string& skey,
   bool add,
@@ -28,7 +28,7 @@ uint32_t make_elements_ranges_map_rec(
 );
 
 void make_elements_ranges_map(
-  mhconfig::ElementRef root,
+  mhconfig::Element* root,
   std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>>& output
 );
 
@@ -48,7 +48,7 @@ public:
   OptimizedMergedConfig(OptimizedMergedConfig&&) = delete;
 
   bool init(
-    ElementRef element,
+    Element* element,
     std::shared_ptr<::string_pool::Pool> pool,
     metrics::MetricsService& metrics_service
   );

@@ -16,7 +16,7 @@ namespace config
 
 template <typename T>
 uint32_t fill_elements(
-  mhconfig::ElementRef root,
+  mhconfig::Element* root,
   T* container,
   ::mhconfig::proto::Element* output
 ) {
@@ -46,7 +46,7 @@ uint32_t fill_elements(
       for (const auto& it : root->as_map()) {
         value = container->add_elements();
 
-        uint32_t sibling_offset = fill_elements(it.second, container, value);
+        uint32_t sibling_offset = fill_elements(it.second.get(), container, value);
         value->set_key(it.first.str());
         value->set_sibling_offset(sibling_offset-1);
 
@@ -66,7 +66,7 @@ uint32_t fill_elements(
       for (const auto x : root->as_sequence()) {
         value = container->add_elements();
 
-        uint32_t sibling_offset = fill_elements(x, container, value);
+        uint32_t sibling_offset = fill_elements(x.get(), container, value);
         value->set_sibling_offset(sibling_offset-1);
 
         parent_sibling_offset += sibling_offset;

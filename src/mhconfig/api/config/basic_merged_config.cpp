@@ -24,7 +24,7 @@ void BasicMergedConfig::add_elements(
     element = element->get(::string_pool::make_string(s, &internal_string));
   }
 
-  api_request->set_element(element);
+  api_request->set_element(element.get());
 }
 
 } /* config */

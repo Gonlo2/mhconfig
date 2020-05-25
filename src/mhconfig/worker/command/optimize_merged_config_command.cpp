@@ -33,7 +33,7 @@ bool OptimizeMergedConfigCommand::execute(
 ) {
   auto optimized_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
   bool ok = optimized_merged_config->init(
-    merged_config_->value,
+    merged_config_->value.get(),
     pool_,
     context.metrics_service
   );
