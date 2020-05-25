@@ -19,8 +19,9 @@ void BasicMergedConfig::add_elements(
   request::GetRequest* api_request
 ) {
   ElementRef element = element_;
+  ::string_pool::InternalString internal_string;
   for (const auto& s: api_request->key()) {
-    element = element->get(::string_pool::String(s));
+    element = element->get(::string_pool::make_string(s, &internal_string));
   }
 
   api_request->set_element(element);

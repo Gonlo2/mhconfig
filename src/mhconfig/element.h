@@ -38,7 +38,7 @@ namespace mhconfig {
   const static ElementRef UNDEFINED_ELEMENT{std::make_shared<Element>()};
 
   const static std::string DATA_TAG_EMPTY{"?"};
-  const static Literal TAG_EMPTY{::string_pool::String(DATA_TAG_EMPTY)};
+  const static Literal TAG_EMPTY{::string_pool::make_small_string(DATA_TAG_EMPTY)};
 
   namespace conversion
   {

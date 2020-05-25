@@ -9,7 +9,8 @@ namespace string_pool {
 
 TEST_CASE("String", "[string]") {
   SECTION("Small string from std::string") {
-    String hello("hello");
+    InternalString internal_string;
+    String hello = make_string("hello", &internal_string);
     REQUIRE(hello == "hello");
     REQUIRE(hello.str() == "hello");
     REQUIRE(hello.hash() == 122511465736213ul);
@@ -29,7 +30,8 @@ TEST_CASE("String", "[string]") {
   }
 
   SECTION("Small+ string from std::string") {
-    String remembered("remembered");
+    InternalString internal_string;
+    String remembered = make_string("remembered", &internal_string);
     REQUIRE(remembered == "remembered");
     REQUIRE(remembered.str() == "remembered");
     REQUIRE(remembered.hash() == 883906214080811291ull);
@@ -49,15 +51,17 @@ TEST_CASE("String", "[string]") {
   }
 
   SECTION("Potential small+ string from std::string") {
-    String remembered("127.0.0.1");
-    REQUIRE(remembered == "127.0.0.1");
-    REQUIRE(remembered.size() == 9);
-    REQUIRE(remembered.is_small() == false);
+    InternalString internal_string;
+    String s = make_string("127.0.0.1", &internal_string);
+    REQUIRE(s == "127.0.0.1");
+    REQUIRE(s.size() == 9);
+    REQUIRE(s.is_small() == false);
   }
 
   SECTION("Large string from std::string") {
+    InternalString internal_string;
     std::string lorem("Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.");
-    String s(lorem);
+    String s = make_string(lorem, &internal_string);
     REQUIRE(s == lorem);
     REQUIRE(s.str() == lorem);
     REQUIRE(s.hash() == 10109368953727484612ul);
@@ -67,13 +71,14 @@ TEST_CASE("String", "[string]") {
   }
 
   SECTION("Small string from std::string in utf8") {
-    String hello("¬¬");
-    REQUIRE(hello == "¬¬");
-    REQUIRE(hello.str() == "¬¬");
-    REQUIRE(hello.hash() == 742000476689ul);
-    REQUIRE(hello != "test");
-    REQUIRE(hello.size() == 4);
-    REQUIRE(hello.is_small() == true);
+    InternalString internal_string;
+    String s = make_string("¬¬", &internal_string);
+    REQUIRE(s == "¬¬");
+    REQUIRE(s.str() == "¬¬");
+    REQUIRE(s.hash() == 742000476689ul);
+    REQUIRE(s != "test");
+    REQUIRE(s.size() == 4);
+    REQUIRE(s.is_small() == true);
   }
 }
 
@@ -101,34 +106,35 @@ TEST_CASE("String pool", "[string-pool]") {
       strings.push_back(pool.add(lorem));
     }
     REQUIRE(pool.stats().num_strings == 1);
+    REQUIRE(pool.stats().num_chunks == 1);
   }
 
   SECTION("Automatic chunk cleanup after string removal") {
     Pool pool;
     std::vector<String> strings;
-    for (size_t i = 0; i < 500; ++i) {
+    for (size_t i = 0; i < 150; ++i) {
       std::string s(10000, '\0');
       s[i] = 'x';
       strings.push_back(pool.add(s));
     }
-    REQUIRE(pool.stats().num_strings == 500);
+    REQUIRE(pool.stats().num_strings == 150);
     REQUIRE(pool.stats().num_chunks == 2);
 
     strings.clear();
 
-    REQUIRE(pool.stats().num_strings < 500);
+    REQUIRE(pool.stats().num_strings < 150);
     REQUIRE(pool.stats().num_chunks == 2);
   }
 
   SECTION("Force pool compaction") {
     Pool pool;
     std::vector<String> strings;
-    for (size_t i = 0; i < 500; ++i) {
+    for (size_t i = 0; i < 150; ++i) {
       std::string s(10000, '\0');
       s[i] = 'x';
       strings.push_back(pool.add(s));
     }
-    REQUIRE(pool.stats().num_strings == 500);
+    REQUIRE(pool.stats().num_strings == 150);
     REQUIRE(pool.stats().num_chunks == 2);
 
     strings.clear();
@@ -137,12 +143,12 @@ TEST_CASE("String pool", "[string-pool]") {
     REQUIRE(pool.stats().num_strings == 0);
     REQUIRE(pool.stats().num_chunks == 2);
 
-    for (size_t i = 0; i < 500; ++i) {
+    for (size_t i = 0; i < 150; ++i) {
       std::string s(10000, '\0');
       s[i] = 'x';
       strings.push_back(pool.add(s));
     }
-    REQUIRE(pool.stats().num_strings == 500);
+    REQUIRE(pool.stats().num_strings == 150);
     REQUIRE(pool.stats().num_chunks == 2);
   }
 
