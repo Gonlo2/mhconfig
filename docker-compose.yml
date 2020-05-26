@@ -5,8 +5,8 @@ volumes:
     grafana_data: {}
 
 services:
-  cpp-builder:
-    image: cpp-builder:0.1
+  builder:
+    image: mhconfig-builder:0.1
     network_mode: host
     ulimits:
       nproc: 65535

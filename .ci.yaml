@@ -17,17 +17,17 @@ workflows:
 
 tasks:
   prepare: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - /source/prepare.sh
 
   prepare_fast: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - [/source/prepare.sh, --only-install]
 
   build_src: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - [cd, "/source"]
     - [protoc, "-I=src/", "--grpc_out=src/", "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin", "src/mhconfig/proto/mhconfig.proto"]
@@ -38,7 +38,7 @@ tasks:
     - [make, -j8, mhconfig]
 
   build_src_release: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - [cd, "/source"]
     - [protoc, "-I=src/", "--grpc_out=src/", "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin", "src/mhconfig/proto/mhconfig.proto"]
@@ -49,7 +49,7 @@ tasks:
     - [make, -j8, mhconfig]
 
   build_tests: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - [cd, "/source"]
     - [protoc, "-I=src/", "--grpc_out=src/", "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin", "src/mhconfig/proto/mhconfig.proto"]
@@ -60,7 +60,7 @@ tasks:
     - [make, -j8, tests]
 
   run_tests: !docker
-    image: cpp-builder
+    image: builder
     commands:
     - [cd, "/source/build"]
     - [./tests]

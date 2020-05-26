@@ -22,7 +22,7 @@ First of all you need to build the docker-image
 
 ```bash
 cd dockerfiles/cpp-builder/
-docker build -t cpp-builder:0.1  .
+docker build -t mhconfig-builder:0.1  .
 ```
 
 After that go to the root path, prepare the thirdparties and build the server
