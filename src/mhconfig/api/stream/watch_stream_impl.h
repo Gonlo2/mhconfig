@@ -69,7 +69,7 @@ public:
   const uint32_t version() const override;
   const std::string& document() const override;
 
-  void unregister() override;
+  bool unregister() override;
 
   std::shared_ptr<WatchOutputMessage> make_output_message() override;
 

@@ -27,6 +27,10 @@ bool UnregisterWatchersCommand::execute(
   for (auto& weak_ptr : watchers_) {
     if (auto watcher = weak_ptr.lock()) {
       watcher->unregister();
+
+      auto output_message = watcher->make_output_message();
+      output_message->set_status(::mhconfig::api::stream::watch::Status::REMOVED);
+      output_message->send();
     }
   }
   return true;

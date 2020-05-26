@@ -57,7 +57,7 @@ public:
   virtual const uint32_t version() const = 0;
   virtual const std::string& document() const = 0;
 
-  virtual void unregister() = 0;
+  virtual bool unregister() = 0;
 
   virtual std::shared_ptr<WatchOutputMessage> make_output_message() = 0;
 };

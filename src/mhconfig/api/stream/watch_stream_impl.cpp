@@ -121,19 +121,17 @@ const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
 }
 
-void WatchInputMessageImpl::unregister() {
+bool WatchInputMessageImpl::unregister() {
   if (auto stream = stream_.lock()) {
-    if (stream->unregister(uid())) {
-      auto output_message = make_output_message();
-      output_message->set_uid(uid());
-      output_message->set_status(watch::Status::REMOVED);
-      output_message->send();
-    }
+    return stream->unregister(uid());
   }
+  return false;
 }
 
 std::shared_ptr<WatchOutputMessage> WatchInputMessageImpl::make_output_message() {
-  return std::make_shared<WatchOutputMessageImpl>(stream_);
+  auto msg = std::make_shared<WatchOutputMessageImpl>(stream_);
+  msg->set_uid(request_->uid());
+  return msg;
 }
 
 
@@ -257,7 +255,6 @@ void WatchStreamImpl::request(
       spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), tag());
       size_t removed_elements = watcher_by_id_.erase(msg->uid());
       auto out_msg = msg->make_output_message();
-      out_msg->set_uid(msg->uid());
       out_msg->set_status(
         (removed_elements == 0) ? watch::Status::UNKNOWN_UID : watch::Status::REMOVED
       );
@@ -273,14 +270,12 @@ void WatchStreamImpl::request(
         );
       } else {
         auto out_msg = msg->make_output_message();
-        out_msg->set_uid(msg->uid());
         out_msg->set_status(watch::Status::UID_IN_USE);
         out_msg->send();
       }
     }
   } else {
     auto out_msg = msg->make_output_message();
-    out_msg->set_uid(msg->uid());
     out_msg->set_status(watch::Status::ERROR);
     out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }

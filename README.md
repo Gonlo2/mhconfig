@@ -218,6 +218,7 @@ message WatchResponse {
   uint32 uid = 1;
   enum Status {
     OK = 0;
+    // if some error take place the watcher will be removed
     ERROR = 1;
     // has been requested a removed or inexistent version
     INVALID_VERSION = 2;

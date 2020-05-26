@@ -37,7 +37,6 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   // First we check if the asked version is lower that the current one
   if (config_namespace.current_version < message_->version()) {
     auto output_message = message_->make_output_message();
-    output_message->set_uid(message_->uid());
     output_message->set_status(::mhconfig::api::stream::watch::Status::INVALID_VERSION);
 
     worker_queue.push(
@@ -68,7 +67,6 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   if (notify) {
     spdlog::debug("The document '{}' has been changed", message_->document());
     auto output_message = message_->make_output_message();
-    output_message->set_uid(message_->uid());
 
     scheduler_queue.push(
       std::make_unique<scheduler::command::ApiGetCommand>(
@@ -86,8 +84,9 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
 bool ApiWatchCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
+  message_->unregister();
+
   auto output_message = message_->make_output_message();
-  output_message->set_uid(message_->uid());
   output_message->set_status(::mhconfig::api::stream::watch::Status::ERROR);
 
   worker_queue.push(

@@ -253,14 +253,12 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
         "The document '{}' changed and it has a watcher",
         watcher->document()
       );
-      auto output_message = watcher->make_output_message();
-      output_message->set_uid(watcher->uid());
 
       scheduler_queue.push(
         std::make_unique<scheduler::command::ApiGetCommand>(
           std::make_shared<::mhconfig::api::stream::WatchGetRequest>(
             watcher,
-            output_message
+            watcher->make_output_message()
           )
         )
       );
