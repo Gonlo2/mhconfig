@@ -56,16 +56,15 @@ bool UpdateCommand::execute(
 bool UpdateCommand::add_items(
   std::vector<load_raw_config_result_t>& items
 ) {
-  for (const std::string& relative_path : update_request_->relative_paths()) {
-    std::string path = jmutils::filesystem::join_paths(
-      update_request_->root_path(),
-      relative_path
-    );
-
+  std::filesystem::path root_path(update_request_->root_path());
+  for (const std::string& x : update_request_->relative_paths()) {
+    // TODO check the format of the input files when the
+    // new update api is ready
+    std::filesystem::path relative_path(x);
     auto result = load_raw_config(
       pool_,
-      update_request_->root_path(),
-      path
+      root_path / relative_path,
+      relative_path
     );
     switch (result.status) {
       case LoadRawConfigStatus::OK: // Fallback
@@ -73,7 +72,6 @@ bool UpdateCommand::add_items(
         items.push_back(result);
         continue;
 
-      case LoadRawConfigStatus::INVALID_FILE: // Fallback
       case LoadRawConfigStatus::ERROR:
         return false;
     }

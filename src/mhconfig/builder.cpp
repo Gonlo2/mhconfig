@@ -8,7 +8,7 @@ namespace builder
 // Setup logic
 
 std::shared_ptr<config_namespace_t> index_files(
-  const std::string& root_path,
+  const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
 ) {
   auto config_namespace = std::make_shared<config_namespace_t>();
@@ -20,35 +20,34 @@ std::shared_ptr<config_namespace_t> index_files(
     std::make_unique<::mhconfig::string_pool::MetricsStatsObserver>(metrics, root_path)
   );
 
-  spdlog::debug("To index the files in the path '{}'", root_path);
+  spdlog::debug("To index the files in the path '{}'", root_path.string());
 
-  boost::system::error_code error_code;
+  std::error_code error_code;
   std::vector<std::string> paths;
   for (
-    boost::filesystem::recursive_directory_iterator it(root_path, error_code), end;
+    std::filesystem::recursive_directory_iterator it(root_path, error_code), end;
     !error_code && (it != end);
     ++it
   ) {
-    auto filename = it->path().filename().string();
-    if (!filename.empty() && (filename[0] == '.')) {
-      it.no_push();
-    } else if (boost::filesystem::is_regular_file(it->path()) && (it->path().extension() == ".yaml")) {
+    if (it->path().filename().native()[0] == '.') {
+      it.disable_recursion_pending();
+    } else if (it->is_regular_file() && (it->path().extension() == ".yaml")) {
+      auto relative_path = std::filesystem::relative(it->path(), root_path)
+        .parent_path();
+
       auto result = load_raw_config(
         config_namespace->pool,
-        root_path,
-        it->path().string()
+        it->path(),
+        relative_path
       );
-      if (result.status == LoadRawConfigStatus::INVALID_FILE) {
-        continue;
-      } else if (result.status != LoadRawConfigStatus::OK) {
+      if (result.status != LoadRawConfigStatus::OK) {
         return config_namespace;
       }
 
       std::shared_ptr<document_metadata_t> document_metadata = nullptr;
       {
-        auto search = config_namespace->document_metadata_by_document.find(
-          result.document
-        );
+        auto search = config_namespace->document_metadata_by_document
+          .find(result.document);
         if (search == config_namespace->document_metadata_by_document.end()) {
           document_metadata = std::make_shared<document_metadata_t>();
           config_namespace->document_metadata_by_document[
@@ -67,7 +66,7 @@ std::shared_ptr<config_namespace_t> index_files(
   if (error_code) {
     spdlog::error(
       "Some error take place obtaining the files on '{}': {}",
-      root_path,
+      root_path.string(),
       error_code.message()
     );
 
@@ -113,57 +112,39 @@ std::shared_ptr<config_namespace_t> index_files(
 
 load_raw_config_result_t load_raw_config(
   std::shared_ptr<::string_pool::Pool> pool,
-  const std::string& root_path,
-  const std::string& path
+  const std::filesystem::path& path,
+  const std::filesystem::path& relative_path
 ) {
   load_raw_config_result_t result;
   result.status = LoadRawConfigStatus::ERROR;
 
   try {
-    auto file_name_and_ext = jmutils::filesystem::file_name_and_extension(path);
-    if (file_name_and_ext.second != ".yaml") {
-      spdlog::error(
-        "The config filetype must be '.yaml' (path: '{}')",
-        path
-      );
-      result.status = LoadRawConfigStatus::INVALID_FILE;
-      return result;
-    }
-
-    result.document = file_name_and_ext.first;
-    result.override_ = jmutils::filesystem::relative_parent_path(
-      path,
-      root_path
-    );
-
-    if (!jmutils::filesystem::is_regular_file(path)) {
-      result.status = jmutils::filesystem::exists(path)
-        ? LoadRawConfigStatus::INVALID_FILE
-        : LoadRawConfigStatus::FILE_DONT_EXISTS;
-
-      return result;
-    }
-
-    spdlog::debug("Loading YAML (path: '{}')", path);
+    spdlog::debug("Loading YAML (path: '{}')", path.string());
     YAML::Node node = YAML::LoadFile(path);
 
+    result.document = path.stem().string();
+    result.override_ = relative_path.string();
     result.raw_config = std::make_shared<raw_config_t>();
     result.raw_config->value = make_and_check_element(
       pool,
       node,
       result.raw_config->reference_to
     );
+  } catch(const YAML::BadFile &e) {
+    spdlog::debug("The file '{}' is a bad guy", path.string());
+    result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
+    return result;
   } catch (const std::exception &e) {
     spdlog::error(
       "Error making the element (path: '{}'): {}",
-      path,
+      path.string(),
       e.what()
     );
     return result;
   } catch(...) {
     spdlog::error(
       "Unknown error making the element (path: '{}')",
-      path
+      path.string()
     );
     return result;
   }

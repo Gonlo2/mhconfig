@@ -4,12 +4,11 @@
 #include "mhconfig/string_pool.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/ds/config_namespace.h"
-#include "jmutils/filesystem/common.h"
+#include "yaml-cpp/exceptions.h"
 #include "jmutils/common.h"
 #include "jmutils/time.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/system/error_code.hpp>
+#include <filesystem>
 
 #include "spdlog/spdlog.h"
 
@@ -28,7 +27,6 @@ const static std::string TAG_OVERRIDE{"!override"};
 
 enum LoadRawConfigStatus {
   OK,
-  INVALID_FILE,
   FILE_DONT_EXISTS,
   ERROR
 };
@@ -41,14 +39,14 @@ struct load_raw_config_result_t {
 };
 
 std::shared_ptr<config_namespace_t> index_files(
-  const std::string& root_path,
+  const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
 );
 
 load_raw_config_result_t load_raw_config(
   std::shared_ptr<::string_pool::Pool> pool,
-  const std::string& root_path,
-  const std::string& relative_path
+  const std::filesystem::path& path,
+  const std::filesystem::path& relative_path
 );
 
 ElementRef override_with(
