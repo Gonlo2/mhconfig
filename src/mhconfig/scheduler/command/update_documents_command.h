@@ -30,7 +30,7 @@ public:
   UpdateDocumentsCommand(
     uint64_t namespace_id,
     std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request,
-    std::vector<load_raw_config_result_t> items
+    std::vector<load_raw_config_result_t>&& items
   );
 
   virtual ~UpdateDocumentsCommand();
@@ -57,6 +57,29 @@ private:
 
   void send_api_response(
     WorkerQueue& worker_queue
+  );
+
+  void fill_config_to_remove(
+    config_namespace_t& config_namespace,
+    std::vector<std::pair<std::string, std::string>>& result
+  );
+
+  void filter_existing_documents(
+    config_namespace_t& config_namespace
+  );
+
+  void decrease_references(
+    config_namespace_t& config_namespace
+  );
+
+  void increment_version_of_the_affected_documents(
+    config_namespace_t& config_namespace,
+    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
+  );
+
+  void insert_updated_documents(
+    config_namespace_t& config_namespace,
+    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
   );
 
   void get_affected_documents(

@@ -22,54 +22,34 @@ std::shared_ptr<config_namespace_t> index_files(
 
   spdlog::debug("To index the files in the path '{}'", root_path.string());
 
-  std::error_code error_code;
-  std::vector<std::string> paths;
-  for (
-    std::filesystem::recursive_directory_iterator it(root_path, error_code), end;
-    !error_code && (it != end);
-    ++it
-  ) {
-    if (it->path().filename().native()[0] == '.') {
-      it.disable_recursion_pending();
-    } else if (it->is_regular_file() && (it->path().extension() == ".yaml")) {
-      auto relative_path = std::filesystem::relative(it->path(), root_path)
-        .parent_path();
-
-      auto result = load_raw_config(
-        config_namespace->pool,
-        it->path(),
-        relative_path
-      );
+  bool ok = index_files(
+    config_namespace->pool.get(),
+    root_path,
+    [&](load_raw_config_result_t&& result) {
       if (result.status != LoadRawConfigStatus::OK) {
-        return config_namespace;
+        return false;
       }
 
       std::shared_ptr<document_metadata_t> document_metadata = nullptr;
-      {
-        auto search = config_namespace->document_metadata_by_document
-          .find(result.document);
-        if (search == config_namespace->document_metadata_by_document.end()) {
-          document_metadata = std::make_shared<document_metadata_t>();
-          config_namespace->document_metadata_by_document[
-            result.document
-          ] = document_metadata;
-        } else {
-          document_metadata = search->second;
-        }
+      auto search = config_namespace->document_metadata_by_document
+        .find(result.document);
+      if (search == config_namespace->document_metadata_by_document.end()) {
+        search = config_namespace->document_metadata_by_document.emplace(
+          result.document,
+          std::make_shared<document_metadata_t>()
+        ).first;
       }
 
       result.raw_config->id = config_namespace->next_raw_config_id++;
-      document_metadata->override_by_key[result.override_].raw_config_by_version[1] = result.raw_config;
+      search->second
+        ->override_by_key[result.override_]
+        .raw_config_by_version[1] = result.raw_config;
+
+      return true;
     }
-  }
+  );
 
-  if (error_code) {
-    spdlog::error(
-      "Some error take place obtaining the files on '{}': {}",
-      root_path.string(),
-      error_code.message()
-    );
-
+  if (!ok) {
     return config_namespace;
   }
 
@@ -111,7 +91,7 @@ std::shared_ptr<config_namespace_t> index_files(
 }
 
 load_raw_config_result_t load_raw_config(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   const std::filesystem::path& path,
   const std::filesystem::path& relative_path
 ) {
@@ -119,22 +99,40 @@ load_raw_config_result_t load_raw_config(
   result.status = LoadRawConfigStatus::ERROR;
 
   try {
-    spdlog::debug("Loading YAML (path: '{}')", path.string());
-    YAML::Node node = YAML::LoadFile(path);
-
     result.document = path.stem().string();
     result.override_ = relative_path.string();
+
+    if (!std::filesystem::exists(path)) {
+      spdlog::debug("The file '{}' don't exists", path.string());
+      result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
+      return result;
+    }
+
+    spdlog::debug("Loading YAML (path: '{}')", path.string());
+    std::ifstream fin(path.string());
+    if (!fin.good()) {
+      spdlog::error("Some error take place reading the file '{}'", path.string());
+      return result;
+    }
+
+    // TODO Move this to a function
+    std::string data;
+    fin.seekg(0, std::ios::end);
+    data.reserve(fin.tellg());
+    fin.seekg(0, std::ios::beg);
+    data.assign(std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>());
+
+    YAML::Node node = YAML::Load(data);
+
+    // TODO Avoid import zlib only to calculate the crc32
     result.raw_config = std::make_shared<raw_config_t>();
+    result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
     result.raw_config->value = make_and_check_element(
       pool,
       node,
       result.raw_config->reference_to
     );
   } catch(const YAML::BadFile &e) {
-    spdlog::debug("The file '{}' is a bad guy", path.string());
-    result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-    return result;
-  } catch (const std::exception &e) {
     spdlog::error(
       "Error making the element (path: '{}'): {}",
       path.string(),
@@ -151,6 +149,13 @@ load_raw_config_result_t load_raw_config(
 
   result.status = LoadRawConfigStatus::OK;
   return result;
+}
+
+bool is_a_valid_filename(
+  const std::filesystem::path& path
+) {
+  return (path.extension() == ".yaml")
+      && (path.filename().native()[0] != '.');
 }
 
 ElementRef override_with(
@@ -273,7 +278,7 @@ NodeType get_virtual_node_type(
 }
 
 ElementRef apply_tags(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   ElementRef element,
   ElementRef root,
   const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
@@ -344,7 +349,7 @@ ElementRef apply_tags(
 }
 
 ElementRef apply_tag_format(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   ElementRef element
 ) {
   if (!element->is_sequence() || (element->as_sequence().size() != 2)) {
@@ -551,7 +556,7 @@ ElementRef apply_tag_sref(
  * All the structure checks must be done here
  */
 ElementRef make_and_check_element(
-    std::shared_ptr<::string_pool::Pool> pool,
+    ::string_pool::Pool* pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
@@ -583,7 +588,7 @@ ElementRef make_and_check_element(
 }
 
 ElementRef make_element(
-    std::shared_ptr<::string_pool::Pool> pool,
+    ::string_pool::Pool* pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
@@ -675,6 +680,16 @@ std::shared_ptr<merged_config_t> get_merged_config(
     .erase(search);
 
   return nullptr;
+}
+
+bool has_last_version(
+  const override_metadata_t& override_metadata
+) {
+  if (override_metadata.raw_config_by_version.empty()) {
+    return false;
+  }
+
+  return override_metadata.raw_config_by_version.crbegin()->second != nullptr;
 }
 
 } /* builder */

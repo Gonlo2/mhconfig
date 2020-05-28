@@ -36,18 +36,35 @@ bool UpdateCommand::execute(
   std::vector<load_raw_config_result_t> items;
   items.reserve(update_request_->relative_paths().size());
 
-  if (!add_items(items)) {
-    update_request_->set_namespace_id(namespace_id_);
-    update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
-    update_request_->commit();
+  bool ok;
+  if (update_request_->reload()) {
+    ok = index_files(
+      pool_.get(),
+      update_request_->root_path(),
+      [&](load_raw_config_result_t&& result) {
+        if (result.status != LoadRawConfigStatus::OK) {
+          return false;
+        }
+        items.emplace_back(std::move(result));
+        return true;
+      }
+    );
   } else {
+    ok = add_items(items);
+  }
+
+  if (ok) {
     context.scheduler_queue->push(
       std::make_unique<::mhconfig::scheduler::command::UpdateDocumentsCommand>(
         namespace_id_,
         update_request_,
-        items
+        std::move(items)
       )
     );
+  } else {
+    update_request_->set_namespace_id(namespace_id_);
+    update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
+    update_request_->commit();
   }
 
   return true;
@@ -58,14 +75,13 @@ bool UpdateCommand::add_items(
 ) {
   std::filesystem::path root_path(update_request_->root_path());
   for (const std::string& x : update_request_->relative_paths()) {
-    // TODO check the format of the input files when the
-    // new update api is ready
-    std::filesystem::path relative_path(x);
-    auto result = load_raw_config(
-      pool_,
-      root_path / relative_path,
-      relative_path
-    );
+    std::filesystem::path relative_file_path(x);
+    auto path = root_path / relative_file_path;
+    if (!is_a_valid_filename(path)) {
+      return false;
+    }
+
+    auto result = load_raw_config(pool_.get(), path, relative_file_path.parent_path());
     switch (result.status) {
       case LoadRawConfigStatus::OK: // Fallback
       case LoadRawConfigStatus::FILE_DONT_EXISTS:

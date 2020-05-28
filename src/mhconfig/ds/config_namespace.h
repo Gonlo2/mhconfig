@@ -31,6 +31,7 @@ const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 
 struct raw_config_t {
   uint32_t id{0};
+  uint32_t crc32{0};
   ElementRef value{nullptr};
   std::unordered_set<std::string> reference_to;
 };

@@ -33,6 +33,7 @@ public:
 
   const std::string& root_path() const override;
   const std::vector<std::string>& relative_paths() const override;
+  bool reload() const override;
 
   void set_namespace_id(uint64_t namespace_id) override;
   void set_status(update_request::Status status) override;

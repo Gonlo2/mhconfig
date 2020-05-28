@@ -30,6 +30,9 @@ const std::vector<std::string>& UpdateRequestImpl::relative_paths() const {
   return relative_paths_;
 }
 
+bool UpdateRequestImpl::reload() const {
+  return request_->reload();
+}
 
 void UpdateRequestImpl::set_namespace_id(uint64_t namespace_id) {
   response_->set_namespace_id(namespace_id);

@@ -299,7 +299,7 @@ void RunGcCommand::remove_versions(
             it_4 = raw_config_by_version.erase(it_4);
           }
 
-          if (!raw_config_by_version.empty() && (it_4->second->value == nullptr)) {
+          if (!raw_config_by_version.empty() && (it_4->second == nullptr)) {
             spdlog::debug(
               "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
               it_4->first,

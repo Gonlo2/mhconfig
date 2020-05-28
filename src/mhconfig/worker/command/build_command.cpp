@@ -67,7 +67,7 @@ bool BuildCommand::execute(
 
       config = (config == nullptr)
         ? UNDEFINED_ELEMENT
-        : mhconfig::builder::apply_tags(pool_, config, config, ref_elements_by_document);
+        : mhconfig::builder::apply_tags(pool_.get(), config, config, ref_elements_by_document);
 
       command::build::built_element_t built_element;
       built_element.overrides_key = build_element.overrides_key;

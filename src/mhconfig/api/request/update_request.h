@@ -31,6 +31,7 @@ public:
 
   virtual const std::string& root_path() const = 0;
   virtual const std::vector<std::string>& relative_paths() const = 0;
+  virtual bool reload() const = 0;
 
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_status(update_request::Status status) = 0;

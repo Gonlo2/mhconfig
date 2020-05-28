@@ -1,14 +1,17 @@
 #ifndef MHCONFIG__BUILDER_H
 #define MHCONFIG__BUILDER_H
 
+#include <filesystem>
+#include <fstream>
+
+#include <zlib.h>
+
 #include "mhconfig/string_pool.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/ds/config_namespace.h"
 #include "yaml-cpp/exceptions.h"
 #include "jmutils/common.h"
 #include "jmutils/time.h"
-
-#include <filesystem>
 
 #include "spdlog/spdlog.h"
 
@@ -43,11 +46,52 @@ std::shared_ptr<config_namespace_t> index_files(
   metrics::MetricsService& metrics
 );
 
+bool is_a_valid_filename(
+  const std::filesystem::path& path
+);
+
 load_raw_config_result_t load_raw_config(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   const std::filesystem::path& path,
   const std::filesystem::path& relative_path
 );
+
+template <typename T>
+bool index_files(
+  ::string_pool::Pool* pool,
+  const std::filesystem::path& root_path,
+  T lambda
+) {
+  spdlog::debug("To index the files in the path '{}'", root_path.string());
+
+  std::error_code error_code;
+  for (
+    std::filesystem::recursive_directory_iterator it(root_path, error_code), end;
+    !error_code && (it != end);
+    ++it
+  ) {
+    if (it->path().filename().native()[0] == '.') {
+      it.disable_recursion_pending();
+    } else if (it->is_regular_file() && is_a_valid_filename(it->path())) {
+      auto relative_path = std::filesystem::relative(it->path(), root_path)
+        .parent_path();
+
+      if (!lambda(load_raw_config(pool, it->path(), relative_path))) {
+        return false;
+      }
+    }
+  }
+
+  if (error_code) {
+    spdlog::error(
+      "Some error take place obtaining the files on '{}': {}",
+      root_path.string(),
+      error_code.message()
+    );
+  }
+
+  return !error_code;
+}
 
 ElementRef override_with(
   ElementRef a,
@@ -58,14 +102,14 @@ ElementRef override_with(
 NodeType get_virtual_node_type(ElementRef element);
 
 ElementRef apply_tags(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   ElementRef element,
   ElementRef root,
   const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
 );
 
 ElementRef apply_tag_format(
-  std::shared_ptr<::string_pool::Pool> pool,
+  ::string_pool::Pool* pool,
   ElementRef element
 );
 
@@ -89,15 +133,15 @@ ElementRef apply_tag_sref(
  * All the structure checks must be done here
  */
 ElementRef make_and_check_element(
-    std::shared_ptr<::string_pool::Pool> pool,
-    YAML::Node &node,
-    std::unordered_set<std::string> &reference_to
+  ::string_pool::Pool* pool,
+  YAML::Node &node,
+  std::unordered_set<std::string> &reference_to
 );
 
 ElementRef make_element(
-    std::shared_ptr<::string_pool::Pool> pool,
-    YAML::Node &node,
-    std::unordered_set<std::string> &reference_to
+  ::string_pool::Pool* pool,
+  YAML::Node &node,
+  std::unordered_set<std::string> &reference_to
 );
 
 // Get logic
@@ -148,7 +192,7 @@ void with_raw_config(
   }
 
   --raw_config_search;
-  if (raw_config_search->second->value == nullptr) {
+  if (raw_config_search->second == nullptr) {
     spdlog::trace(
       "The raw_config value is deleted for the version {}",
       raw_config_search->first
@@ -163,6 +207,10 @@ void with_raw_config(
 
   lambda(raw_config_search->second);
 }
+
+bool has_last_version(
+  const override_metadata_t& override_metadata
+);
 
 } /* builder */
 } /* mhconfig */

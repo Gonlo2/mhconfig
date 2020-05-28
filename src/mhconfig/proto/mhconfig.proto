@@ -48,8 +48,12 @@ message GetResponse {
 message UpdateRequest {
   // the root path of the namespace that has been changed.
   string root_path = 1;
-  // the list of paths to check for changes, this apply to creations, modifications and deletions.
+  // the list of paths to check for changes, this apply to creations,
+  // modifications and deletions.
   repeated string relative_paths = 2;
+  // reload all the config files of the namespace, if this flag is
+  // on the relative_paths are ignored
+  bool reload = 3;
 }
 
 message UpdateResponse {
