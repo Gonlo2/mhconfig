@@ -4,8 +4,6 @@
 #include <memory>
 
 #include "mhconfig/api/request/get_request.h"
-#include "mhconfig/api/config/basic_merged_config.h"
-#include "mhconfig/api/config/optimized_merged_config.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/worker/command/api_get_reply_command.h"
 #include "mhconfig/worker/command/api_reply_command.h"
@@ -28,8 +26,7 @@ class SetDocumentsCommand : public Command
 public:
   SetDocumentsCommand(
     uint64_t namespace_id,
-    std::shared_ptr<build::wait_built_t> wait_build,
-    std::unordered_map<std::string, build::built_element_t> built_elements_by_document
+    std::shared_ptr<build::wait_built_t>&& wait_build
   );
 
   virtual ~SetDocumentsCommand();
@@ -52,7 +49,6 @@ public:
 private:
   uint64_t namespace_id_;
   std::shared_ptr<build::wait_built_t> wait_build_;
-  std::unordered_map<std::string, build::built_element_t> built_elements_by_document_;
 };
 
 } /* command */

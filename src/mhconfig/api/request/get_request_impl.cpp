@@ -26,7 +26,7 @@ const std::string& GetRequestImpl::root_path() const {
   return request_->root_path();
 }
 
-const uint32_t GetRequestImpl::version() const {
+uint32_t GetRequestImpl::version() const {
   return request_->version();
 }
 
@@ -38,22 +38,22 @@ const std::string& GetRequestImpl::document() const {
   return request_->document();
 }
 
-const std::vector<std::string>& GetRequestImpl::key() const {
-  return key_;
+const std::string& GetRequestImpl::template_() const {
+  return request_->template_();
 }
 
-void GetRequestImpl::set_status(get_request::Status status) {
+void GetRequestImpl::set_status(Status status) {
   switch (status) {
-    case get_request::Status::OK:
+    case Status::OK:
       response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_OK);
       break;
-    case get_request::Status::ERROR:
+    case Status::ERROR:
       response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_ERROR);
       break;
-    case get_request::Status::INVALID_VERSION:
+    case Status::INVALID_VERSION:
       response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_INVALID_VERSION);
       break;
-    case get_request::Status::REF_GRAPH_IS_NOT_DAG:
+    case Status::REF_GRAPH_IS_NOT_DAG:
       response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_REF_GRAPH_IS_NOT_DAG);
       break;
   }
@@ -77,6 +77,10 @@ void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
   elements_data_.clear();
   elements_data_.write(data, len);
   response_->clear_elements();
+}
+
+void GetRequestImpl::set_template_rendered(const std::string& data) {
+  response_->set_template_rendered(data);
 }
 
 bool GetRequestImpl::commit() {
@@ -106,7 +110,6 @@ void GetRequestImpl::request(
   );
   if (status.ok()) {
     overrides_ = to_vector(request_->overrides());
-    key_ = to_vector(request_->key());
 
     scheduler_sender->push(
       std::make_unique<scheduler::command::ApiGetCommand>(

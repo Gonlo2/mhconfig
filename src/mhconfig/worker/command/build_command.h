@@ -9,6 +9,8 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/builder.h"
 
+#include <nlohmann/json.hpp>
+
 namespace mhconfig
 {
 namespace worker
@@ -18,6 +20,11 @@ namespace command
 
 using namespace mhconfig::ds::config_namespace;
 
+bool fill_json(
+  mhconfig::Element* root,
+  nlohmann::json& output
+);
+
 class BuildCommand : public Command
 {
 public:
@@ -25,7 +32,7 @@ public:
   BuildCommand(
     uint64_t namespace_id,
     std::shared_ptr<::string_pool::Pool> pool,
-    std::shared_ptr<build::wait_built_t> wait_build
+    std::shared_ptr<build::wait_built_t>&& wait_build
   );
   virtual ~BuildCommand();
 

@@ -8,12 +8,10 @@ namespace command
 {
 
 OptimizeMergedConfigCommand::OptimizeMergedConfigCommand(
-  std::shared_ptr<merged_config_t> merged_config,
-  std::shared_ptr<::string_pool::Pool> pool
+  std::shared_ptr<merged_config_t> merged_config
 )
   : Command(),
-  merged_config_(merged_config),
-  pool_(pool)
+  merged_config_(merged_config)
 {
 }
 
@@ -31,19 +29,29 @@ bool OptimizeMergedConfigCommand::force_take_metric() const {
 bool OptimizeMergedConfigCommand::execute(
   context_t& context
 ) {
-  auto optimized_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>();
-  bool ok = optimized_merged_config->init(
+  ::mhconfig::proto::GetResponse get_response;
+  std::string data;
+
+  ::mhconfig::api::config::fill_elements(
     merged_config_->value.get(),
-    pool_,
-    context.metrics_service
+    &get_response,
+    get_response.add_elements()
   );
-  if (ok) {
+
+  if (get_response.SerializeToString(&data)) {
+    context.metrics_service.observe(
+      metrics::MetricsService::ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+      {},
+      data.size()
+    );
+
     // This works only because the the api merged config object is modified only in the
     // scheduler thread and that modification trigger this command, so at this point
     // this thread is the only place where this variable is modified.
     // If some other MergedConfig strategy is made THIS SHOULD BE CHANGED TO SWAP IT IN
     // THE SCHEDULER THREAD
-    merged_config_->api_merged_config = optimized_merged_config;
+    //TODO
+    //merged_config_->api_merged_config = std::make_shared<mhconfig::api::config::OptimizedMergedConfig>(std::move(data));
   } else {
     spdlog::warn("Can't optimize the config of the document");
   }

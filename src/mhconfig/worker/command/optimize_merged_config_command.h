@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "mhconfig/api/config/optimized_merged_config.h"
+#include "mhconfig/api/config/common.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/builder.h"
 
@@ -23,8 +23,7 @@ class OptimizeMergedConfigCommand : public Command
 {
 public:
   OptimizeMergedConfigCommand(
-    std::shared_ptr<merged_config_t> merged_config,
-    std::shared_ptr<::string_pool::Pool> pool
+    std::shared_ptr<merged_config_t> merged_config
   );
   virtual ~OptimizeMergedConfigCommand();
 
@@ -38,7 +37,6 @@ public:
 
 private:
   std::shared_ptr<merged_config_t> merged_config_;
-  std::shared_ptr<::string_pool::Pool> pool_;
 };
 
 } /* command */

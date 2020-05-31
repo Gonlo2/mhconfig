@@ -18,7 +18,7 @@ namespace metrics
   class SyncMetricsService : public MetricsService
   {
   public:
-    SyncMetricsService(const std::string& address);
+    explicit SyncMetricsService(const std::string& address);
     virtual ~SyncMetricsService();
 
     void init();
@@ -44,16 +44,16 @@ namespace metrics
       {0.99, 0.001}
     };
 
-    prometheus::Family<prometheus::Summary>* family_api_duration_summary_;
-    prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_;
-    prometheus::Family<prometheus::Summary>* family_worker_duration_summary_;
-    prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_;
-    prometheus::Family<prometheus::Summary>* family_optimized_merged_config_used_bytes_summary_;
+    prometheus::Family<prometheus::Summary>* family_api_duration_summary_{nullptr};
+    prometheus::Family<prometheus::Summary>* family_scheduler_duration_summary_{nullptr};
+    prometheus::Family<prometheus::Summary>* family_worker_duration_summary_{nullptr};
+    prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_{nullptr};
+    prometheus::Family<prometheus::Summary>* family_optimized_merged_config_used_bytes_summary_{nullptr};
 
-    prometheus::Family<prometheus::Gauge>* family_string_pool_num_strings_gauge_;
-    prometheus::Family<prometheus::Gauge>* family_string_pool_num_chunks_gauge_;
-    prometheus::Family<prometheus::Gauge>* family_string_pool_reclaimed_bytes_gauge_;
-    prometheus::Family<prometheus::Gauge>* family_string_pool_used_bytes_gauge_;
+    prometheus::Family<prometheus::Gauge>* family_string_pool_num_strings_gauge_{nullptr};
+    prometheus::Family<prometheus::Gauge>* family_string_pool_num_chunks_gauge_{nullptr};
+    prometheus::Family<prometheus::Gauge>* family_string_pool_reclaimed_bytes_gauge_{nullptr};
+    prometheus::Family<prometheus::Gauge>* family_string_pool_used_bytes_gauge_{nullptr};
   };
 
 } /* metrics */

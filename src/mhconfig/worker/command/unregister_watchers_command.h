@@ -16,7 +16,7 @@ namespace command
 class UnregisterWatchersCommand : public Command
 {
 public:
-  UnregisterWatchersCommand(
+  explicit UnregisterWatchersCommand(
     std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>>&& watchers
   );
   virtual ~UnregisterWatchersCommand();

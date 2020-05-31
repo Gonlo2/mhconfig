@@ -34,8 +34,6 @@ public:
   virtual ~Stream() {
   }
 
-  virtual const std::string name() const = 0;
-
   //TODO move this function to the private sections and make the
   //class Service friend of this
   std::shared_ptr<Session> proceed(

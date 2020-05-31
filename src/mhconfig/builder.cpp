@@ -7,6 +7,13 @@ namespace builder
 
 // Setup logic
 
+bool is_a_valid_filename(
+  const std::filesystem::path& path
+) {
+  auto start = path.filename().native()[0];
+  return (start != '.') && ((start == '_') || (path.extension() == ".yaml"));
+}
+
 std::shared_ptr<config_namespace_t> index_files(
   const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
@@ -90,72 +97,58 @@ std::shared_ptr<config_namespace_t> index_files(
   return config_namespace;
 }
 
-load_raw_config_result_t load_raw_config(
-  ::string_pool::Pool* pool,
+load_raw_config_result_t load_yaml_raw_config(
+  const std::string& document,
+  const std::string& override_,
   const std::filesystem::path& path,
-  const std::filesystem::path& relative_path
+  ::string_pool::Pool* pool
 ) {
-  load_raw_config_result_t result;
-  result.status = LoadRawConfigStatus::ERROR;
+  return load_raw_config(
+    document,
+    override_,
+    path,
+    [pool](const std::string& data, load_raw_config_result_t& result) {
+      YAML::Node node = YAML::Load(data);
 
-  try {
-    result.document = path.stem().string();
-    result.override_ = relative_path.string();
-
-    if (!std::filesystem::exists(path)) {
-      spdlog::debug("The file '{}' don't exists", path.string());
-      result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-      return result;
+      result.raw_config->value = make_and_check_element(
+        pool,
+        node,
+        result.raw_config->reference_to
+      );
     }
-
-    spdlog::debug("Loading YAML (path: '{}')", path.string());
-    std::ifstream fin(path.string());
-    if (!fin.good()) {
-      spdlog::error("Some error take place reading the file '{}'", path.string());
-      return result;
-    }
-
-    // TODO Move this to a function
-    std::string data;
-    fin.seekg(0, std::ios::end);
-    data.reserve(fin.tellg());
-    fin.seekg(0, std::ios::beg);
-    data.assign(std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>());
-
-    YAML::Node node = YAML::Load(data);
-
-    // TODO Avoid import zlib only to calculate the crc32
-    result.raw_config = std::make_shared<raw_config_t>();
-    result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
-    result.raw_config->value = make_and_check_element(
-      pool,
-      node,
-      result.raw_config->reference_to
-    );
-  } catch(const YAML::BadFile &e) {
-    spdlog::error(
-      "Error making the element (path: '{}'): {}",
-      path.string(),
-      e.what()
-    );
-    return result;
-  } catch(...) {
-    spdlog::error(
-      "Unknown error making the element (path: '{}')",
-      path.string()
-    );
-    return result;
-  }
-
-  result.status = LoadRawConfigStatus::OK;
-  return result;
+  );
 }
 
-bool is_a_valid_filename(
+load_raw_config_result_t load_template_raw_config(
+  const std::string& document,
+  const std::string& override_,
   const std::filesystem::path& path
 ) {
-  return (path.extension() == ".yaml")
-      && (path.filename().native()[0] != '.');
+  return load_raw_config(
+    document,
+    override_,
+    path,
+    [](const std::string& data, load_raw_config_result_t& result) {
+      result.raw_config->template_ = std::make_shared<inja::Template>();
+      result.raw_config->template_->content = data;
+
+      {
+        inja::ParserConfig parser_config;
+        inja::LexerConfig lexer_config;
+        inja::TemplateStorage included_templates;
+        ForbiddenIncludeStrategy include_strategy;
+
+        inja::Parser parser(
+          parser_config,
+          lexer_config,
+          included_templates,
+          include_strategy
+        );
+
+        parser.parse_into(*result.raw_config->template_, "");
+      }
+    }
+  );
 }
 
 ElementRef override_with(
@@ -637,12 +630,10 @@ ElementRef make_element(
 
 std::shared_ptr<merged_config_t> get_or_build_merged_config(
   config_namespace_t& config_namespace,
-  const std::string& document,
   const std::string& overrides_key
 ) {
   auto merged_config = get_merged_config(
     config_namespace,
-    document,
     overrides_key
   );
   if (merged_config == nullptr) {
@@ -657,7 +648,6 @@ std::shared_ptr<merged_config_t> get_or_build_merged_config(
 
 std::shared_ptr<merged_config_t> get_merged_config(
   config_namespace_t& config_namespace,
-  const std::string& document,
   const std::string& overrides_key
 ) {
   // First we search if exists cached some mergd config using the overrides_key

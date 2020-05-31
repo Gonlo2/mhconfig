@@ -9,11 +9,19 @@ namespace command
 
 ApiGetReplyCommand::ApiGetReplyCommand(
   std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
-  std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
+  const std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>& merged_config
 )
-  : Command(),
-  request_(std::move(request)),
-  api_merged_config_(api_merged_config)
+  : request_(std::move(request)),
+  merged_config_(merged_config)
+{
+}
+
+ApiGetReplyCommand::ApiGetReplyCommand(
+  std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
+  std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>&& merged_config
+)
+  : request_(std::move(request)),
+  merged_config_(std::move(merged_config))
 {
 }
 
@@ -27,7 +35,17 @@ std::string ApiGetReplyCommand::name() const {
 bool ApiGetReplyCommand::execute(
   context_t& context
 ) {
-  api_merged_config_->add_elements(request_.get());
+  switch (merged_config_->status) {
+    case MergedConfigStatus::UNDEFINED:  // Fallback
+    case MergedConfigStatus::BUILDING:
+      assert(false);
+    case MergedConfigStatus::OK_CONFIG_NORMAL:
+      request_->set_element(merged_config_->value.get());
+      break;
+    case MergedConfigStatus::OK_TEMPLATE:
+      request_->set_template_rendered(merged_config_->preprocesed_value);
+      break;
+  }
   request_->commit();
   return true;
 }

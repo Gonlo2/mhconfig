@@ -50,14 +50,11 @@ private:
     WorkerQueue& worker_queue
   );
 
-  void send_api_get_response(
-    WorkerQueue& worker_queue,
-    std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
-  );
-
   NamespaceExecutionResult prepare_build_request(
     config_namespace_t& config_namespace,
-    WorkerQueue& worker_queue
+    WorkerQueue& worker_queue,
+    const std::string& overrides_key,
+    std::shared_ptr<inja::Template>&& template_
   );
 
   std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(
@@ -89,24 +86,95 @@ private:
   );
 
   // Help functions
-  inline void make_overrides_key(
-    const document_metadata_t& document_metadata,
+  inline void add_config_overrides_key(
+    const document_metadata_t* document_metadata,
     const std::vector<std::string>& overrides,
     uint32_t version,
     std::string& overrides_key
   ) {
-    overrides_key.clear();
-    overrides_key.reserve(overrides.size()*4);
-    for (auto& override_: overrides) {
+    for (size_t i = overrides.size(); i--;) {
       with_raw_config(
         document_metadata,
-        override_,
+        overrides[i],
         version,
         [&overrides_key](auto& raw_config) {
           jmutils::push_uint32(overrides_key, raw_config->id);
         }
       );
     }
+  }
+
+  inline void add_template_overrides_key(
+    const document_metadata_t* document_metadata,
+    const std::vector<std::string>& overrides,
+    uint32_t version,
+    std::string& overrides_key,
+    std::shared_ptr<inja::Template>& template_
+  ) {
+    template_ = nullptr;
+    for (size_t i = overrides.size(); (template_ == nullptr) && i--;) {
+      with_raw_config(
+        document_metadata,
+        overrides[i],
+        version,
+        [&](auto& raw_config) {
+          template_ = raw_config->template_;
+          jmutils::push_uint32(overrides_key, raw_config->id);
+        }
+      );
+    }
+  }
+
+  inline bool add_overrides_key(
+    config_namespace_t& config_namespace,
+    std::string& overrides_key,
+    std::shared_ptr<inja::Template>& template_
+  ) {
+    if (!get_request_->template_().empty()) {
+      auto search = config_namespace.document_metadata_by_document
+        .find(get_request_->template_());
+
+      template_ = nullptr;
+      if (search != config_namespace.document_metadata_by_document.end()) {
+        add_template_overrides_key(
+          search->second.get(),
+          get_request_->overrides(),
+          get_request_->version(),
+          overrides_key,
+          template_
+        );
+      }
+      if (template_ == nullptr) {
+        spdlog::warn(
+          "Can't found a template file with the name '{}'",
+          get_request_->template_()
+        );
+        get_request_->set_status(
+          ::mhconfig::api::request::GetRequest::Status::ERROR
+        );
+        return false;
+      }
+    }
+
+    auto search = config_namespace.document_metadata_by_document
+      .find(get_request_->document());
+
+    if (search == config_namespace.document_metadata_by_document.end()) {
+      spdlog::warn(
+        "Can't found a config file with the name '{}'",
+        get_request_->document()
+      );
+      get_request_->set_element(UNDEFINED_ELEMENT.get());
+      return false;
+    }
+    add_config_overrides_key(
+      search->second.get(),
+      get_request_->overrides(),
+      get_request_->version(),
+      overrides_key
+    );
+
+    return true;
   }
 
   inline uint32_t get_specific_version(

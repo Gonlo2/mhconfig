@@ -22,7 +22,7 @@ First of all you need to build the docker-image
 
 ```bash
 cd dockerfiles/cpp-builder/
-docker build -t mhconfig-builder:0.1  .
+docker build -t mhconfig-builder:0.2  .
 ```
 
 After that go to the root path, prepare the thirdparties and build the server
@@ -119,6 +119,25 @@ The overrides have some restrictions:
 * The `!ref` tag can only be used if the resulting configuration does not have cycles, that is, you cannot refer to a configuration directly or indirectly uses the self configuration.
 * You can only use the sref tag for scalars in the document.
 
+## Templates
+
+To facilitate the integration of the service with third party tools there is the possibility to apply templates to the configuration. For example, it's possible watch a configuration to which a template is applied, write the result to a file and start the service. This way, if the configuration or the template changes, the client receives a notification with the new value, dumps it again to the file and notifies the third party tool that the configuration has changed.
+
+The templates are rendered with [inja](https://github.com/pantor/inja) so the syntax is the same with the exception that
+the includes are not supported.
+
+```jinja2
+mysql_variables=
+{
+## for k, v in mysql_variables
+    {{ k }}={{ v }}
+## endfor
+}
+```
+
+PS: Keep in mind that all the scalars of the configuration are strings so the if expressions and the arithmetic operations has
+limitations, this is going to be treated in the future but at the moment it isn't supported.
+
 ## API
 
 ### Common
@@ -141,15 +160,15 @@ message GetRequest {
   // the version of the configuration to retrieve, it retrieve the latest
   // version with a zero value and the proper version otherwise.
   uint32 version = 3;
-  // the key to retrieve and it must have at least one element.
-  repeated string key = 4;
+  // the document to retrieve
+  string document = 4;
+  // the template to render with the requested config, none if it isn't defined
+  string template = 5;
 }
 
 message GetResponse {
   enum Status {
-    // the operation take place successfully.
     OK = 0;
-    //some error take place.
     ERROR = 1;
     // has been requested a removed or inexistent version.
     INVALID_VERSION = 2;
@@ -161,6 +180,7 @@ message GetResponse {
   // the returned version, it's the last version if the asked version was the zero.
   uint32 version = 3;
   repeated Element elements = 4;
+  string template_rendered = 5;
 }
 ```
 
@@ -215,6 +235,8 @@ message WatchRequest {
   uint32 version = 5;
   // document to watch.
   string document = 6;
+  // the template to render with the requested config, none if it isn't defined
+  string template = 7;
 }
 
 message WatchResponse {
@@ -229,9 +251,9 @@ message WatchResponse {
     // in the case of use the `ref` tag, the dependency graph have a cycle.
     REF_GRAPH_IS_NOT_DAG = 3;
     // the provided uid is already in use.
-    UID_IN_USE = 4;
+    UID_IN_USE = 20;
     // the provided uid don't exists in the system.
-    UNKNOWN_UID = 5;
+    UNKNOWN_UID = 21;
     // the provided uid has been removed, keep in mind that it's possible
     // to have career conditions in this method if:
     // - a file has been changed and processing of the watcher has begun
@@ -241,12 +263,13 @@ message WatchResponse {
     // PS: the server could remove the watcher if the namespace has been
     // deleted and it's the client responsibility to re-register if it
     // wish to do so
-    REMOVED = 6;
+    REMOVED = 22;
   }
   Status status = 2;
   uint64 namespace_id = 3;
   uint32 version = 4;
   repeated Element elements = 5;
+  string template_rendered = 6;
 }
 ```
 
@@ -279,9 +302,10 @@ This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) f
 
 ## Third party libraries
 
-* CMPH: http://cmph.sourceforge.net/index.html
 * fmt: https://github.com/fmtlib/fmt
 * grpc: https://grpc.io/
+* inja: https://github.com/pantor/inja
+* json: https://github.com/nlohmann/json
 * prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
 * spdlog: https://github.com/gabime/spdlog
 * yaml-cpp: https://github.com/jbeder/yaml-cpp

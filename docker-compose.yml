@@ -6,7 +6,7 @@ volumes:
 
 services:
   builder:
-    image: mhconfig-builder:0.1
+    image: mhconfig-builder:0.2
     network_mode: host
     ulimits:
       nproc: 65535

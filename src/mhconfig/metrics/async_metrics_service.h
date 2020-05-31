@@ -11,7 +11,7 @@ namespace metrics
   class AsyncMetricsService : public MetricsService
   {
   public:
-    AsyncMetricsService(
+    explicit AsyncMetricsService(
       std::shared_ptr<MetricsQueue::Sender> sender
     );
     virtual ~AsyncMetricsService();

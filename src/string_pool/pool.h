@@ -187,7 +187,7 @@ class Pool final
 {
 public:
   Pool();
-  Pool(std::unique_ptr<StatsObserver>&& stats_observer);
+  explicit Pool(std::unique_ptr<StatsObserver>&& stats_observer);
 
   ~Pool();
 
@@ -234,7 +234,7 @@ private:
   char data_[CHUNK_DATA_SIZE];
   InternalString strings_[CHUNK_STRING_SIZE];
 
-  Chunk(Pool* pool);
+  explicit Chunk(Pool* pool);
   ~Chunk();
 
   Chunk(const Chunk& o) = delete;

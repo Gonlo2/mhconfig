@@ -48,17 +48,48 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
     return NamespaceExecutionResult::OK;
   }
 
+  if (message_->document().empty() || (message_->document()[0] == '_')) {
+    auto output_message = message_->make_output_message();
+    output_message->set_status(::mhconfig::api::stream::watch::Status::ERROR);
+
+    worker_queue.push(
+      std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+        std::move(output_message)
+      )
+    );
+
+    return NamespaceExecutionResult::OK;
+  }
+
   bool notify = false;
 
-  auto document_metadata = config_namespace
-    .document_metadata_by_document[message_->document()];
+  {
+    auto document_metadata = config_namespace
+      .document_metadata_by_document[message_->document()];
 
-  for (const auto& override_: message_->overrides()) {
-    auto& override_metadata = document_metadata->override_by_key[override_];
-    //TODO Check if the overrides are distinct
-    override_metadata.watchers.push_back(message_);
-    notify |= !override_metadata.raw_config_by_version.empty()
-      && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
+    for (const auto& override_: message_->overrides()) {
+      auto& override_metadata = document_metadata->override_by_key[override_];
+      //TODO Check if the overrides are distinct
+      override_metadata.watchers.push_back(message_);
+      notify |= !override_metadata.raw_config_by_version.empty()
+        && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
+    }
+  }
+
+  // TODO This will trigger also a update if any of the overrides templates change
+  // although only the last one is used, review if is neccesary deal with multiples
+  // templates or this is a silly use case.
+  if (!message_->template_().empty()) {
+    auto document_metadata = config_namespace
+      .document_metadata_by_document[message_->template_()];
+
+    for (const auto& override_: message_->overrides()) {
+      auto& override_metadata = document_metadata->override_by_key[override_];
+      //TODO Check if the overrides are distinct
+      override_metadata.watchers.push_back(message_);
+      notify |= !override_metadata.raw_config_by_version.empty()
+        && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
+    }
   }
 
   config_namespace.watchers.push_back(message_);

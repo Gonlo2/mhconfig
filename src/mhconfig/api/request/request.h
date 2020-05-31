@@ -43,14 +43,14 @@ protected:
   virtual void finish() = 0;
 
 private:
-  enum Status {
+  enum RequestStatus {
     CREATE,
     PROCESS,
     FINISH
   };
 
   jmutils::time::MonotonicTimePoint start_time_;
-  Status status_{Status::CREATE};
+  RequestStatus status_{RequestStatus::CREATE};
   bool metricate_;
 
   const std::string status();

@@ -5,6 +5,7 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/watch_stream.h"
+#include "mhconfig/api/config/common.h"
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_watch_command.h"
 
@@ -36,6 +37,7 @@ public:
   void set_version(uint32_t version) override;
   void set_element(mhconfig::Element* element) override;
   void set_element_bytes(const char* data, size_t len) override;
+  void set_template_rendered(const std::string& data) override;
 
   bool send(bool finish = false) override;
 
@@ -62,12 +64,13 @@ public:
   );
   virtual ~WatchInputMessageImpl();
 
-  const uint32_t uid() const override;
-  const bool remove() const override;
+  uint32_t uid() const override;
+  bool remove() const override;
   const std::string& root_path() const override;
   const std::vector<std::string>& overrides() const override;
-  const uint32_t version() const override;
+  uint32_t version() const override;
   const std::string& document() const override;
+  const std::string& template_() const override;
 
   bool unregister() override;
 
@@ -90,24 +93,23 @@ public:
   virtual ~WatchGetRequest();
 
   const std::string& root_path() const override;
-  const uint32_t version() const override;
+  uint32_t version() const override;
   const std::vector<std::string>& overrides() const override;
   const std::string& document() const override;
-  const std::vector<std::string>& key() const override;
+  const std::string& template_() const override;
 
-  void set_status(::mhconfig::api::request::get_request::Status status) override;
+  void set_status(::mhconfig::api::request::GetRequest::Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(mhconfig::Element* element) override;
   void set_element_bytes(const char* data, size_t len) override;
+  void set_template_rendered(const std::string& data) override;
 
   bool commit() override;
 
 private:
   std::shared_ptr<WatchInputMessage> input_message_;
   std::shared_ptr<WatchOutputMessage> output_message_;
-
-  std::vector<std::string> key_;
 };
 
 class WatchStreamImpl final

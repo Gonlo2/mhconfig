@@ -110,10 +110,10 @@ namespace mhconfig {
   }
   bool Element::is_null() const {
     return type_ == NULL_NODE;
-  };
+  }
   bool Element::is_undefined() const {
     return type_ == UNDEFINED_NODE;
-  };
+  }
 
   std::pair<bool, std::string> Element::to_yaml() const {
     YAML::Emitter out;

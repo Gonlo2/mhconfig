@@ -1,6 +1,3 @@
-[submodule "third_party/cmph"]
-	path = third_party/cmph
-	url = git@github.com:bonitao/cmph.git
 [submodule "third_party/fmt"]
 	path = third_party/fmt
 	url = git@github.com:fmtlib/fmt.git
@@ -16,3 +13,9 @@
 [submodule "third_party/yaml-cpp"]
 	path = third_party/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "third_party/json"]
+	path = third_party/json
+	url = git@github.com:nlohmann/json.git
+[submodule "third_party/inja"]
+	path = third_party/inja
+	url = git@github.com:Gonlo2/inja.git

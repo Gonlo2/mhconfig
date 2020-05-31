@@ -81,7 +81,25 @@ bool UpdateCommand::add_items(
       return false;
     }
 
-    auto result = load_raw_config(pool_.get(), path, relative_file_path.parent_path());
+    load_raw_config_result_t result;
+
+    if (path.filename().native()[0] == '_') {
+      result = load_template_raw_config(
+        path.filename().string(),
+        relative_file_path.parent_path().string(),
+        path
+      );
+    } else if (path.extension() == ".yaml") {
+      result = load_yaml_raw_config(
+        path.stem().string(),
+        relative_file_path.parent_path().string(),
+        path,
+        pool_.get()
+      );
+    } else {
+      assert(false);
+    }
+
     switch (result.status) {
       case LoadRawConfigStatus::OK: // Fallback
       case LoadRawConfigStatus::FILE_DONT_EXISTS:

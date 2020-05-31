@@ -80,7 +80,7 @@ String& String::operator=(String&& o) noexcept {
   return *this;
 }
 
-String::~String() {
+String::~String() noexcept {
   if (!is_small() && (data_ != 0)) {
     ((InternalString*) data_)->decrement_refcount();
     data_ = 0;
@@ -98,9 +98,11 @@ std::string String::str() const {
         case 2:
           result += CODED_VALUE_TO_ASCII_CHAR[data & 63];
           data >>= 6;
+          // fallthrough
         case 1:
           result += CODED_VALUE_TO_ASCII_CHAR[data & 63];
           data >>= 6;
+          // fallthrough
         case 0:
           result += CODED_VALUE_TO_ASCII_CHAR[data & 63];
           data >>= 6;
@@ -117,30 +119,38 @@ std::string String::str() const {
           result += CODED_VALUE_TO_ASCII_CHAR[data & 63];
           data >>= 6;
           result += CODED_VALUE_TO_ASCII_CHAR[data & 63];
+          break;
       }
     } else {
       switch ((data_>>2) & 7) {
         case 7:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 6:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 5:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 4:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 3:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 2:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          // fallthrough
         case 1:
           data >>= 8;
           result += static_cast<char>(data & 255);
+          break;
       }
     }
     return result;

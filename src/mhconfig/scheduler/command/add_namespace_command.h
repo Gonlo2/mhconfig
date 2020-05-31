@@ -15,7 +15,7 @@ namespace command
 class AddNamespaceCommand : public Command
 {
 public:
-  AddNamespaceCommand(
+  explicit AddNamespaceCommand(
     std::shared_ptr<config_namespace_t> config_namespace
   );
   virtual ~AddNamespaceCommand();

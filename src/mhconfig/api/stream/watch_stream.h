@@ -40,6 +40,7 @@ public:
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(mhconfig::Element* element) = 0;
   virtual void set_element_bytes(const char* data, size_t len) = 0;
+  virtual void set_template_rendered(const std::string& data) = 0;
 };
 
 class WatchInputMessage
@@ -50,12 +51,13 @@ public:
   virtual ~WatchInputMessage() {
   }
 
-  virtual const uint32_t uid() const = 0;
-  virtual const bool remove() const = 0;
+  virtual uint32_t uid() const = 0;
+  virtual bool remove() const = 0;
   virtual const std::string& root_path() const = 0;
   virtual const std::vector<std::string>& overrides() const = 0;
-  virtual const uint32_t version() const = 0;
+  virtual uint32_t version() const = 0;
   virtual const std::string& document() const = 0;
+  virtual const std::string& template_() const = 0;
 
   virtual bool unregister() = 0;
 

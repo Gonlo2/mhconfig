@@ -50,13 +50,13 @@ namespace mhconfig {
   {
   public:
     Element();
-    Element(NodeType type);
-    Element(const Literal& literal);
-    Element(const Literal& literal, const Literal& tag);
-    Element(const MapRef map);
-    Element(const MapRef map, const Literal& tag);
-    Element(const SequenceRef sequence);
-    Element(const SequenceRef sequence, const Literal& tag);
+    explicit Element(NodeType type);
+    explicit Element(const Literal& literal);
+    explicit Element(const Literal& literal, const Literal& tag);
+    explicit Element(const MapRef map);
+    explicit Element(const MapRef map, const Literal& tag);
+    explicit Element(const SequenceRef sequence);
+    explicit Element(const SequenceRef sequence, const Literal& tag);
 
     Element(const Element& rhs) = delete;
     Element(Element&& rhs) = delete;

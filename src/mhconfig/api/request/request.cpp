@@ -26,8 +26,8 @@ std::shared_ptr<Session> Request::proceed(
   } else {
     spdlog::debug("Received gRPC event {} in {} status", name(), status());
 
-    if (status_ == Status::CREATE) {
-      status_ = Status::PROCESS;
+    if (status_ == RequestStatus::CREATE) {
+      status_ = RequestStatus::PROCESS;
 
       metricate_ = (sequential_id & 0xff) == 0;
       sequential_id = (sequential_id+1) & 0xefffffff;
@@ -38,7 +38,7 @@ std::shared_ptr<Session> Request::proceed(
       clone_and_subscribe(service, cq);
 
       request(scheduler_sender);
-    } else if (status_ == Status::FINISH) {
+    } else if (status_ == RequestStatus::FINISH) {
       if (metricate_) {
         auto end_time = jmutils::time::monotonic_now();
 
@@ -68,8 +68,8 @@ bool Request::reply() {
     return false;
   }
 
-  assert(status_ == Status::PROCESS);
-  status_ = Status::FINISH;
+  assert(status_ == RequestStatus::PROCESS);
+  status_ = RequestStatus::FINISH;
 
   // TODO try to move the logic here
   // The call to enqueue the FINISH status need be the
@@ -81,9 +81,9 @@ bool Request::reply() {
 
 const std::string Request::status() {
   switch (status_) {
-    case Status::CREATE: return "CREATE";
-    case Status::PROCESS: return "PROCESS";
-    case Status::FINISH: return "FINISH";
+    case RequestStatus::CREATE: return "CREATE";
+    case RequestStatus::PROCESS: return "PROCESS";
+    case RequestStatus::FINISH: return "FINISH";
   }
 
   return "unknown";

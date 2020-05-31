@@ -1,4 +1,4 @@
-FROM gcc:8.2
+FROM gcc:9.3
 MAINTAINER Juan Manuel Fdez
 
 ### base ###

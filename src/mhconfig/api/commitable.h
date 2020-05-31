@@ -9,11 +9,7 @@ namespace api
 class Commitable
 {
 public:
-  Commitable() {
-  }
-  virtual ~Commitable() {
-  }
-
+  virtual ~Commitable() {};
   virtual bool commit() = 0;
 };
 

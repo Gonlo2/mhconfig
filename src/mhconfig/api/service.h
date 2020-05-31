@@ -57,7 +57,6 @@ private:
   CustomService service_;
   std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs_;
 
-
   void subscribe_requests(
     grpc::ServerCompletionQueue* cq
   );

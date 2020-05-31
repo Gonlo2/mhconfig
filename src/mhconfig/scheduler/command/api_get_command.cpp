@@ -9,8 +9,7 @@ namespace command
 
 ApiGetCommand::ApiGetCommand(
   std::shared_ptr<::mhconfig::api::request::GetRequest> get_request
-) : Command(),
-    get_request_(get_request)
+) : get_request_(get_request)
 {
 }
 
@@ -34,30 +33,39 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   SchedulerQueue& scheduler_queue,
   WorkerQueue& worker_queue
 ) {
-  // First we set the basic request fields
   get_request_->set_version(
     get_specific_version(config_namespace, get_request_->version())
   );
   get_request_->set_namespace_id(config_namespace.id);
 
-  // We check if exists the asked document
-  auto search = config_namespace.document_metadata_by_document
-    .find(get_request_->document());
-
-  if (search == config_namespace.document_metadata_by_document.end()) {
-    spdlog::warn(
-      "Can't found a config file with the name '{}'",
+  if (get_request_->document().empty() || (get_request_->document()[0] == '_')) {
+    spdlog::error(
+      "The asked document '{}' don't have a valid name",
       get_request_->document()
     );
 
-    get_request_->set_element(UNDEFINED_ELEMENT.get());
+    get_request_->set_status(
+      ::mhconfig::api::request::GetRequest::Status::ERROR
+    );
+    send_api_response(worker_queue);
+    return NamespaceExecutionResult::OK;
+  }
+
+  if (!get_request_->template_().empty() && (get_request_->template_()[0] != '_')) {
+    spdlog::error(
+      "The asked template '{}' don't have a valid name",
+      get_request_->template_()
+    );
+
+    get_request_->set_status(
+      ::mhconfig::api::request::GetRequest::Status::ERROR
+    );
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
   }
 
   // If the document exists and the user asked for a version
   // we check if the version is available
-  auto document_metadata = search->second;
   if (
       (get_request_->version() != 0)
       && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
@@ -66,7 +74,7 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
     spdlog::trace("The asked version {} don't exists", get_request_->version());
 
     get_request_->set_status(
-      ::mhconfig::api::request::get_request::Status::INVALID_VERSION
+      ::mhconfig::api::request::GetRequest::Status::INVALID_VERSION
     );
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
@@ -77,59 +85,58 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   // To search it we create the overrides key
   thread_local static std::string overrides_key;
   overrides_key.clear();
-  make_overrides_key(
-    *document_metadata,
-    get_request_->overrides(),
-    get_request_->version(),
-    overrides_key
-  );
+  overrides_key.reserve((get_request_->overrides().size()+1)*4);
+  std::shared_ptr<inja::Template> template_;
+  if (!add_overrides_key(config_namespace, overrides_key, template_)) {
+    send_api_response(worker_queue);
+    return NamespaceExecutionResult::OK;
+  }
+
   auto merged_config = ::mhconfig::builder::get_merged_config(
     config_namespace,
-    get_request_->document(),
     overrides_key
   );
 
-  if ((merged_config != nullptr) && (merged_config->status == MergedConfigStatus::OK)) {
-    spdlog::debug("The built document '{}' has been found", get_request_->document());
+  if (merged_config != nullptr) {
+    switch (merged_config->status) {
+      case MergedConfigStatus::UNDEFINED:  // Fallback
+      case MergedConfigStatus::BUILDING:
+        break;
+      case MergedConfigStatus::OK_CONFIG_NORMAL:  // Fallback
+      case MergedConfigStatus::OK_TEMPLATE: {
+        spdlog::debug(
+          "The built document '{}' and template '{}' has been found",
+          get_request_->document(),
+          get_request_->template_()
+        );
 
-    merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
+        merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
 
-    send_api_get_response(worker_queue, merged_config->api_merged_config);
-    return NamespaceExecutionResult::OK;
+        worker_queue.push(
+          std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
+            std::move(get_request_),
+            std::move(merged_config)
+          )
+        );
+        return NamespaceExecutionResult::OK;
+      }
+    }
   }
 
   spdlog::debug("Preparing build for document '{}'", get_request_->document());
   return prepare_build_request(
     config_namespace,
-    worker_queue
-  );
-}
-
-void ApiGetCommand::send_api_response(
-  WorkerQueue& worker_queue
-) {
-  worker_queue.push(
-    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
-      std::move(get_request_)
-    )
-  );
-}
-
-void ApiGetCommand::send_api_get_response(
-  WorkerQueue& worker_queue,
-  std::shared_ptr<mhconfig::api::config::MergedConfig> api_merged_config
-) {
-  worker_queue.push(
-    std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
-      std::move(get_request_),
-      api_merged_config
-    )
+    worker_queue,
+    overrides_key,
+    std::move(template_)
   );
 }
 
 NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   config_namespace_t& config_namespace,
-  WorkerQueue& worker_queue
+  WorkerQueue& worker_queue,
+  const std::string& overrides_key,
+  std::shared_ptr<inja::Template>&& template_
 ) {
   // The references are allowed only if the graph is a DAG,
   // so we check it here
@@ -141,7 +148,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   );
   if (!is_a_dag_result.first) {
     get_request_->set_status(
-      ::mhconfig::api::request::get_request::Status::REF_GRAPH_IS_NOT_DAG
+      ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG
     );
     send_api_response(worker_queue);
     return NamespaceExecutionResult::OK;
@@ -155,13 +162,14 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
 
   auto wait_built = std::make_shared<build::wait_built_t>();
 
-  wait_built->is_main = documents_in_order.size() == 1;
-  wait_built->request = get_request_;
-  wait_built->elements_to_build.resize(documents_in_order.size());
   wait_built->specific_version = get_specific_version(
     config_namespace,
     get_request_->version()
   );
+  wait_built->request = get_request_;
+  wait_built->template_ = std::move(template_);
+  wait_built->overrides_key = overrides_key;
+  wait_built->elements_to_build.resize(documents_in_order.size());
 
   for (size_t i = 0; i < documents_in_order.size(); ++i) {
     auto& build_element = wait_built->elements_to_build[i];
@@ -169,17 +177,17 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
     spdlog::debug("Checking the document '{}'", build_element.name);
 
     auto document_metadata = config_namespace
-      .document_metadata_by_document[build_element.name];
+      .document_metadata_by_document[build_element.name].get();
 
-    make_overrides_key(
-      *document_metadata,
+    build_element.overrides_key.reserve(get_request_->overrides().size()*4);
+    add_config_overrides_key(
+      document_metadata,
       get_request_->overrides(),
       get_request_->version(),
       build_element.overrides_key
     );
     auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
       config_namespace,
-      build_element.name,
       build_element.overrides_key
     );
     switch (merged_config->status) {
@@ -190,7 +198,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
         );
         for (const auto& k : get_request_->overrides()) {
           with_raw_config(
-            *document_metadata,
+            document_metadata,
             k,
             get_request_->version(),
             [&build_element, &k](auto& raw_config) {
@@ -214,11 +222,13 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
         break;
       }
 
-      case MergedConfigStatus::OK: {
+      case MergedConfigStatus::OK_CONFIG_NORMAL: {
         spdlog::debug("The document '{}' is ok", build_element.name);
         build_element.config = merged_config->value;
         break;
       }
+      case MergedConfigStatus::OK_TEMPLATE:
+        assert(false);
     }
   }
 
@@ -231,7 +241,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
       std::make_unique<::mhconfig::worker::command::BuildCommand>(
         config_namespace.id,
         config_namespace.pool,
-        wait_built
+        std::move(wait_built)
       )
     );
   } else {
@@ -302,18 +312,19 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
     spdlog::warn("Can't found a config file with the name '{}'", document);
     return false;
   }
+  auto document_metadata = document_metadata_search->second.get();
 
-  auto document_metadata = document_metadata_search->second;
-  std::string overrides_key;
-  make_overrides_key(
-    *document_metadata,
+  thread_local static std::string overrides_key;
+  overrides_key.clear();
+  overrides_key.reserve(overrides.size()*4);
+  add_config_overrides_key(
+    document_metadata,
     overrides,
     version,
     overrides_key
   );
   auto config = ::mhconfig::builder::get_merged_config(
     config_namespace,
-    document,
     overrides_key
   );
   if (config != nullptr) {
@@ -326,7 +337,7 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   for (uint32_t i = 0; i < overrides.size(); ++i) {
     bool is_a_dag = true;
     with_raw_config(
-      *document_metadata,
+      document_metadata,
       overrides[i],
       version,
       [this, &config_namespace, &document, &overrides, version, &dfs_path,
@@ -400,10 +411,20 @@ bool ApiGetCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
   get_request_->set_status(
-    ::mhconfig::api::request::get_request::Status::ERROR
+    ::mhconfig::api::request::GetRequest::Status::ERROR
   );
   send_api_response(worker_queue);
   return true;
+}
+
+inline void ApiGetCommand::send_api_response(
+  WorkerQueue& worker_queue
+) {
+  worker_queue.push(
+    std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
+      std::move(get_request_)
+    )
+  );
 }
 
 } /* command */

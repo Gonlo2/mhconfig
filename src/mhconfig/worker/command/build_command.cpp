@@ -7,15 +7,55 @@ namespace worker
 namespace command
 {
 
+bool fill_json(
+  mhconfig::Element* root,
+  nlohmann::json& output
+) {
+  switch (root->type()) {
+    case ::mhconfig::UNDEFINED_NODE:
+      return false;
+
+    case ::mhconfig::NULL_NODE:
+      return true;
+
+    case ::mhconfig::SCALAR_NODE:
+      output = root->as<std::string>();
+      return true;
+
+    case ::mhconfig::MAP_NODE: {
+      for (const auto& it : root->as_map()) {
+        if (!fill_json(it.second.get(), output[it.first.str()])) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    case ::mhconfig::SEQUENCE_NODE: {
+      auto& seq = root->as_sequence();
+      std::vector<nlohmann::json> values(seq.size());
+      for (size_t i = seq.size(); i--;) {
+        if (!fill_json(seq[i].get(), values[i])) {
+          return false;
+        }
+      }
+      output = std::move(values);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 BuildCommand::BuildCommand(
   uint64_t namespace_id,
   std::shared_ptr<::string_pool::Pool> pool,
-  std::shared_ptr<build::wait_built_t> wait_build
+  std::shared_ptr<build::wait_built_t>&& wait_build
 )
   : Command(),
   namespace_id_(namespace_id),
   pool_(pool),
-  wait_build_(wait_build)
+  wait_build_(std::move(wait_build))
 {
 }
 
@@ -33,16 +73,14 @@ bool BuildCommand::force_take_metric() const {
 bool BuildCommand::execute(
   context_t& context
 ) {
-  std::unordered_map<std::string, build::built_element_t> built_elements_by_document;
-
   std::unordered_map<std::string, ElementRef> ref_elements_by_document;
   for (auto& build_element : wait_build_->elements_to_build) {
     spdlog::debug("Building the document '{}'", build_element.name);
 
-    size_t override_id = 0;
-    ElementRef config = build_element.config;
-
-    if (config == nullptr) {
+    build_element.is_new_config = build_element.config == nullptr;
+    if (build_element.is_new_config) {
+      size_t override_id = 0;
+      ElementRef config = nullptr;
       while ((override_id < wait_build_->request->overrides().size()) && (config == nullptr)) {
         auto search = build_element.raw_config_by_override
           .find(wait_build_->request->overrides()[override_id]);
@@ -65,25 +103,43 @@ bool BuildCommand::execute(
         ++override_id;
       }
 
-      config = (config == nullptr)
+      build_element.config = (config == nullptr)
         ? UNDEFINED_ELEMENT
         : mhconfig::builder::apply_tags(pool_.get(), config, config, ref_elements_by_document);
-
-      command::build::built_element_t built_element;
-      built_element.overrides_key = build_element.overrides_key;
-      built_element.config = config;
-
-      built_elements_by_document[build_element.name] = built_element;
     }
 
-    ref_elements_by_document[build_element.name] = config;
+    ref_elements_by_document[build_element.name] = build_element.config;
+  }
+
+  if (wait_build_->template_ != nullptr) {
+    wait_build_->is_template_ok = false;
+    try {
+      nlohmann::json data;
+      if (fill_json(wait_build_->elements_to_build.back().config.get(), data)) {
+        inja::TemplateStorage included_templates;
+        inja::FunctionStorage callbacks;
+
+        std::stringstream os;
+        inja::Renderer renderer(included_templates, callbacks);
+        renderer.render_to(os, *wait_build_->template_, data);
+
+        wait_build_->template_rendered = std::move(os.str());
+        wait_build_->is_template_ok = true;
+      }
+    } catch(const std::exception &e) {
+      spdlog::error(
+        "Error rendering the template: {}",
+        e.what()
+      );
+    } catch(...) {
+      spdlog::error("Unknown error rendering the template");
+    }
   }
 
   context.scheduler_queue->push(
     std::make_unique<::mhconfig::scheduler::command::SetDocumentsCommand>(
       namespace_id_,
-      wait_build_,
-      built_elements_by_document
+      std::move(wait_build_)
     )
   );
 

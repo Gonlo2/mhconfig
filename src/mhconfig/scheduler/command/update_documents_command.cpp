@@ -192,7 +192,7 @@ void UpdateDocumentsCommand::filter_existing_documents(
 
       if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
         with_raw_config(
-          *document_metadata_search->second,
+          document_metadata_search->second.get(),
           items_[i].override_,
           0,
           [&](const auto& raw_config) {
@@ -224,7 +224,7 @@ void UpdateDocumentsCommand::decrease_references(
 
     if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
       with_raw_config(
-        *document_metadata_search->second,
+        document_metadata_search->second.get(),
         item.override_,
         0,
         [&](const auto& raw_config) {
@@ -274,10 +274,10 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
 
     for (const auto& document : affected_documents) {
       auto document_metadata = config_namespace
-        .document_metadata_by_document[document];
+        .document_metadata_by_document[document].get();
 
       with_raw_config(
-        *document_metadata,
+        document_metadata,
         updated_documents_it.first,
         0,
         [&](const auto& raw_config) {
@@ -289,10 +289,8 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
             config_namespace.next_raw_config_id
           );
 
-          auto new_raw_config = std::make_shared<raw_config_t>();
+          auto new_raw_config = raw_config->clone();
           new_raw_config->id = config_namespace.next_raw_config_id++;
-          new_raw_config->value = raw_config->value;
-          new_raw_config->reference_to = raw_config->reference_to;
 
           document_metadata->override_by_key[updated_documents_it.first]
             .raw_config_by_version[config_namespace.current_version] = new_raw_config;

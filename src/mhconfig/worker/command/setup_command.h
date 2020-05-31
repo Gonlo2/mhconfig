@@ -18,7 +18,7 @@ namespace command
 class SetupCommand : public Command
 {
 public:
-  SetupCommand(const std::string& path);
+  explicit SetupCommand(const std::string& path);
   virtual ~SetupCommand();
 
   std::string name() const override;

@@ -23,9 +23,10 @@ message GetRequest {
   // the version of the configuration to retrieve, it retrieve the latest
   // version with a zero value and the proper version otherwise.
   uint32 version = 3;
-  // the document and the key to retrieve
+  // the document to retrieve
   string document = 4;
-  repeated string key = 5;
+  // the template to render with the requested config, none if it isn't defined
+  string template = 5;
 }
 
 message GetResponse {
@@ -42,6 +43,7 @@ message GetResponse {
   // the returned version, it's the last version if the asked version was the zero.
   uint32 version = 3;
   repeated Element elements = 4;
+  string template_rendered = 5;
 }
 
 
@@ -102,6 +104,8 @@ message WatchRequest {
   uint32 version = 5;
   // document to watch.
   string document = 6;
+  // the template to render with the requested config, none if it isn't defined
+  string template = 7;
 }
 
 message WatchResponse {
@@ -116,9 +120,9 @@ message WatchResponse {
     // in the case of use the `ref` tag, the dependency graph have a cycle.
     REF_GRAPH_IS_NOT_DAG = 3;
     // the provided uid is already in use.
-    UID_IN_USE = 4;
+    UID_IN_USE = 20;
     // the provided uid don't exists in the system.
-    UNKNOWN_UID = 5;
+    UNKNOWN_UID = 21;
     // the provided uid has been removed, keep in mind that it's possible
     // to have career conditions in this method if:
     // - a file has been changed and processing of the watcher has begun
@@ -128,12 +132,13 @@ message WatchResponse {
     // PS: the server could remove the watcher if the namespace has been
     // deleted and it's the client responsibility to re-register if it
     // wish to do so
-    REMOVED = 6;
+    REMOVED = 22;
   }
   Status status = 2;
   uint64 namespace_id = 3;
   uint32 version = 4;
   repeated Element elements = 5;
+  string template_rendered = 6;
 }
 
 

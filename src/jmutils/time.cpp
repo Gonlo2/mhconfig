@@ -9,11 +9,11 @@ namespace time
     return std::chrono::duration_cast<std::chrono::seconds>(
       std::chrono::steady_clock::now().time_since_epoch()
     ).count();
-  };
+  }
 
   MonotonicTimePoint monotonic_now() {
     return std::chrono::steady_clock::now();
-  };
+  }
 
 } /* time */
 } /* jmutils */

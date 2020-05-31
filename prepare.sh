@@ -50,21 +50,6 @@ function prepare_grpc() {
   )
 }
 
-function prepare_cmph() {
-  print_third_party_msg cmph
-  (
-    cd "$BUILD_THIRD_PARTY_PATH/cmph"
-    if ! $ONLY_INSTALL ; then
-      autoreconf -i
-      CXXFLAGS="-O2" ./configure
-      make "-j${MAKE_N_PROC}"
-    fi
-    sudo make install
-
-    sudo ldconfig
-  )
-}
-
 cd "/source"
 
 ONLY_INSTALL=false
@@ -102,8 +87,9 @@ if ! $ONLY_INSTALL ; then
   rsync -a third_party build --exclude .git
 fi
 
-prepare_cmph
 prepare_grpc
+prepare_third_party inja
+prepare_third_party json
 prepare_third_party catch2
 prepare_third_party fmt
 prepare_third_party spdlog

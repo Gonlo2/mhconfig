@@ -15,10 +15,35 @@
 
 #include "spdlog/spdlog.h"
 
+#include <inja/inja.hpp>
+
 namespace mhconfig
 {
 namespace builder
 {
+
+namespace {
+  class ForbiddenIncludeException : public std::exception
+  {
+    const char * what() const noexcept override {
+      return "Include a template is forbidden";
+    }
+  };
+
+  class ForbiddenIncludeStrategy final : public inja::IncludeStrategy
+  {
+  public:
+    inja::Template parse_template(
+      const inja::ParserConfig& parser_config,
+      const inja::LexerConfig& lexer_config,
+      inja::TemplateStorage& included_templates,
+      inja::IncludeStrategy& include_strategy,
+      nonstd::string_view filename
+    ) override {
+      throw ForbiddenIncludeException();
+    }
+  };
+}
 
 using namespace mhconfig::ds::config_namespace;
 
@@ -41,19 +66,82 @@ struct load_raw_config_result_t {
   std::shared_ptr<raw_config_t> raw_config{nullptr};
 };
 
+bool is_a_valid_filename(
+  const std::filesystem::path& path
+);
+
 std::shared_ptr<config_namespace_t> index_files(
   const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
 );
 
-bool is_a_valid_filename(
-  const std::filesystem::path& path
+template <typename T>
+load_raw_config_result_t load_raw_config(
+  const std::string& document,
+  const std::string& override_,
+  const std::filesystem::path& path,
+  T lambda
+) {
+  load_raw_config_result_t result;
+  result.status = LoadRawConfigStatus::ERROR;
+  result.document = document;
+  result.override_ = override_;
+
+  try {
+    if (!std::filesystem::exists(path)) {
+      spdlog::debug("The file '{}' don't exists", path.string());
+      result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
+      return result;
+    }
+
+    spdlog::debug("Loading file '{}'", path.string());
+    std::ifstream fin(path.string());
+    if (!fin.good()) {
+      spdlog::error("Some error take place reading the file '{}'", path.string());
+      return result;
+    }
+
+    // TODO Move this to a function
+    std::string data;
+    fin.seekg(0, std::ios::end);
+    data.reserve(fin.tellg());
+    fin.seekg(0, std::ios::beg);
+    data.assign(std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>());
+
+    // TODO Avoid import zlib only to calculate the crc32
+    result.raw_config = std::make_shared<raw_config_t>();
+    result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
+    lambda(data, result);
+  } catch(const std::exception &e) {
+    spdlog::error(
+      "Error making the element (path: '{}'): {}",
+      path.string(),
+      e.what()
+    );
+    return result;
+  } catch(...) {
+    spdlog::error(
+      "Unknown error making the element (path: '{}')",
+      path.string()
+    );
+    return result;
+  }
+
+  result.status = LoadRawConfigStatus::OK;
+  return result;
+}
+
+load_raw_config_result_t load_yaml_raw_config(
+  const std::string& document,
+  const std::string& override_,
+  const std::filesystem::path& path,
+  ::string_pool::Pool* pool
 );
 
-load_raw_config_result_t load_raw_config(
-  ::string_pool::Pool* pool,
-  const std::filesystem::path& path,
-  const std::filesystem::path& relative_path
+load_raw_config_result_t load_template_raw_config(
+  const std::string& document,
+  const std::string& override_,
+  const std::filesystem::path& path
 );
 
 template <typename T>
@@ -70,14 +158,37 @@ bool index_files(
     !error_code && (it != end);
     ++it
   ) {
-    if (it->path().filename().native()[0] == '.') {
+    auto first_filename_char = it->path().filename().native()[0];
+    if (first_filename_char == '.') {
       it.disable_recursion_pending();
-    } else if (it->is_regular_file() && is_a_valid_filename(it->path())) {
+    } else if (it->is_regular_file()) {
       auto relative_path = std::filesystem::relative(it->path(), root_path)
-        .parent_path();
+        .parent_path()
+        .string();
 
-      if (!lambda(load_raw_config(pool, it->path(), relative_path))) {
-        return false;
+      if (first_filename_char == '_') {
+        bool ok = lambda(
+          load_template_raw_config(
+            it->path().filename().string(),
+            relative_path,
+            it->path()
+          )
+        );
+        if (!ok) {
+          return false;
+        }
+      } else if (it->path().extension() == ".yaml") {
+        bool ok = lambda(
+          load_yaml_raw_config(
+            it->path().stem().string(),
+            relative_path,
+            it->path(),
+            pool
+          )
+        );
+        if (!ok) {
+          return false;
+        }
       }
     }
   }
@@ -148,19 +259,17 @@ ElementRef make_element(
 
 std::shared_ptr<merged_config_t> get_or_build_merged_config(
   config_namespace_t& config_namespace,
-  const std::string& document,
   const std::string& overrides_key
 );
 
 std::shared_ptr<merged_config_t> get_merged_config(
   config_namespace_t& config_namespace,
-  const std::string& document,
   const std::string& overrides_key
 );
 
 template<typename F>
-void with_raw_config(
-  const document_metadata_t& document_metadata,
+inline void with_raw_config(
+  const document_metadata_t* document_metadata,
   const std::string& override_,
   uint32_t version,
   F lambda
@@ -171,10 +280,10 @@ void with_raw_config(
     version
   );
 
-  auto override_search = document_metadata.override_by_key
+  auto override_search = document_metadata->override_by_key
     .find(override_);
 
-  if (override_search == document_metadata.override_by_key.end()) {
+  if (override_search == document_metadata->override_by_key.end()) {
     spdlog::trace("Don't exists the override '{}'", override_);
     return;
   }

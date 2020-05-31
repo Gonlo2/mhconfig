@@ -72,6 +72,10 @@ void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
   proto_response_->clear_elements();
 }
 
+void WatchOutputMessageImpl::set_template_rendered(const std::string& data) {
+  proto_response_->set_template_rendered(data);
+}
+
 bool WatchOutputMessageImpl::send(bool finish) {
   if (auto stream = stream_.lock()) {
     if (proto_response_->SerializeToOstream(&elements_data_)) {
@@ -97,11 +101,11 @@ WatchInputMessageImpl::WatchInputMessageImpl(
 WatchInputMessageImpl::~WatchInputMessageImpl() {
 }
 
-const uint32_t WatchInputMessageImpl::uid() const {
+uint32_t WatchInputMessageImpl::uid() const {
   return request_->uid();
 }
 
-const bool WatchInputMessageImpl::remove() const {
+bool WatchInputMessageImpl::remove() const {
   return request_->remove();
 }
 
@@ -113,12 +117,16 @@ const std::vector<std::string>& WatchInputMessageImpl::overrides() const {
   return overrides_;
 }
 
-const uint32_t WatchInputMessageImpl::version() const {
+uint32_t WatchInputMessageImpl::version() const {
   return request_->version();
 }
 
 const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
+}
+
+const std::string& WatchInputMessageImpl::template_() const {
+  return request_->template_();
 }
 
 bool WatchInputMessageImpl::unregister() {
@@ -151,7 +159,7 @@ const std::string& WatchGetRequest::root_path() const {
   return input_message_->root_path();
 }
 
-const uint32_t WatchGetRequest::version() const {
+uint32_t WatchGetRequest::version() const {
   return input_message_->version();
 }
 
@@ -163,22 +171,22 @@ const std::string& WatchGetRequest::document() const {
   return input_message_->document();
 }
 
-const std::vector<std::string>& WatchGetRequest::key() const {
-  return key_;
+const std::string& WatchGetRequest::template_() const {
+  return input_message_->template_();
 }
 
-void WatchGetRequest::set_status(::mhconfig::api::request::get_request::Status status) {
+void WatchGetRequest::set_status(::mhconfig::api::request::GetRequest::Status status) {
   switch (status) {
-    case ::mhconfig::api::request::get_request::Status::OK:
+    case ::mhconfig::api::request::GetRequest::Status::OK:
       output_message_->set_status(watch::Status::OK);
       break;
-    case ::mhconfig::api::request::get_request::Status::ERROR:
+    case ::mhconfig::api::request::GetRequest::Status::ERROR:
       output_message_->set_status(watch::Status::ERROR);
       break;
-    case ::mhconfig::api::request::get_request::Status::INVALID_VERSION:
+    case ::mhconfig::api::request::GetRequest::Status::INVALID_VERSION:
       output_message_->set_status(watch::Status::INVALID_VERSION);
       break;
-    case ::mhconfig::api::request::get_request::Status::REF_GRAPH_IS_NOT_DAG:
+    case ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG:
       output_message_->set_status(watch::Status::REF_GRAPH_IS_NOT_DAG);
       break;
   }
@@ -198,6 +206,10 @@ void WatchGetRequest::set_element(mhconfig::Element* element) {
 
 void WatchGetRequest::set_element_bytes(const char* data, size_t len) {
   output_message_->set_element_bytes(data, len);
+}
+
+void WatchGetRequest::set_template_rendered(const std::string& data) {
+  output_message_->set_template_rendered(data);
 }
 
 bool WatchGetRequest::commit() {

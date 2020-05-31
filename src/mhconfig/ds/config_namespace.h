@@ -9,11 +9,12 @@
 
 #include <boost/functional/hash.hpp>
 
+#include <inja/inja.hpp>
+
 #include "string_pool/pool.h"
 
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/watch_stream.h"
-#include "mhconfig/api/config/merged_config.h"
 #include "mhconfig/element.h"
 #include "jmutils/common.h"
 
@@ -33,21 +34,41 @@ struct raw_config_t {
   uint32_t id{0};
   uint32_t crc32{0};
   ElementRef value{nullptr};
+  std::shared_ptr<inja::Template> template_{nullptr};
   std::unordered_set<std::string> reference_to;
+
+  std::shared_ptr<raw_config_t> clone() {
+    auto result = std::make_shared<raw_config_t>();
+    result->id = id;
+    result->crc32 = crc32;
+    result->value = value;
+    result->template_ = template_;
+    result->reference_to = reference_to;
+    return result;
+  }
 };
 
 enum MergedConfigStatus {
   UNDEFINED,
   BUILDING,
-  OK
+  OK_CONFIG_NORMAL,
+  OK_TEMPLATE
 };
 
 struct merged_config_t {
-  MergedConfigStatus status{MergedConfigStatus::UNDEFINED};
-  uint64_t creation_timestamp{0};
-  uint64_t last_access_timestamp{0};
-  ElementRef value{nullptr};
-  std::shared_ptr<::mhconfig::api::config::MergedConfig> api_merged_config{nullptr};
+  MergedConfigStatus status : 8;
+  uint64_t creation_timestamp : 56;
+  uint64_t last_access_timestamp;
+  ElementRef value;
+  // The preprocesed_value field store the rendered template or the optimized value
+  std::string preprocesed_value;
+
+  merged_config_t()
+    : status(MergedConfigStatus::UNDEFINED),
+    creation_timestamp(0),
+    last_access_timestamp(0),
+    value(nullptr)
+  {}
 };
 
 struct override_metadata_t {
@@ -69,6 +90,7 @@ namespace build {
 
     std::string name;
     std::string overrides_key;
+    bool is_new_config;
 
     std::unordered_map<
       std::string,
@@ -76,26 +98,25 @@ namespace build {
     > raw_config_by_override;
   };
 
-  struct built_element_t {
-    std::string overrides_key;
-    mhconfig::ElementRef config;
-  };
-
   struct wait_built_t {
-    std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
-    std::shared_ptr<::mhconfig::api::request::GetRequest> request;
-    std::vector<build_element_t> elements_to_build;
     uint32_t specific_version;
-    bool is_main;
+    bool is_template_ok;
+    std::shared_ptr<::mhconfig::api::request::GetRequest> request;
+    std::shared_ptr<inja::Template> template_;
+    std::string overrides_key;
+    std::string template_rendered;  //TODO Change this to preprocesed_value and store
+    // the optimized protobuf of the asked value
+    std::vector<build_element_t> elements_to_build;
+    std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
   };
 }
 
 struct config_namespace_t {
-  bool ok;
   uint32_t next_raw_config_id{1};
   uint32_t current_version{1};
   uint64_t id;
-  uint64_t last_access_timestamp;
+  uint64_t last_access_timestamp : 56;
+  bool ok : 8;
   std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
   std::string root_path;
 
