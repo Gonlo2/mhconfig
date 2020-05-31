@@ -169,6 +169,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   wait_built->request = get_request_;
   wait_built->template_ = std::move(template_);
   wait_built->overrides_key = overrides_key;
+  wait_built->num_pending_elements = 0;
   wait_built->elements_to_build.resize(documents_in_order.size());
 
   for (size_t i = 0; i < documents_in_order.size(); ++i) {
@@ -215,8 +216,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
           "The document '{}' is building, waiting for it",
           build_element.name
         );
-        wait_built->pending_element_position_by_name[build_element.name] = i;
-
+        wait_built->num_pending_elements += 1;
         config_namespace.wait_builts_by_key[build_element.overrides_key]
           .push_back(wait_built);
         break;
@@ -232,7 +232,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
     }
   }
 
-  if (wait_built->pending_element_position_by_name.empty()) {
+  if (wait_built->num_pending_elements == 0) {
     spdlog::debug(
       "Sending the get request with id {} to built",
       (void*)wait_built->request.get()
@@ -248,7 +248,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
     spdlog::debug(
       "The document '{}' need wait to {} building documents",
       get_request_->document(),
-      wait_built->pending_element_position_by_name.size()
+      wait_built->num_pending_elements
     );
   }
 

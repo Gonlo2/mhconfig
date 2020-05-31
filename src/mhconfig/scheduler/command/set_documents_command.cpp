@@ -65,12 +65,14 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
             "Unchecking element built for the request with id {}",
             (void*) wait_built->request.get()
           );
-          auto search = wait_built->pending_element_position_by_name
-            .find(build_element.name);
-          wait_built->elements_to_build[search->second].config = build_element.config;
-          wait_built->pending_element_position_by_name.erase(search);
-
-          if (wait_built->pending_element_position_by_name.empty()) {
+          for (size_t i = wait_built->elements_to_build.size(); i--;) {
+            if (wait_built->elements_to_build[i].name == build_element.name) {
+              wait_built->elements_to_build[i].config = build_element.config;
+              break;
+            }
+          }
+          wait_built->num_pending_elements -= 1;
+          if (wait_built->num_pending_elements == 0) {
             // If the requested config don't have any ref and it don't have a template
             // we could send it directly to the API
             if ((wait_built->elements_to_build.size() == 1) && (wait_built->template_ == nullptr)) {

@@ -100,6 +100,7 @@ namespace build {
 
   struct wait_built_t {
     uint32_t specific_version;
+    uint16_t num_pending_elements;
     bool is_template_ok;
     std::shared_ptr<::mhconfig::api::request::GetRequest> request;
     std::shared_ptr<inja::Template> template_;
@@ -107,7 +108,6 @@ namespace build {
     std::string template_rendered;  //TODO Change this to preprocesed_value and store
     // the optimized protobuf of the asked value
     std::vector<build_element_t> elements_to_build;
-    std::unordered_map<std::string, uint32_t> pending_element_position_by_name;
   };
 }
 
