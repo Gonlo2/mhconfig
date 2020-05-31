@@ -267,6 +267,15 @@ NodeType get_virtual_node_type(
   if (element->tag() == TAG_FORMAT) return SCALAR_NODE;
   if (element->tag() == TAG_SREF) return SCALAR_NODE;
 
+  switch (element->type()) {
+    case NodeType::SCALAR_NODE: // Fallback
+    case NodeType::STR_NODE: // Fallback
+    case NodeType::INT_NODE: // Fallback
+    case NodeType::FLOAT_NODE: // Fallback
+    case NodeType::BOOL_NODE:
+      return SCALAR_NODE;
+  }
+
   return element->type();
 }
 
@@ -589,11 +598,14 @@ ElementRef make_element(
     case YAML::NodeType::Null:
       return std::make_shared<Element>(NULL_NODE);
 
-    case YAML::NodeType::Scalar:
+    case YAML::NodeType::Scalar: {
+      std::string tag {node.Tag()};
+      sanitize_tag(tag);
       return std::make_shared<Element>(
         pool->add(node.as<std::string>()),
-        pool->add(node.Tag())
+        pool->add(tag)
       );
+    }
 
     case YAML::NodeType::Sequence: {
       auto sequence = std::make_shared<Sequence>();
@@ -601,10 +613,9 @@ ElementRef make_element(
       for (auto it : node) {
         sequence->push_back(make_and_check_element(pool, it, reference_to));
       }
-      return std::make_shared<Element>(
-        sequence,
-        pool->add(node.Tag())
-      );
+      std::string tag {node.Tag()};
+      sanitize_tag(tag);
+      return std::make_shared<Element>(sequence, pool->add(tag));
     }
 
     case YAML::NodeType::Map: {
@@ -616,10 +627,9 @@ ElementRef make_element(
 
         (*map)[k->as<::string_pool::String>()] = v;
       }
-      return std::make_shared<Element>(
-        map,
-        pool->add(node.Tag())
-      );
+      std::string tag {node.Tag()};
+      sanitize_tag(tag);
+      return std::make_shared<Element>(map, pool->add(tag));
     }
   }
 
@@ -680,6 +690,16 @@ bool has_last_version(
   }
 
   return override_metadata.raw_config_by_version.crbegin()->second != nullptr;
+}
+
+void sanitize_tag(std::string& tag) {
+  if (tag.size() >= 18) {
+    static const char* official_tag {"tag:yaml.org,2002:"};
+    for (size_t i = 0; i < 18; ++i) {
+      if (tag[i] != official_tag[i]) return;
+    }
+    tag.replace(0, 18, "!!");
+  }
 }
 
 } /* builder */

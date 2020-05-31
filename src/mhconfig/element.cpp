@@ -8,10 +8,29 @@ namespace mhconfig {
       case SEQUENCE_NODE: return "SEQUENCE";
       case NULL_NODE: return "NULL";
       case SCALAR_NODE: return "SCALAR";
+      case STR_NODE: return "STRING";
+      case INT_NODE: return "INTEGER";
+      case FLOAT_NODE: return "FLOAT";
+      case BOOL_NODE: return "BOOLEAN";
     }
 
     return "unknown";
   }
+
+  NodeType scalar_type(const Literal& tag) {
+    if (tag == TAG_STR) {
+      return STR_NODE;
+    } else if (tag == TAG_INT) {
+      return INT_NODE;
+    } else if (tag == TAG_FLOAT) {
+      return FLOAT_NODE;
+    } else if (tag == TAG_BOOL) {
+      return BOOL_NODE;
+    }
+
+    return SCALAR_NODE;
+  }
+
 
   Element::Element() :
     type_(UNDEFINED_NODE),
@@ -31,7 +50,7 @@ namespace mhconfig {
   {}
 
   Element::Element(const Literal& literal, const Literal& tag) :
-    type_(SCALAR_NODE),
+    type_(scalar_type(tag)),
     tag_(tag),
     literal_(literal)
   {}
@@ -100,7 +119,16 @@ namespace mhconfig {
   }
 
   bool Element::is_scalar() const {
-    return type_ == SCALAR_NODE;
+    switch (type_) {
+      case NodeType::SCALAR_NODE: // Fallback
+      case NodeType::STR_NODE: // Fallback
+      case NodeType::INT_NODE: // Fallback
+      case NodeType::FLOAT_NODE: // Fallback
+      case NodeType::BOOL_NODE:
+        return true;
+      default:
+        return false;
+    }
   }
   bool Element::is_map() const {
     return type_ == MAP_NODE;
@@ -158,7 +186,11 @@ namespace mhconfig {
         out << YAML::Block;
         return out.good();
       }
-      case SCALAR_NODE: {
+      case SCALAR_NODE: // Fallback
+      case STR_NODE: // Fallback
+      case INT_NODE: // Fallback
+      case FLOAT_NODE: // Fallback
+      case BOOL_NODE: {
         out << YAML::Flow;
         out << literal_.str();
         out << YAML::Block;
@@ -172,9 +204,16 @@ namespace mhconfig {
 
   ElementRef Element::clone_without_tag() const {
     switch (type_) {
-      case MAP_NODE: return std::make_shared<Element>(map_);
-      case SEQUENCE_NODE: return std::make_shared<Element>(sequence_);
-      case SCALAR_NODE: return std::make_shared<Element>(literal_);
+      case MAP_NODE:
+        return std::make_shared<Element>(map_);
+      case SEQUENCE_NODE:
+        return std::make_shared<Element>(sequence_);
+      case SCALAR_NODE: // Fallback
+      case STR_NODE: // Fallback
+      case INT_NODE: // Fallback
+      case FLOAT_NODE: // Fallback
+      case BOOL_NODE:
+        return std::make_shared<Element>(literal_);
     }
 
     return std::make_shared<Element>(type_);
@@ -201,6 +240,18 @@ namespace mhconfig {
       case SCALAR_NODE:
         ss << "value: '" << literal_.str() << "', ";
         break;
+      case STR_NODE:
+        ss << "str: '" << literal_.str() << "', ";
+        break;
+      case INT_NODE:
+        ss << "int: '" << literal_.str() << "', ";
+        break;
+      case FLOAT_NODE:
+        ss << "float: '" << literal_.str() << "', ";
+        break;
+      case BOOL_NODE:
+        ss << "bool: '" << literal_.str() << "', ";
+        break;
     }
 
     ss << "tag: '" << tag_.str() << "')";
@@ -216,12 +267,61 @@ namespace mhconfig {
   {
     template <>
     std::pair<bool, ::string_pool::String> as<::string_pool::String>(NodeType type, const Literal& literal) {
-      return std::make_pair(type == SCALAR_NODE, literal);
+      switch (type) {
+        case NodeType::SCALAR_NODE: // Fallback
+        case NodeType::STR_NODE: // Fallback
+        case NodeType::INT_NODE: // Fallback
+        case NodeType::FLOAT_NODE: // Fallback
+        case NodeType::BOOL_NODE:
+          return std::make_pair(true, literal);
+      }
+      return std::make_pair(false, literal);
     }
 
     template <>
     std::pair<bool, std::string> as<std::string>(NodeType type, const Literal& literal) {
-      return std::make_pair(type == SCALAR_NODE, literal.str());
+      switch (type) {
+        case NodeType::SCALAR_NODE: // Fallback
+        case NodeType::STR_NODE: // Fallback
+        case NodeType::INT_NODE: // Fallback
+        case NodeType::FLOAT_NODE: // Fallback
+        case NodeType::BOOL_NODE:
+          return std::make_pair(true, literal.str());
+      }
+      return std::make_pair(false, "");
     }
+
+    template <>
+    std::pair<bool, bool> as<bool>(NodeType type, const Literal& literal) {
+      if (type == NodeType::BOOL_NODE) {
+        if (literal == "true") {
+          return std::make_pair(true, true);
+        } else if (literal == "false") {
+          return std::make_pair(true, false);
+        }
+      }
+      return std::make_pair(false, false);
+    }
+
+    template <>
+    std::pair<bool, int64_t> as<int64_t>(NodeType type, const Literal& literal) {
+      if (type == NodeType::INT_NODE) {
+        auto str{literal.str()};
+        int64_t value = std::strtoll(str.c_str(), nullptr, 10);
+        return std::make_pair(errno == 0, value);
+      }
+      return std::make_pair(false, 0);
+    }
+
+    template <>
+    std::pair<bool, double> as<double>(NodeType type, const Literal& literal) {
+      if (type == NodeType::FLOAT_NODE) {
+        auto str{literal.str()};
+        double value = std::strtod(str.c_str(), nullptr);
+        return std::make_pair(errno == 0, value);
+      }
+      return std::make_pair(false, 0);
+    }
+
   } /* conversion */
 }

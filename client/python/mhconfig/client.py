@@ -1,5 +1,6 @@
 import time
 import traceback
+from enum import IntEnum
 from queue import Queue
 from threading import Lock, Thread, Event
 from collections import defaultdict
@@ -43,27 +44,53 @@ class ServerChangedException(Exception):
     pass
 
 
+class ValueElement(IntEnum):
+    STR = 0
+    UNDEFINED = 1
+    INT = 2
+    FLOAT = 3
+    BOOL = 4
+    NULL = 5
+    MAP = 6
+    SEQUENCE = 7
+
+
+class KeyElement(IntEnum):
+    STR = 0
+
+
 def _decode(elements, idx):
     element = elements[idx]
-    if element.type == mhconfig_pb2.Element.NodeType.SCALAR_NODE:
-        return element.value
-    elif element.type == mhconfig_pb2.Element.NodeType.MAP_NODE:
+    value_element = ValueElement(element.type & 15)
+    if value_element == ValueElement.STR:
+        return element.value_str
+    elif value_element == ValueElement.INT:
+        return element.value_int
+    elif value_element == ValueElement.FLOAT:
+        return element.value_float
+    elif value_element == ValueElement.BOOL:
+        return element.value_bool
+    elif value_element == ValueElement.MAP:
         result = {}
         for _ in range(element.size):
             idx += 1
-            result[elements[idx].key] = _decode(elements, idx)
+            key_element = KeyElement((elements[idx].type>>4) & 7)
+            if key_element == KeyElement.STR:
+                result[elements[idx].key_str] = _decode(elements, idx)
+            else:
+                raise NotImplementedError
             idx += elements[idx].sibling_offset
         return frozendict(result)
-    elif element.type == mhconfig_pb2.Element.NodeType.SEQUENCE_NODE:
+    elif value_element == ValueElement.SEQUENCE:
         result = []
         for _ in range(element.size):
             idx += 1
             result.append(_decode(elements, idx))
             idx += elements[idx].sibling_offset
         return tuple(result)
-    elif element.type == mhconfig_pb2.Element.NodeType.NULL_NODE:
+    elif value_element == ValueElement.NULL:
         return None
-    elif element.type == mhconfig_pb2.Element.NodeType.UNDEFINED_NODE:
+    elif value_element == ValueElement.UNDEFINED:
         return UndefinedElement
     else:
         raise NotImplementedError

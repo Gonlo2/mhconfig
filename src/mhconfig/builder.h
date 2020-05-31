@@ -321,6 +321,8 @@ bool has_last_version(
   const override_metadata_t& override_metadata
 );
 
+void sanitize_tag(std::string& tag);
+
 } /* builder */
 } /* mhconfig */
 

@@ -142,19 +142,37 @@ message WatchResponse {
 }
 
 
+// The type is stored has two groups, the type of the node
+// (four less significative bits) and the type of the key
+// (tree most significative).
+//   Value group:
+//   - String: 0
+//   - Undefined: 1
+//   - Integer: 2
+//   - Float: 3
+//   - Boolean: 4
+//   - Null: 5
+//   - Map: 6
+//   - Sequence: 7
+//   Key group:
+//   - String: 0
+// PS: The idea of use 7 bits is to use only one byte to
+// encode the data (protobuf use the last bit to know if
+// The value don't fit in the actual byte)
+
 message Element {
-  enum NodeType {
-    SCALAR_NODE = 0;
-    MAP_NODE = 1;
-    SEQUENCE_NODE = 2;
-    NULL_NODE = 3;
-    UNDEFINED_NODE = 4;
-  }
-  NodeType type = 1;
+  uint32 type = 1;
   uint32 sibling_offset = 2;
   uint32 size = 3;
-  string key = 4;
-  string value = 5;
+  oneof value {
+    string value_str = 4;
+    sint64 value_int = 5;
+    bool value_bool = 6;
+    double value_float = 7;
+  }
+  oneof key {
+    string key_str = 8;
+  }
 }
 
 // SCALAR

@@ -22,9 +22,11 @@ namespace mhconfig {
     SEQUENCE_NODE = 2,
     NULL_NODE = 3,
     SCALAR_NODE = 4,
+    STR_NODE = 5,
+    INT_NODE = 6,
+    FLOAT_NODE = 7,
+    BOOL_NODE = 8
   };
-
-  std::string to_string(NodeType type);
 
   class Element;
 
@@ -37,8 +39,15 @@ namespace mhconfig {
 
   const static ElementRef UNDEFINED_ELEMENT{std::make_shared<Element>()};
 
-  const static std::string DATA_TAG_EMPTY{"?"};
-  const static Literal TAG_EMPTY{::string_pool::make_small_string(DATA_TAG_EMPTY)};
+  const static Literal TAG_EMPTY{::string_pool::make_small_string("?")};
+  const static Literal TAG_STR{::string_pool::make_small_string("!!str")};
+  const static Literal TAG_INT{::string_pool::make_small_string("!!int")};
+  const static Literal TAG_FLOAT{::string_pool::make_small_string("!!float")};
+  const static Literal TAG_BOOL{::string_pool::make_small_string("!!bool")};
+
+  std::string to_string(NodeType type);
+
+  NodeType scalar_type(const Literal& tag);
 
   namespace conversion
   {
@@ -70,8 +79,6 @@ namespace mhconfig {
 
     template <typename T>
     const T as() const {
-      assert(type_ != UNDEFINED_NODE);
-
       std::pair<bool, T> r = mhconfig::conversion::as<T>(type_, literal_);
       assert(r.first);
       return r.second;
@@ -79,11 +86,14 @@ namespace mhconfig {
 
     template <typename T>
     const T as(T default_value) const {
-      if (type_ == UNDEFINED_NODE) return default_value;
-
       std::pair<bool, T> r = mhconfig::conversion::as<T>(type_, literal_);
       if (!r.first) return default_value;
       return r.second;
+    }
+
+    template <typename T>
+    const std::pair<bool, T> try_as() const {
+      return mhconfig::conversion::as<T>(type_, literal_);
     }
 
     const Sequence& as_sequence() const;

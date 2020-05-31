@@ -18,9 +18,30 @@ bool fill_json(
     case ::mhconfig::NULL_NODE:
       return true;
 
-    case ::mhconfig::SCALAR_NODE:
-      output = root->as<std::string>();
-      return true;
+    case NodeType::SCALAR_NODE: // Fallback
+    case NodeType::STR_NODE: {
+      auto r = root->try_as<std::string>();
+      output = r.second;
+      return r.first;
+    }
+
+    case NodeType::INT_NODE: {
+      auto r = root->try_as<int64_t>();
+      output = r.second;
+      return r.first;
+    }
+
+    case NodeType::FLOAT_NODE: {
+      auto r = root->try_as<double>();
+      output = r.second;
+      return r.first;
+    }
+
+    case NodeType::BOOL_NODE: {
+      auto r = root->try_as<bool>();
+      output = r.second;
+      return r.first;
+    }
 
     case ::mhconfig::MAP_NODE: {
       for (const auto& it : root->as_map()) {

@@ -65,11 +65,12 @@ appended to this first level.
 
 Some custom tags are allowed to facilitate the configuration administration.
 
-* `!format` allow format a string with some parameters
-* `!ref` insert the configuration of another file if don't exists a circular dependency
-* `!sref` insert a scalar or a null value from the same configuration file
-* `!delete` remove the previous element with that path
+* `!format` allow format a string with some parameters.
+* `!ref` insert the configuration of another file if don't exists a circular dependency.
+* `!sref` insert a scalar or a null value from the same configuration file.
+* `!delete` remove the previous element with that path.
 * `!override` force override one value instead merge it.
+* `!!str`, `!!int`, `!!float` and `!!bool` defines the type of a scalar, being a string by default.
 
 #### Format
 
@@ -134,9 +135,6 @@ mysql_variables=
 ## endfor
 }
 ```
-
-PS: Keep in mind that all the scalars of the configuration are strings so the if expressions and the arithmetic operations has
-limitations, this is going to be treated in the future but at the moment it isn't supported.
 
 ## API
 
