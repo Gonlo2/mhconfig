@@ -132,8 +132,28 @@ bool BuildCommand::execute(
     ref_elements_by_document[build_element.name] = build_element.config;
   }
 
-  if (wait_build_->template_ != nullptr) {
-    wait_build_->is_template_ok = false;
+  if (wait_build_->template_ == nullptr) {
+    ::mhconfig::proto::GetResponse get_response;
+    ::mhconfig::api::config::fill_elements(
+      wait_build_->elements_to_build.back().config.get(),
+      &get_response,
+      get_response.add_elements()
+    );
+
+    wait_build_->is_preprocesed_value_ok = get_response.SerializeToString(
+      &wait_build_->preprocesed_value
+    );
+    if (wait_build_->is_preprocesed_value_ok) {
+      context.async_metrics_service->observe(
+        metrics::MetricsService::ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+        {},
+        wait_build_->preprocesed_value.size()
+      );
+    } else {
+      spdlog::warn("Can't optimize the config of the document");
+    }
+  } else {
+    wait_build_->is_preprocesed_value_ok = false;
     try {
       nlohmann::json data;
       if (fill_json(wait_build_->elements_to_build.back().config.get(), data)) {
@@ -144,8 +164,8 @@ bool BuildCommand::execute(
         inja::Renderer renderer(included_templates, callbacks);
         renderer.render_to(os, *wait_build_->template_, data);
 
-        wait_build_->template_rendered = std::move(os.str());
-        wait_build_->is_template_ok = true;
+        wait_build_->preprocesed_value = std::move(os.str());
+        wait_build_->is_preprocesed_value_ok = true;
       }
     } catch(const std::exception &e) {
       spdlog::error(

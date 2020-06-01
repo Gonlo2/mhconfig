@@ -98,11 +98,16 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
   );
 
   if (merged_config != nullptr) {
-    switch (merged_config->status) {
+    auto status = merged_config->status;
+    switch (status) {
       case MergedConfigStatus::UNDEFINED:  // Fallback
       case MergedConfigStatus::BUILDING:
         break;
-      case MergedConfigStatus::OK_CONFIG_NORMAL:  // Fallback
+      case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED:  // Fallback
+        merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
+        // fallthrough
+      case MergedConfigStatus::OK_CONFIG_OPTIMIZING:  // Fallback
+      case MergedConfigStatus::OK_CONFIG_OPTIMIZED:  // Fallback
       case MergedConfigStatus::OK_TEMPLATE: {
         spdlog::debug(
           "The built document '{}' and template '{}' has been found",
@@ -115,7 +120,8 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
         worker_queue.push(
           std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
             std::move(get_request_),
-            std::move(merged_config)
+            std::move(merged_config),
+            status
           )
         );
         return NamespaceExecutionResult::OK;
@@ -222,7 +228,9 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
         break;
       }
 
-      case MergedConfigStatus::OK_CONFIG_NORMAL: {
+      case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED:  // Fallback
+      case MergedConfigStatus::OK_CONFIG_OPTIMIZING:  // Fallback
+      case MergedConfigStatus::OK_CONFIG_OPTIMIZED: {
         spdlog::debug("The document '{}' is ok", build_element.name);
         build_element.config = merged_config->value;
         break;

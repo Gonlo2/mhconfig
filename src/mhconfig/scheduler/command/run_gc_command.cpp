@@ -82,31 +82,21 @@ void RunGcCommand::remove_merge_configs(
     number_of_processed_merged_configs += from.size();
 
     if (generation == 0) {
-      // This generation has the young configs, they has some properties:
-      // - If the config is undefined or building the config remain here
-      // - They use the api basic merged config to avoid waste CPU optimizing it
-      // - Once the config is promoted to the next generation a worker command optimize it in background
-
+      // This generation has the young configs
       auto& to = it.second->merged_config_by_gc_generation[1];
       to.reserve(to.size() + from.size());
       for (size_t i = 0; i < from.size(); ) {
         if(
-          ((from[i]->status == MergedConfigStatus::OK_CONFIG_NORMAL)
+          ((from[i]->status == MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED)
+            || (from[i]->status == MergedConfigStatus::OK_CONFIG_OPTIMIZING)
+            || (from[i]->status == MergedConfigStatus::OK_CONFIG_OPTIMIZED)
             || (from[i]->status == MergedConfigStatus::OK_TEMPLATE)
           ) && (from[i]->creation_timestamp + max_live_in_seconds_ <= current_timestamp)
         ) {
           if (from[i]->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
             ++number_of_removed_merged_configs;
           } else {
-            if (from[i]->status == MergedConfigStatus::OK_CONFIG_NORMAL) {
-              context.worker_queue.push(
-                std::make_unique<::mhconfig::worker::command::OptimizeMergedConfigCommand>(
-                  from[i]
-                )
-              );
-            }
-
-            to.push_back(from[i]);
+            to.push_back(std::move(from[i]));
           }
           jmutils::swap_delete(from, i);
         } else {
@@ -118,11 +108,11 @@ void RunGcCommand::remove_merge_configs(
       auto& to = it.second->merged_config_by_gc_generation[2];
       to.reserve(to.size() + from.size());
 
-      for (auto merged_config : from) {
-        if(merged_config->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
+      for (size_t i = from.size(); i--;) {
+        if(from[i]->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {
           ++number_of_removed_merged_configs;
         } else {
-          to.push_back(merged_config);
+          to.push_back(std::move(from[i]));
         }
       }
 

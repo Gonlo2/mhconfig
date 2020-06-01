@@ -42,7 +42,11 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     (void*) wait_build_->request.get()
   );
 
-  for (auto& build_element : wait_build_->elements_to_build) {
+  bool store_optimized_config = (wait_build_->template_ == nullptr)
+    && wait_build_->is_preprocesed_value_ok;
+
+  for (size_t i = 0, l = wait_build_->elements_to_build.size(); i < l; ++i) {
+    auto& build_element = wait_build_->elements_to_build[i];
     if (build_element.is_new_config) {
       spdlog::debug("Setting the document '{}'", build_element.name);
 
@@ -50,7 +54,13 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
         config_namespace,
         build_element.overrides_key
       );
-      merged_config->status = MergedConfigStatus::OK_CONFIG_NORMAL;
+
+      if ((i == l-1) && store_optimized_config) {
+        merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZED;
+        merged_config->preprocesed_value = std::move(wait_build_->preprocesed_value);
+      } else {
+        merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
+      }
       merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
       merged_config->value = build_element.config;
 
@@ -81,10 +91,16 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
                 (void*) wait_built->request.get()
               );
 
+              auto status = merged_config->status;
+              if (status == MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED) {
+                merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
+              }
+
               worker_queue.push(
                 std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
                   std::move(wait_built->request),
-                  merged_config
+                  merged_config,
+                  status
                 )
               );
             } else {
@@ -121,14 +137,14 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
       .find(wait_build_->overrides_key);
 
     // TODO Cache also if the template isn't ok to avoid try render this again
-    if (wait_build_->is_template_ok) {
+    if (wait_build_->is_preprocesed_value_ok) {
       auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
         config_namespace,
         wait_build_->overrides_key
       );
       merged_config->status = MergedConfigStatus::OK_TEMPLATE;
       merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
-      merged_config->preprocesed_value = wait_build_->template_rendered;
+      merged_config->preprocesed_value = std::move(wait_build_->preprocesed_value);
 
       if (wait_builts_search != config_namespace.wait_builts_by_key.end()) {
         for (size_t i = wait_builts_search->second.size(); i--; ) {
@@ -139,10 +155,13 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
             (void*) wait_built->request.get()
           );
 
+
+          auto status = merged_config->status;
           worker_queue.push(
             std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
               std::move(wait_built->request),
-              merged_config
+              merged_config,
+              status
             )
           );
         }
@@ -180,11 +199,13 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
     wait_build_->overrides_key
   );
 
-  if ((wait_build_->template_ == nullptr) || wait_build_->is_template_ok) {
+  if ((wait_build_->template_ == nullptr) || wait_build_->is_preprocesed_value_ok) {
+    auto status = merged_config->status;
     worker_queue.push(
       std::make_unique<::mhconfig::worker::command::ApiGetReplyCommand>(
         std::move(wait_build_->request),
-        std::move(merged_config)
+        std::move(merged_config),
+        status
       )
     );
   } else {

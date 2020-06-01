@@ -4,8 +4,10 @@
 #include <memory>
 #include <string>
 
+#include "mhconfig/scheduler/command/set_optimized_config_command.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/config/common.h"
 #include "jmutils/time.h"
 
 namespace mhconfig
@@ -23,12 +25,14 @@ public:
 
   ApiGetReplyCommand(
     std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
-    const std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>& merged_config
+    const std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>& merged_config,
+    MergedConfigStatus status
   );
 
   ApiGetReplyCommand(
     std::shared_ptr<::mhconfig::api::request::GetRequest>&& request,
-    std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>&& merged_config
+    std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t>&& merged_config,
+    MergedConfigStatus status
   );
 
   virtual ~ApiGetReplyCommand();
@@ -42,6 +46,7 @@ public:
 private:
   std::shared_ptr<::mhconfig::api::request::GetRequest> request_;
   std::shared_ptr<mhconfig::ds::config_namespace::merged_config_t> merged_config_;
+  MergedConfigStatus status_;
 };
 
 } /* command */

@@ -51,7 +51,9 @@ struct raw_config_t {
 enum MergedConfigStatus {
   UNDEFINED,
   BUILDING,
-  OK_CONFIG_NORMAL,
+  OK_CONFIG_NO_OPTIMIZED,
+  OK_CONFIG_OPTIMIZING,
+  OK_CONFIG_OPTIMIZED,
   OK_TEMPLATE
 };
 
@@ -101,12 +103,11 @@ namespace build {
   struct wait_built_t {
     uint32_t specific_version;
     uint16_t num_pending_elements;
-    bool is_template_ok;
+    bool is_preprocesed_value_ok;
     std::shared_ptr<::mhconfig::api::request::GetRequest> request;
     std::shared_ptr<inja::Template> template_;
     std::string overrides_key;
-    std::string template_rendered;  //TODO Change this to preprocesed_value and store
-    // the optimized protobuf of the asked value
+    std::string preprocesed_value;
     std::vector<build_element_t> elements_to_build;
   };
 }

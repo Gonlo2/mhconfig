@@ -5,7 +5,6 @@
 
 #include "mhconfig/api/request/run_gc_request.h"
 #include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/worker/command/optimize_merged_config_command.h"
 
 namespace mhconfig
 {
