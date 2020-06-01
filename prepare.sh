@@ -24,24 +24,13 @@ function prepare_third_party() {
   )
 }
 
-function prepare_grpc() {
+function prepare_protobuf() {
   print_third_party_msg protobuf
   (
     cd "$BUILD_THIRD_PARTY_PATH/grpc/third_party/protobuf"
     if ! $ONLY_INSTALL ; then
       ./autogen.sh
       ./configure
-      make "-j${MAKE_N_PROC}"
-    fi
-    sudo make install
-
-    sudo ldconfig
-  )
-
-  print_third_party_msg grpc
-  (
-    cd "$BUILD_THIRD_PARTY_PATH/grpc"
-    if ! $ONLY_INSTALL ; then
       make "-j${MAKE_N_PROC}"
     fi
     sudo make install
@@ -87,7 +76,8 @@ if ! $ONLY_INSTALL ; then
   rsync -a third_party build --exclude .git
 fi
 
-prepare_grpc
+prepare_protobuf
+prepare_third_party grpc "-DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF"
 prepare_third_party inja
 prepare_third_party json
 prepare_third_party catch2

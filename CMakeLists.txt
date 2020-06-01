@@ -20,9 +20,11 @@ endif()
 
 add_definitions(-std=c++17)
 
-find_package(PkgConfig REQUIRED)
 find_package(prometheus-cpp REQUIRED)
 find_package(Catch2 REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+
 
 # location of header files
 include_directories(${PROJECT_SOURCE_DIR}/src)
@@ -48,26 +50,20 @@ file(
 # build executable
 add_executable(mhconfig src/mhconfig.cpp ${SRC_SOURCES})
 target_link_libraries(mhconfig pthread)
-target_link_libraries(mhconfig yaml-cpp)
 target_link_libraries(mhconfig ssl.a crypto.a)
+target_link_libraries(mhconfig yaml-cpp)
 target_link_libraries(mhconfig prometheus-cpp::core prometheus-cpp::pull)
 target_link_libraries(mhconfig debug libtcmalloc.so)
 target_link_libraries(mhconfig optimized libtcmalloc_minimal.so)
 target_link_libraries(mhconfig stdc++.a stdc++fs.a)
-target_link_libraries(mhconfig libgrpc++.a grpc.a)
-target_include_directories(mhconfig PUBLIC ${GRPC_INCLUDE_DIRS})
-target_compile_options(mhconfig PUBLIC ${GRPC_CFLAGS_OTHER})
-target_link_libraries(mhconfig libprotobuf.a)
+target_link_libraries(mhconfig gRPC::grpc++)
+
 
 # tests
 add_executable(tests tests/tests.cpp ${TESTS_SOURCES})
 target_link_libraries(tests pthread)
-target_link_libraries(tests yaml-cpp)
 target_link_libraries(tests ssl crypto)
 target_link_libraries(tests stdc++fs)
+target_link_libraries(tests yaml-cpp)
 target_link_libraries(tests prometheus-cpp::core prometheus-cpp::pull)
-target_link_libraries(tests libtcmalloc.so)
-target_link_libraries(tests libgrpc++ grpc)
-target_include_directories(tests PUBLIC ${GRPC_INCLUDE_DIRS})
-target_compile_options(tests PUBLIC ${GRPC_CFLAGS_OTHER})
-target_link_libraries(tests libprotobuf)
+target_link_libraries(mhconfig gRPC::grpc++)
