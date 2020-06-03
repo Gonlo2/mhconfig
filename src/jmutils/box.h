@@ -2,6 +2,7 @@
 #define JMUTILS__BOX_H
 
 #include <atomic>
+#include "spdlog/spdlog.h"
 
 namespace jmutils
 {
@@ -11,7 +12,7 @@ namespace jmutils
   public:
     template<typename... Args>
     Box(Args&&... args) noexcept : value_(args...) {
-      refcount_.store(1);
+      refcount_.store(0);
     }
 
     ~Box() noexcept {
