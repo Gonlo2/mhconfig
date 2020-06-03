@@ -16,8 +16,6 @@
 #include <iostream>
 #include <exception>
 
-#include "spdlog/spdlog.h"
-
 namespace jmutils
 {
 namespace container
@@ -49,12 +47,7 @@ public:
     }
 
     bool push(T&& value) {
-      spdlog::trace("Pushing a value in the sender {}", (void*)this);
       if (!optimistic_push(value)) {
-        spdlog::trace(
-          "Seems that the sender {} is full, obtaining the lock and trying again",
-          (void*)this
-        );
         std::unique_lock lock(full_mutex_);
         full_cond_.wait(lock, [this, &value]{ return optimistic_push(value); });
       }
@@ -80,15 +73,10 @@ public:
 
     inline bool optimistic_push(T& value) {
       if (producer_size_ == (1ul<<SizeLog2)) {
-        spdlog::trace(
-          "The cached producer size of the sender {} is full, obtaining the last value",
-          (void*)this
-        );
         producer_size_ = size_.load(std::memory_order_acquire);
       }
 
       if (producer_size_ != (1ul<<SizeLog2)) {
-        spdlog::trace("Pushing a value in the sender {}", (void*)this);
         std::shared_lock lock(empty_mutex_);
         std::swap(data_[end_], value);
         size_.fetch_add(1, std::memory_order_relaxed);
@@ -97,8 +85,6 @@ public:
         end_ = (end_+1) & ((1<<SizeLog2)-1);
         producer_size_ += 1;
         return true;
-      } else {
-        spdlog::trace("The sender {} is full", (void*)this);
       }
       return false;
     }
@@ -111,7 +97,7 @@ public:
   {
   }
 
-  virtual ~MPSCQueue() {
+  ~MPSCQueue() {
   }
 
   MPSCQueue(const MPSCQueue&) = delete;
@@ -127,15 +113,8 @@ public:
   }
 
   void pop(T& value) {
-    spdlog::trace("Popping a value in the mpsc queue {}", (void*)this);
-
     // First we try to obtain a value using the cached size
     if (!optimistic_pop(value)) {
-      spdlog::trace(
-        "Seems that all the senders of the mpsc queue are empty, obtaining the lock and trying again",
-        (void*)this
-      );
-
       // If we are here that means that all the cached sizes are zero so maybe
       // the queue is empty but we need to check if someone push some value
       // after the check
@@ -145,7 +124,6 @@ public:
   }
 
   bool push(T&& value) {
-    spdlog::trace("Pushing a value in the internal queue {}", (void*)this);
     queue_.push(std::move(value));
     return true;
   }
@@ -162,26 +140,18 @@ private:
       current_sender_ = (current_sender_+1) % (senders_.size()+1);
       if (current_sender_ == senders_.size()) {
         if (!queue_.empty()) {
-          spdlog::trace("Popping a value in the internal queue {}", (void*)this);
           std::swap(queue_.front(), value);
           queue_.pop();
           return true;
-        } else {
-          spdlog::trace("The internal queue {} is empty", (void*)this);
         }
       } else {
         auto sender = senders_[current_sender_].get();
         if (sender->consumer_size_ == 0) {
-          spdlog::trace(
-            "The cached consumer size of the sender {} is empty, obtaining the last value",
-            (void*)sender
-          );
           sender->consumer_size_ = sender->size_
             .load(std::memory_order_acquire);
         }
 
         if (sender->consumer_size_ != 0) {
-          spdlog::trace("Popping a value in the sender {}", (void*)sender);
           std::unique_lock lock(sender->full_mutex_);
           std::swap(sender->data_[sender->start_], value);
           sender->size_.fetch_sub(1, std::memory_order_relaxed);
@@ -190,13 +160,10 @@ private:
           sender->start_ = (sender->start_+1) & ((1<<SizeLog2)-1);
           sender->consumer_size_ -= 1;
           return true;
-        } else {
-          spdlog::trace("The sender {} is empty", (void*)sender);
         }
       }
     }
 
-    spdlog::trace("The mpsc queue {} is empty", (void*)this);
     return false;
   }
 

@@ -16,8 +16,6 @@
 #include <iostream>
 #include <exception>
 
-#include "spdlog/spdlog.h"
-
 namespace jmutils
 {
 namespace container
@@ -87,7 +85,6 @@ public:
         start_ = (start_+1) & ((1<<SizeLog2)-1);
         consumer_size_ -= 1;
         return true;
-      } else {
       }
       return false;
     }
@@ -100,7 +97,7 @@ public:
   {
   }
 
-  virtual ~SPMCQueue() {
+  ~SPMCQueue() {
   }
 
   SPMCQueue(const SPMCQueue&) = delete;
@@ -147,7 +144,6 @@ private:
         receiver->end_ = (receiver->end_+1) & ((1<<SizeLog2)-1);
         receiver->producer_size_ += 1;
         return true;
-      } else {
       }
     }
 
