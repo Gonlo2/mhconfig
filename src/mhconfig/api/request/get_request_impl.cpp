@@ -67,10 +67,10 @@ void GetRequestImpl::set_version(uint32_t version) {
   response_->set_version(version);
 }
 
-void GetRequestImpl::set_element(mhconfig::Element* element) {
+void GetRequestImpl::set_element(const mhconfig::Element& element) {
   elements_data_.clear();
   response_->clear_elements();
-  mhconfig::api::config::fill_elements(element, response_, response_->add_elements());
+  config::fill_elements(element, response_, response_->add_elements());
 }
 
 void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
@@ -117,7 +117,7 @@ void GetRequestImpl::request(
       )
     );
   } else {
-    set_element(UNDEFINED_ELEMENT.get());
+    set_element(UNDEFINED_ELEMENT);
     reply();
   }
 }

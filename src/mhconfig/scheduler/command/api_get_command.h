@@ -164,7 +164,7 @@ private:
         "Can't found a config file with the name '{}'",
         get_request_->document()
       );
-      get_request_->set_element(UNDEFINED_ELEMENT.get());
+      get_request_->set_element(UNDEFINED_ELEMENT);
       return false;
     }
     add_config_overrides_key(

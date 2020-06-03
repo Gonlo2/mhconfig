@@ -33,7 +33,7 @@ const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 struct raw_config_t {
   uint32_t id{0};
   uint32_t crc32{0};
-  ElementRef value{nullptr};
+  Element value;
   std::shared_ptr<inja::Template> template_{nullptr};
   std::unordered_set<std::string> reference_to;
 
@@ -61,15 +61,14 @@ struct merged_config_t {
   MergedConfigStatus status : 8;
   uint64_t creation_timestamp : 56;
   uint64_t last_access_timestamp;
-  ElementRef value;
+  Element value;
   // The preprocesed_value field store the rendered template or the optimized value
   std::string preprocesed_value;
 
   merged_config_t()
     : status(MergedConfigStatus::UNDEFINED),
     creation_timestamp(0),
-    last_access_timestamp(0),
-    value(nullptr)
+    last_access_timestamp(0)
   {}
 };
 
@@ -88,11 +87,11 @@ struct document_metadata_t {
 // TODO move to the builder file
 namespace build {
   struct build_element_t {
-    mhconfig::ElementRef config;
+    mhconfig::Element config;
 
     std::string name;
     std::string overrides_key;
-    bool is_new_config;
+    bool to_build{true};
 
     std::unordered_map<
       std::string,

@@ -7,320 +7,484 @@ namespace mhconfig {
       case MAP_NODE: return "MAP";
       case SEQUENCE_NODE: return "SEQUENCE";
       case NULL_NODE: return "NULL";
-      case SCALAR_NODE: return "SCALAR";
       case STR_NODE: return "STRING";
       case INT_NODE: return "INTEGER";
       case FLOAT_NODE: return "FLOAT";
       case BOOL_NODE: return "BOOLEAN";
+
+      case FORMAT_NODE: return "FORMAT_NODE";
+      case SREF_NODE: return "SREF_NODE";
+      case REF_NODE: return "REF_NODE";
+      case DELETE_NODE: return "DELETE_NODE";
+      case OVERRIDE_MAP_NODE: return "OVERRIDE_MAP_NODE";
+      case OVERRIDE_SEQUENCE_NODE: return "OVERRIDE_SEQUENCE_NODE";
+      case OVERRIDE_NULL_NODE: return "OVERRIDE_NULL_NODE";
+      case OVERRIDE_STR_NODE: return "OVERRIDE_STR_NODE";
+      case OVERRIDE_INT_NODE: return "OVERRIDE_INT_NODE";
+      case OVERRIDE_FLOAT_NODE: return "OVERRIDE_FLOAT_NODE";
+      case OVERRIDE_BOOL_NODE: return "OVERRIDE_BOOL_NODE";
     }
 
     return "unknown";
   }
 
-  NodeType scalar_type(const Literal& tag) {
-    if (tag == TAG_STR) {
-      return STR_NODE;
-    } else if (tag == TAG_INT) {
-      return INT_NODE;
-    } else if (tag == TAG_FLOAT) {
-      return FLOAT_NODE;
-    } else if (tag == TAG_BOOL) {
-      return BOOL_NODE;
+  Element::Element() noexcept {
+  }
+
+  Element::Element(NodeType type) noexcept {
+    switch (type) {
+      case UNDEFINED_NODE:
+        data_.emplace<UNDEFINED_NODE>();
+        break;
+      case MAP_NODE:
+        data_.emplace<MAP_NODE>();
+        break;
+      case SEQUENCE_NODE:
+        data_.emplace<SEQUENCE_NODE>();
+        break;
+      case NULL_NODE:
+        data_.emplace<NULL_NODE>();
+        break;
+      case STR_NODE:
+        data_.emplace<STR_NODE>();
+        break;
+      case INT_NODE:
+        data_.emplace<INT_NODE>();
+        break;
+      case FLOAT_NODE:
+        data_.emplace<FLOAT_NODE>();
+        break;
+      case BOOL_NODE:
+        data_.emplace<BOOL_NODE>();
+        break;
+      case FORMAT_NODE:
+        data_.emplace<FORMAT_NODE>();
+        break;
+      case SREF_NODE:
+        data_.emplace<SREF_NODE>();
+        break;
+      case REF_NODE:
+        data_.emplace<REF_NODE>();
+        break;
+      case DELETE_NODE:
+        data_.emplace<DELETE_NODE>();
+        break;
+      case OVERRIDE_MAP_NODE:
+        data_.emplace<OVERRIDE_MAP_NODE>();
+        break;
+      case OVERRIDE_SEQUENCE_NODE:
+        data_.emplace<OVERRIDE_SEQUENCE_NODE>();
+        break;
+      case OVERRIDE_NULL_NODE:
+        data_.emplace<OVERRIDE_NULL_NODE>();
+        break;
+      case OVERRIDE_STR_NODE:
+        data_.emplace<OVERRIDE_STR_NODE>();
+        break;
+      case OVERRIDE_INT_NODE:
+        data_.emplace<OVERRIDE_INT_NODE>();
+        break;
+      case OVERRIDE_FLOAT_NODE:
+        data_.emplace<OVERRIDE_FLOAT_NODE>();
+        break;
+      case OVERRIDE_BOOL_NODE:
+        data_.emplace<OVERRIDE_BOOL_NODE>();
+        break;
+    }
+  }
+
+  Element::Element(const Literal& value, bool override_) noexcept {
+    if (override_) {
+      data_.emplace<OVERRIDE_STR_NODE>(value);
+    } else {
+      data_.emplace<STR_NODE>(value);
+    }
+  }
+
+  Element::Element(int64_t value, bool override_) noexcept {
+    if (override_) {
+      data_.emplace<OVERRIDE_INT_NODE>(value);
+    } else {
+      data_.emplace<INT_NODE>(value);
+    }
+  }
+
+  Element::Element(double value, bool override_) noexcept {
+    if (override_) {
+      data_.emplace<OVERRIDE_FLOAT_NODE>(value);
+    } else {
+      data_.emplace<FLOAT_NODE>(value);
+    }
+  }
+
+  Element::Element(bool value, bool override_) noexcept {
+    if (override_) {
+      data_.emplace<OVERRIDE_BOOL_NODE>(value);
+    } else {
+      data_.emplace<BOOL_NODE>(value);
+    }
+  }
+
+  Element::Element(MapBox* map, NodeType type) noexcept {
+    map->increment_refcount();
+    switch (type) {
+      case MAP_NODE:
+        data_.emplace<MAP_NODE>(map);
+        break;
+      case OVERRIDE_MAP_NODE:
+        data_.emplace<OVERRIDE_MAP_NODE>(map);
+        break;
+      default:
+        assert(false);
+        break;
+    }
+  }
+
+  Element::Element(SequenceBox* sequence, NodeType type) noexcept {
+    sequence->increment_refcount();
+    switch (type) {
+      case SEQUENCE_NODE:
+        data_.emplace<SEQUENCE_NODE>(sequence);
+        break;
+      case FORMAT_NODE:
+        data_.emplace<FORMAT_NODE>(sequence);
+        break;
+      case SREF_NODE:
+        data_.emplace<SREF_NODE>(sequence);
+        break;
+      case REF_NODE:
+        data_.emplace<REF_NODE>(sequence);
+        break;
+      case OVERRIDE_SEQUENCE_NODE:
+        data_.emplace<OVERRIDE_SEQUENCE_NODE>(sequence);
+        break;
+      default:
+        break;
+    }
+  }
+
+  Element::Element(const Element& rhs) noexcept : data_(rhs.data_) {
+    increment_refcount(data_);
+  }
+
+  Element::Element(Element&& rhs) noexcept {
+    std::swap(data_, rhs.data_);
+  }
+
+  Element& Element::operator=(const Element& o) noexcept {
+    if (this == &o) return *this;
+    decrement_refcount(data_);
+    data_ = o.data_;
+    increment_refcount(data_);
+    return *this;
+  }
+
+  Element& Element::operator=(Element&& o) noexcept {
+    std::swap(data_, o.data_);
+    return *this;
+  }
+
+  Element::~Element() noexcept {
+    decrement_refcount(data_);
+  }
+
+  const Sequence* Element::as_sequence() const {
+    switch (type()) {
+      case SEQUENCE_NODE:
+        return std::get<SEQUENCE_NODE>(data_)->get();
+      case FORMAT_NODE:
+        return std::get<FORMAT_NODE>(data_)->get();
+      case SREF_NODE:
+        return std::get<SREF_NODE>(data_)->get();
+      case REF_NODE:
+        return std::get<REF_NODE>(data_)->get();
+      case OVERRIDE_SEQUENCE_NODE:
+        return std::get<OVERRIDE_SEQUENCE_NODE>(data_)->get();
+      default:
+        return nullptr;
+    }
+  }
+
+  const Map* Element::as_map() const {
+    switch (type()) {
+      case MAP_NODE:
+        return std::get<MAP_NODE>(data_)->get();
+      case OVERRIDE_MAP_NODE:
+        return std::get<OVERRIDE_MAP_NODE>(data_)->get();
+      default:
+        return nullptr;
+    }
+  }
+
+  Element Element::get(const Literal& key) const {
+    auto map = as_map();
+    if (map == nullptr) {
+      spdlog::debug("The element {} isn't a map", repr());
+      return Element();
     }
 
-    return SCALAR_NODE;
+    auto search = map->find(key);
+    return (search == map->end()) ? Element() : search->second;
   }
 
-
-  Element::Element() :
-    type_(UNDEFINED_NODE),
-    tag_(TAG_EMPTY)
-  {
-  }
-
-  Element::Element(NodeType type) :
-    type_(type),
-    tag_(TAG_EMPTY)
-  {}
-
-  Element::Element(const Literal& literal) :
-    type_(SCALAR_NODE),
-    tag_(TAG_EMPTY),
-    literal_(literal)
-  {}
-
-  Element::Element(const Literal& literal, const Literal& tag) :
-    type_(scalar_type(tag)),
-    tag_(tag),
-    literal_(literal)
-  {}
-
-  Element::Element(const MapRef map) :
-    type_(MAP_NODE),
-    tag_(TAG_EMPTY),
-    map_(map)
-  {}
-
-  Element::Element(const MapRef map, const Literal& tag) :
-    type_(MAP_NODE),
-    tag_(tag),
-    map_(map)
-  {}
-
-  Element::Element(const SequenceRef sequence) :
-    type_(SEQUENCE_NODE),
-    tag_(TAG_EMPTY),
-    sequence_(sequence)
-  {}
-
-  Element::Element(const SequenceRef sequence, const Literal& tag) :
-    type_(SEQUENCE_NODE),
-    tag_(tag),
-    sequence_(sequence)
-  {}
-
-  const Sequence& Element::as_sequence() const {
-    assert(type_ == SEQUENCE_NODE);
-    return *sequence_;
-  }
-
-  const Map& Element::as_map() const {
-    assert(type_ == MAP_NODE);
-    return *map_;
-  }
-
-  ElementRef Element::get(const Literal& key) const {
-    if (type_ != MAP_NODE) {
-      spdlog::get("console")->debug("The element {} isn't a map", repr());
-      return UNDEFINED_ELEMENT;
+  Element Element::get(size_t index) const {
+    auto seq = as_sequence();
+    if (seq == nullptr) {
+      spdlog::debug("The element {} isn't a sequence", repr());
+      return Element();
     }
 
-    auto search = map_->find(key);
-    return (search == map_->end()) ? UNDEFINED_ELEMENT : search->second;
-  }
-
-  ElementRef Element::get(size_t index) const {
-    if (type_ != SEQUENCE_NODE) {
-      spdlog::get("console")->debug("The element {} isn't a sequence", repr());
-      return UNDEFINED_ELEMENT;
-    }
-
-    return (sequence_->size() <= index) ? UNDEFINED_ELEMENT : (*sequence_)[index];
+    return (index < seq->size()) ? (*seq)[index] : Element();
   }
 
   bool Element::has(const Literal& key) const {
-    return (type_ == MAP_NODE)
-      ? map_->count(key) > 0
-      : false;
-  }
-
-  const Literal& Element::tag() const {
-    return tag_;
+    auto map = as_map();
+    return (map == nullptr) ? false : map->count(key) > 0;
   }
 
   bool Element::is_scalar() const {
-    switch (type_) {
-      case NodeType::SCALAR_NODE: // Fallback
-      case NodeType::STR_NODE: // Fallback
-      case NodeType::INT_NODE: // Fallback
-      case NodeType::FLOAT_NODE: // Fallback
-      case NodeType::BOOL_NODE:
-        return true;
-      default:
-        return false;
-    }
-  }
-  bool Element::is_map() const {
-    return type_ == MAP_NODE;
-  }
-  bool Element::is_sequence() const {
-    return type_ == SEQUENCE_NODE;
-  }
-  bool Element::is_null() const {
-    return type_ == NULL_NODE;
-  }
-  bool Element::is_undefined() const {
-    return type_ == UNDEFINED_NODE;
-  }
-
-  std::pair<bool, std::string> Element::to_yaml() const {
-    YAML::Emitter out;
-    out.SetIndent(2);
-
-    out << YAML::BeginDoc;
-    bool ok = to_yaml_base(out);
-
-    return std::make_pair(
-      ok && out.good(),
-      std::string(out.c_str())
-    );
-  }
-
-  bool Element::to_yaml_base(YAML::Emitter& out) const {
-    if (tag_.size() > 1) {
-      out << YAML::LocalTag(tag_.str().substr(1, tag_.size()-1));
-    }
-
-    switch (type_) {
-      case MAP_NODE: {
-        out << YAML::BeginMap;
-        for (const auto& it : *map_) {
-          out << YAML::Key << it.first.str();
-          out << YAML::Value;
-          if (!it.second->to_yaml_base(out)) return false;
-        }
-        out << YAML::EndMap;
-        return out.good();
-      }
-      case SEQUENCE_NODE: {
-        out << YAML::BeginSeq;
-        for (const auto& e : *sequence_) {
-          if (!e->to_yaml_base(out)) return false;
-        }
-        out << YAML::EndSeq;
-        return out.good();
-      }
-      case NULL_NODE: {
-        out << YAML::Flow;
-        out << YAML::Null;
-        out << YAML::Block;
-        return out.good();
-      }
-      case SCALAR_NODE: // Fallback
+    switch (type()) {
       case STR_NODE: // Fallback
       case INT_NODE: // Fallback
       case FLOAT_NODE: // Fallback
-      case BOOL_NODE: {
-        out << YAML::Flow;
-        out << literal_.str();
-        out << YAML::Block;
-        return out.good();
-      }
-      case UNDEFINED_NODE:
-        return false;
+      case BOOL_NODE: // Fallback
+      case OVERRIDE_STR_NODE: // Fallback
+      case OVERRIDE_INT_NODE: // Fallback
+      case OVERRIDE_FLOAT_NODE: // Fallback
+      case OVERRIDE_BOOL_NODE:
+        return true;
+      default:
+        break;
     }
     return false;
   }
 
-  ElementRef Element::clone_without_tag() const {
-    switch (type_) {
-      case MAP_NODE:
-        return std::make_shared<Element>(map_);
-      case SEQUENCE_NODE:
-        return std::make_shared<Element>(sequence_);
-      case SCALAR_NODE: // Fallback
+  bool Element::is_string() const {
+    switch (type()) {
       case STR_NODE: // Fallback
-      case INT_NODE: // Fallback
-      case FLOAT_NODE: // Fallback
-      case BOOL_NODE:
-        return std::make_shared<Element>(literal_);
+      case OVERRIDE_STR_NODE: // Fallback
+        return true;
+      default:
+        break;
     }
+    return false;
+  }
 
-    return std::make_shared<Element>(type_);
+  bool Element::is_map() const {
+    return as_map() != nullptr;
+  }
+
+  bool Element::is_sequence() const {
+    return as_sequence() != nullptr;
+  }
+
+  bool Element::is_null() const {
+    switch (type()) {
+      case NULL_NODE: // Fallback
+      case OVERRIDE_NULL_NODE:
+        return true;
+      default:
+        break;
+    }
+    return false;
+  }
+
+  bool Element::is_undefined() const {
+    return type() == UNDEFINED_NODE;
+  }
+
+  bool Element::is_override() const {
+    switch (type()) {
+      case OVERRIDE_MAP_NODE: // Fallback
+      case OVERRIDE_SEQUENCE_NODE: // Fallback
+      case OVERRIDE_NULL_NODE: // Fallback
+      case OVERRIDE_STR_NODE: // Fallback
+      case OVERRIDE_INT_NODE: // Fallback
+      case OVERRIDE_FLOAT_NODE: // Fallback
+      case OVERRIDE_BOOL_NODE:
+        return true;
+      default:
+        break;
+    }
+    return false;
+  }
+
+  Element Element::clone_without_virtual() const {
+    switch (type()) {
+      case UNDEFINED_NODE:
+        return Element();
+      case MAP_NODE:
+        return Element(std::get<MAP_NODE>(data_));
+      case SEQUENCE_NODE:
+        return Element(std::get<SEQUENCE_NODE>(data_));
+      case NULL_NODE:
+        return Element(NULL_NODE);
+      case STR_NODE:
+        return Element(std::get<STR_NODE>(data_));
+      case INT_NODE:
+        return Element(std::get<INT_NODE>(data_));
+      case FLOAT_NODE:
+        return Element(std::get<FLOAT_NODE>(data_));
+      case BOOL_NODE:
+        return Element(std::get<BOOL_NODE>(data_));
+      case FORMAT_NODE:
+        return Element(std::get<FORMAT_NODE>(data_));
+      case SREF_NODE:
+        return Element(std::get<SREF_NODE>(data_));
+      case REF_NODE:
+        return Element(std::get<REF_NODE>(data_));
+      case DELETE_NODE:
+        return Element();
+      case OVERRIDE_MAP_NODE:
+        return Element(std::get<OVERRIDE_MAP_NODE>(data_));
+      case OVERRIDE_SEQUENCE_NODE:
+        return Element(std::get<OVERRIDE_SEQUENCE_NODE>(data_));
+      case OVERRIDE_NULL_NODE:
+        return Element(OVERRIDE_NULL_NODE);
+      case OVERRIDE_STR_NODE:
+        return Element(std::get<OVERRIDE_STR_NODE>(data_));
+      case OVERRIDE_INT_NODE:
+        return Element(std::get<OVERRIDE_INT_NODE>(data_));
+      case OVERRIDE_FLOAT_NODE:
+        return Element(std::get<OVERRIDE_FLOAT_NODE>(data_));
+      case OVERRIDE_BOOL_NODE:
+        return Element(std::get<OVERRIDE_BOOL_NODE>(data_));
+    }
+    assert(false);
   }
 
   std::string Element::repr() const {
     std::stringstream ss;
 
     ss << "Element(";
-    ss << "type: " << to_string(type_) << ", ";
+    ss << "type: " << to_string(type());
 
-    switch (type_) {
+    switch (type()) {
       case NULL_NODE: break;
       case UNDEFINED_NODE: break;
 
-      case MAP_NODE:
-        ss << "size: " << map_->size() << ", ";
+      case MAP_NODE: // Fallback
+      case OVERRIDE_MAP_NODE:
+        ss << ", size: " << as_map()->size();
         break;
 
-      case SEQUENCE_NODE:
-        ss << "size: " << sequence_->size() << ", ";
+      case SEQUENCE_NODE: // Fallback
+      case FORMAT_NODE: // Fallback
+      case SREF_NODE: // Fallback
+      case REF_NODE: // Fallback
+      case OVERRIDE_SEQUENCE_NODE:
+        ss << ", size: " << as_sequence()->size();
         break;
 
-      case SCALAR_NODE:
-        ss << "value: '" << literal_.str() << "', ";
-        break;
       case STR_NODE:
-        ss << "str: '" << literal_.str() << "', ";
+        ss << ", str: '" << std::get<STR_NODE>(data_).str();
         break;
       case INT_NODE:
-        ss << "int: '" << literal_.str() << "', ";
+        ss << ", int: '" << std::get<INT_NODE>(data_);
         break;
       case FLOAT_NODE:
-        ss << "float: '" << literal_.str() << "', ";
+        ss << ", float: '" << std::get<FLOAT_NODE>(data_);
         break;
       case BOOL_NODE:
-        ss << "bool: '" << literal_.str() << "', ";
+        ss << ", bool: '" << std::get<BOOL_NODE>(data_);
+        break;
+
+      case OVERRIDE_STR_NODE:
+        ss << ", str: '" << std::get<OVERRIDE_STR_NODE>(data_).str();
+        break;
+      case OVERRIDE_INT_NODE:
+        ss << ", int: '" << std::get<OVERRIDE_INT_NODE>(data_);
+        break;
+      case OVERRIDE_FLOAT_NODE:
+        ss << ", float: '" << std::get<OVERRIDE_FLOAT_NODE>(data_);
+        break;
+      case OVERRIDE_BOOL_NODE:
+        ss << ", bool: '" << std::get<OVERRIDE_BOOL_NODE>(data_);
         break;
     }
 
-    ss << "tag: '" << tag_.str() << "')";
+    ss << "')";
 
     return ss.str();
-  }
-
-  NodeType Element::type() const {
-    return type_;
   }
 
   namespace conversion
   {
     template <>
-    std::pair<bool, ::string_pool::String> as<::string_pool::String>(NodeType type, const Literal& literal) {
-      switch (type) {
-        case NodeType::SCALAR_NODE: // Fallback
-        case NodeType::STR_NODE: // Fallback
-        case NodeType::INT_NODE: // Fallback
-        case NodeType::FLOAT_NODE: // Fallback
-        case NodeType::BOOL_NODE:
-          return std::make_pair(true, literal);
+    std::pair<bool, ::string_pool::String> as<::string_pool::String>(const Data& data) {
+      switch ((NodeType) data.index()) {
+        case NodeType::STR_NODE:
+          return std::make_pair(true, std::get<STR_NODE>(data));
+        case NodeType::OVERRIDE_STR_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_STR_NODE>(data));
+        default:
+          break;
       }
-      return std::make_pair(false, literal);
+      return std::make_pair(false, ::string_pool::String());
     }
 
     template <>
-    std::pair<bool, std::string> as<std::string>(NodeType type, const Literal& literal) {
-      switch (type) {
-        case NodeType::SCALAR_NODE: // Fallback
-        case NodeType::STR_NODE: // Fallback
-        case NodeType::INT_NODE: // Fallback
-        case NodeType::FLOAT_NODE: // Fallback
+    std::pair<bool, std::string> as<std::string>(const Data& data) {
+      switch ((NodeType) data.index()) {
+        case NodeType::STR_NODE:
+          return std::make_pair(true, std::get<STR_NODE>(data).str());
+        case NodeType::OVERRIDE_STR_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_STR_NODE>(data).str());
         case NodeType::BOOL_NODE:
-          return std::make_pair(true, literal.str());
+          return std::make_pair(true, std::get<BOOL_NODE>(data) ? "true" : "false");
+        case NodeType::OVERRIDE_BOOL_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_BOOL_NODE>(data) ? "true" : "false");
+        case NodeType::INT_NODE:
+          return std::make_pair(true, std::to_string(std::get<INT_NODE>(data)));
+        case NodeType::OVERRIDE_INT_NODE:
+          return std::make_pair(true, std::to_string(std::get<OVERRIDE_INT_NODE>(data)));
+        case NodeType::FLOAT_NODE:
+          return std::make_pair(true, std::to_string(std::get<FLOAT_NODE>(data)));
+        case NodeType::OVERRIDE_FLOAT_NODE:
+          return std::make_pair(true, std::to_string(std::get<OVERRIDE_FLOAT_NODE>(data)));
+        default:
+          break;
       }
       return std::make_pair(false, "");
     }
 
     template <>
-    std::pair<bool, bool> as<bool>(NodeType type, const Literal& literal) {
-      if (type == NodeType::BOOL_NODE) {
-        if (literal == "true") {
-          return std::make_pair(true, true);
-        } else if (literal == "false") {
-          return std::make_pair(true, false);
-        }
+    std::pair<bool, bool> as<bool>(const Data& data) {
+      switch ((NodeType) data.index()) {
+        case NodeType::BOOL_NODE:
+          return std::make_pair(true, std::get<BOOL_NODE>(data));
+        case NodeType::OVERRIDE_BOOL_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_BOOL_NODE>(data));
+        default:
+          break;
       }
       return std::make_pair(false, false);
     }
 
     template <>
-    std::pair<bool, int64_t> as<int64_t>(NodeType type, const Literal& literal) {
-      if (type == NodeType::INT_NODE) {
-        auto str{literal.str()};
-        int64_t value = std::strtoll(str.c_str(), nullptr, 10);
-        return std::make_pair(errno == 0, value);
+    std::pair<bool, int64_t> as<int64_t>(const Data& data) {
+      switch ((NodeType) data.index()) {
+        case NodeType::INT_NODE:
+          return std::make_pair(true, std::get<INT_NODE>(data));
+        case NodeType::OVERRIDE_INT_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_INT_NODE>(data));
+        default:
+          break;
       }
       return std::make_pair(false, 0);
     }
 
     template <>
-    std::pair<bool, double> as<double>(NodeType type, const Literal& literal) {
-      if (type == NodeType::FLOAT_NODE) {
-        auto str{literal.str()};
-        double value = std::strtod(str.c_str(), nullptr);
-        return std::make_pair(errno == 0, value);
+    std::pair<bool, double> as<double>(const Data& data) {
+      switch ((NodeType) data.index()) {
+        case NodeType::FLOAT_NODE:
+          return std::make_pair(true, std::get<FLOAT_NODE>(data));
+        case NodeType::OVERRIDE_FLOAT_NODE:
+          return std::make_pair(true, std::get<OVERRIDE_FLOAT_NODE>(data));
+        default:
+          break;
       }
-      return std::make_pair(false, 0);
+      return std::make_pair(false, 0.0);
     }
 
   } /* conversion */

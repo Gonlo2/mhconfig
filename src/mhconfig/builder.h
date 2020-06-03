@@ -11,6 +11,7 @@
 #include "mhconfig/ds/config_namespace.h"
 #include "yaml-cpp/exceptions.h"
 #include "jmutils/common.h"
+#include "jmutils/box.h"
 #include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
@@ -46,6 +47,14 @@ namespace {
 }
 
 using namespace mhconfig::ds::config_namespace;
+
+const static std::string TAG_NO_PLAIN_SCALAR{"!"};
+const static std::string TAG_PLAIN_SCALAR{"?"};
+const static std::string TAG_NULL{"tag:yaml.org,2002:null"};
+const static std::string TAG_STR{"tag:yaml.org,2002:str"};
+const static std::string TAG_INT{"tag:yaml.org,2002:int"};
+const static std::string TAG_FLOAT{"tag:yaml.org,2002:float"};
+const static std::string TAG_BOOL{"tag:yaml.org,2002:bool"};
 
 const static std::string TAG_FORMAT{"!format"};
 const static std::string TAG_SREF{"!sref"};
@@ -204,52 +213,59 @@ bool index_files(
   return !error_code;
 }
 
-ElementRef override_with(
-  ElementRef a,
-  ElementRef b,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+Element override_with(
+  const Element& a,
+  const Element& b,
+  const std::unordered_map<std::string, Element> &elements_by_document
 );
 
-NodeType get_virtual_node_type(ElementRef element);
-
-ElementRef apply_tags(
-  ::string_pool::Pool* pool,
-  ElementRef element,
-  ElementRef root,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+NodeType get_virtual_node_type(
+  const Element& element
 );
 
-ElementRef apply_tag_format(
+bool apply_tags(
   ::string_pool::Pool* pool,
-  ElementRef element
+  const Element& element,
+  const Element& root,
+  const std::unordered_map<std::string, Element> &elements_by_document,
+  Element& result
+);
+
+Element apply_tag_format(
+  ::string_pool::Pool* pool,
+  const Element& element
 );
 
 std::string format_str(
   const std::string& templ,
-  uint32_t num_arguments,
   const std::vector<std::pair<std::string, std::string>>& template_arguments
 );
 
-ElementRef apply_tag_ref(
-  ElementRef element,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+Element apply_tag_ref(
+  const Element& element,
+  const std::unordered_map<std::string, Element> &elements_by_document
 );
 
-ElementRef apply_tag_sref(
-  ElementRef child,
-  ElementRef root
+Element apply_tag_sref(
+  const Element& child,
+  Element root
 );
 
 /*
  * All the structure checks must be done here
  */
-ElementRef make_and_check_element(
+Element make_and_check_element(
   ::string_pool::Pool* pool,
   YAML::Node &node,
   std::unordered_set<std::string> &reference_to
 );
 
-ElementRef make_element(
+bool is_a_valid_path(
+  const Sequence* path,
+  const std::string& tag
+);
+
+Element make_element(
   ::string_pool::Pool* pool,
   YAML::Node &node,
   std::unordered_set<std::string> &reference_to
@@ -320,8 +336,6 @@ inline void with_raw_config(
 bool has_last_version(
   const override_metadata_t& override_metadata
 );
-
-void sanitize_tag(std::string& tag);
 
 } /* builder */
 } /* mhconfig */

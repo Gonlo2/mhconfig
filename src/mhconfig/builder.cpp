@@ -151,38 +151,37 @@ load_raw_config_result_t load_template_raw_config(
   );
 }
 
-ElementRef override_with(
-  ElementRef a,
-  ElementRef b,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+Element override_with(
+  const Element& a,
+  const Element& b,
+  const std::unordered_map<std::string, Element> &elements_by_document
 ) {
-  if (b->tag() == TAG_OVERRIDE) {
-    return b->clone_without_tag();
+  if (b.is_override()) {
+    return b.clone_without_virtual();
   }
 
-  bool is_first_a_ref = a->tag() == TAG_REF;
-  if (is_first_a_ref || (b->tag() == TAG_REF)) {
+  bool is_first_a_ref = a.type() == REF_NODE;
+  if (is_first_a_ref || (b.type() == REF_NODE)) {
     auto referenced_element = apply_tag_ref(
       is_first_a_ref ? a : b,
-      ref_elements_by_document
+      elements_by_document
     );
 
     return override_with(
       is_first_a_ref ? referenced_element : a,
       is_first_a_ref ? b : referenced_element,
-      ref_elements_by_document
+      elements_by_document
     );
   }
 
   switch (get_virtual_node_type(b)) {
-    case NULL_NODE:
-    case SCALAR_NODE: {
+    case STR_NODE: {
       NodeType type = get_virtual_node_type(a);
-      if ((type != NULL_NODE) && (type != SCALAR_NODE)) {
+      if (type != STR_NODE) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
-          a->repr(),
-          b->repr(),
+          a.repr(),
+          b.repr(),
           TAG_OVERRIDE
         );
         return a;
@@ -192,236 +191,252 @@ ElementRef override_with(
     }
 
     case MAP_NODE: {
-      if (!a->is_map()) {
+      if (!a.is_map()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
-          a->repr(),
-          b->repr(),
+          a.repr(),
+          b.repr(),
           TAG_OVERRIDE
         );
         return a;
       }
 
-      auto map = std::make_shared<Map>();
-      map->reserve(a->as_map().size() + b->as_map().size());
+      auto map_box = new MapBox;
+      auto map = map_box->get();
+      auto map_a = a.as_map();
+      auto map_b = b.as_map();
+      map->reserve(map_a->size() + map_b->size());
 
-      for (const auto& x : a->as_map()) {
-        if (x.second->tag() != TAG_DELETE) {
+      for (const auto& x : *map_a) {
+        if (x.second.type() != DELETE_NODE) {
           (*map)[x.first] = x.second;
         }
       }
 
-      for (const auto& x : b->as_map()) {
+      for (const auto& x : *map_b) {
         const auto& search = map->find(x.first);
         if (search == map->end()) {
-          if (x.second->tag() != TAG_DELETE) {
+          if (x.second.type() != DELETE_NODE) {
             (*map)[x.first] = x.second;
           }
-        } else if (x.second->tag() == TAG_DELETE) {
+        } else if (x.second.type() == DELETE_NODE) {
           map->erase(search);
         } else {
           (*map)[x.first] = override_with(
             search->second,
             x.second,
-            ref_elements_by_document
+            elements_by_document
           );
         }
       }
 
-      return std::make_shared<Element>(map);
+      return Element(map_box);
     }
 
     case SEQUENCE_NODE: {
-      if (!a->is_sequence()) {
+      if (!a.is_sequence()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
-          a->repr(),
-          b->repr(),
+          a.repr(),
+          b.repr(),
           TAG_OVERRIDE
         );
         return a;
       }
 
-      auto sequence = std::make_shared<Sequence>();
-      sequence->reserve(a->as_sequence().size() + b->as_sequence().size());
+      auto seq_box = new SequenceBox;
+      auto seq = seq_box->get();
+      auto seq_a = a.as_sequence();
+      auto seq_b = b.as_sequence();
+      seq->reserve(seq_a->size() + seq_b->size());
 
-      for (const auto& x: a->as_sequence()) {
-        if (x->tag() != TAG_DELETE) sequence->push_back(x);
+      for (size_t i = 0, l = seq_a->size(); i < l; ++i) {
+        if ((*seq_a)[i].type() != DELETE_NODE) {
+          seq->push_back((*seq_a)[i]);
+        }
       }
 
-      for (const auto& x: b->as_sequence()) {
-        if (x->tag() != TAG_DELETE) sequence->push_back(x);
+      for (size_t i = 0, l = seq_b->size(); i < l; ++i) {
+        if ((*seq_b)[i].type() != DELETE_NODE) {
+          seq->push_back((*seq_b)[i]);
+        }
       }
 
-      return std::make_shared<Element>(sequence);
+      return Element(seq_box);
     }
   }
 
-  spdlog::warn("Can't override {} with {}", a->repr(), b->repr());
+  spdlog::warn("Can't override {} with {}", a.repr(), b.repr());
   return a;
 }
 
 NodeType get_virtual_node_type(
-  ElementRef element
+  const Element& element
 ) {
-  if (element->tag() == TAG_FORMAT) return SCALAR_NODE;
-  if (element->tag() == TAG_SREF) return SCALAR_NODE;
-
-  switch (element->type()) {
-    case NodeType::SCALAR_NODE: // Fallback
+  auto type = element.type();
+  switch (type) {
+    case NodeType::FORMAT_NODE: // Fallback
+    case NodeType::SREF_NODE: // Fallback
+    case NodeType::NULL_NODE: // Fallback
     case NodeType::STR_NODE: // Fallback
     case NodeType::INT_NODE: // Fallback
     case NodeType::FLOAT_NODE: // Fallback
-    case NodeType::BOOL_NODE:
-      return SCALAR_NODE;
+    case NodeType::BOOL_NODE: // Fallback
+      return STR_NODE;
+    default:
+      break;
   }
 
-  return element->type();
+  return type;
 }
 
-ElementRef apply_tags(
+bool apply_tags(
   ::string_pool::Pool* pool,
-  ElementRef element,
-  ElementRef root,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+  const Element& element,
+  const Element& root,
+  const std::unordered_map<std::string, Element> &elements_by_document,
+  Element& result
 ) {
-  if (element->tag() == TAG_DELETE) {
-    return UNDEFINED_ELEMENT;
-  }
+  bool any_changed = false;
 
-  switch (element->type()) {
-    case MAP_NODE: {
-      auto map = std::make_shared<Map>();
-      map->reserve(element->as_map().size());
+  switch (element.type()) {
+    case MAP_NODE: // Fallback
+    case OVERRIDE_MAP_NODE: {
+      auto map_box = new MapBox;
+      auto map = map_box->get();
+      map->reserve(element.as_map()->size());
 
-      bool changed = false;
-      for (const auto& it : element->as_map()) {
-        if (it.second->tag() == TAG_DELETE) {
-          changed = true;
+      for (const auto& it : *element.as_map()) {
+        if (it.second.type() == DELETE_NODE) {
+          any_changed = true;
         } else {
-          auto new_element = apply_tags(pool, it.second, root, ref_elements_by_document);
-
-          changed |= new_element != it.second;
-          (*map)[it.first] = new_element;
+          auto changed = apply_tags(
+            pool,
+            it.second,
+            root,
+            elements_by_document,
+            (*map)[it.first]
+          );
+          any_changed |= changed;
         }
       }
 
-      if (changed) {
-        element = std::make_shared<Element>(map, element->tag());
-      }
+      result = any_changed ? Element(map_box, element.type()) : element;
       break;
     }
 
-    case SEQUENCE_NODE: {
-      auto sequence = std::make_shared<Sequence>();
-      sequence->reserve(element->as_sequence().size());
+    case SEQUENCE_NODE: // Fallback
+    case FORMAT_NODE: // Fallback
+    case SREF_NODE: // Fallback
+    case REF_NODE: // Fallback
+    case OVERRIDE_SEQUENCE_NODE: {
+      auto seq_box = new SequenceBox;
+      auto seq = seq_box->get();
+      auto current_sequence = element.as_sequence();
+      seq->reserve(current_sequence->size());
 
-      bool changed = false;
-      for (const auto x : element->as_sequence()) {
-        if (x->tag() == TAG_DELETE) {
-          changed = true;
+      for (size_t i = 0, l = current_sequence->size(); i < l; ++i) {
+        if ((*current_sequence)[i].type() == DELETE_NODE) {
+          any_changed = true;
         } else {
-          auto new_element = apply_tags(pool, x, root, ref_elements_by_document);
-
-          changed |= new_element != x;
-          sequence->push_back(new_element);
+          bool changed = apply_tags(
+            pool,
+            (*current_sequence)[i],
+            root,
+            elements_by_document,
+            seq->emplace_back()
+          );
+          any_changed |= changed;
         }
       }
 
-      if (changed) {
-        element = std::make_shared<Element>(sequence, element->tag());
-      }
+      result = any_changed ? Element(seq_box, element.type()) : element;
       break;
     }
+    default:
+      result = element;
   }
 
-  if (element->tag() == TAG_SREF) {
-    element = apply_tag_sref(element, root);
+  if (result.type() == SREF_NODE) {
+    result = apply_tag_sref(result, root);
+    any_changed = true;
   }
 
-  if (element->tag() == TAG_REF) {
-    element = apply_tag_ref(element, ref_elements_by_document);
+  if (result.type() == REF_NODE) {
+    result = apply_tag_ref(result, elements_by_document);
+    any_changed = true;
   }
 
-  if (element->tag() == TAG_FORMAT) {
-    element = apply_tag_format(pool, element);
+  if (result.type() == FORMAT_NODE) {
+    result = apply_tag_format(pool, result);
+    any_changed = true;
   }
 
-  return element;
+  return any_changed;
 }
 
-ElementRef apply_tag_format(
+Element apply_tag_format(
   ::string_pool::Pool* pool,
-  ElementRef element
+  const Element& element
 ) {
-  if (!element->is_sequence() || (element->as_sequence().size() != 2)) {
+  if (!element.is_sequence() || (element.as_sequence()->size() != 2)) {
     spdlog::error(
       "The structure with the tag '{}' must be a sequence of size 2",
       TAG_FORMAT
     );
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
-  auto template_node = element->as_sequence()[0];
-  auto arguments_node = element->as_sequence()[1];
-
-  if (!template_node->is_scalar()) {
+  auto& template_node = (*element.as_sequence())[0];
+  auto template_result = template_node.try_as<std::string>();
+  if (!template_node.is_string() || !template_result.first) {
     spdlog::error(
       "The '{}' tag first argument must be a template",
       TAG_FORMAT
     );
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
-  if (!arguments_node->is_map()) {
+  auto& arguments_node = (*element.as_sequence())[1];
+  if (!arguments_node.is_map()) {
     spdlog::error(
-      "The '{}' tag second argument must be a map [string -> string]",
+      "The '{}' tag second argument must be a map [string -> scalar]",
       TAG_FORMAT
     );
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
-  uint32_t num_arguments = arguments_node->as_map().size();
-  if (num_arguments > 8) {
+  std::vector<std::pair<std::string, std::string>> template_arguments;
+  for (const auto& it : *arguments_node.as_map()) {
+    auto r = it.second.try_as<std::string>();
+    if (!it.second.is_scalar() || !r.first) {
+      spdlog::error(
+        "The '{}' tag second argument must be a map [string -> scalar]",
+        TAG_FORMAT
+      );
+      return Element();
+    }
+
+    template_arguments.emplace_back(it.first.str(), r.second);
+  }
+
+  if (template_arguments.size() > 8) {
     spdlog::error(
       "The '{}' tag can't handle more that 8 arguments",
       TAG_FORMAT
     );
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
-  std::vector<std::pair<std::string, std::string>> template_arguments;
-  for (const auto& it : arguments_node->as_map()) {
-    if (!it.second->is_scalar()) {
-      spdlog::error(
-        "The '{}' tag second argument must be a map [string -> string]",
-        TAG_FORMAT
-      );
-      return UNDEFINED_ELEMENT;
-    }
-
-    template_arguments.emplace_back(
-      it.first.str(),
-      it.second->as<std::string>()
-    );
-  }
-
-  std::string value = format_str(
-    template_node->as<std::string>(),
-    num_arguments,
-    template_arguments
-  );
-
-  return std::make_shared<Element>(pool->add(value));
+  std::string value = format_str(template_result.second, template_arguments);
+  return Element(pool->add(value));
 }
 
 std::string format_str(
   const std::string& templ,
-  uint32_t num_arguments,
   const std::vector<std::pair<std::string, std::string>>& template_arguments
 ) {
-
-  switch (num_arguments) {
+  switch (template_arguments.size()) {
     case 0:
       return templ;
 
@@ -505,50 +520,44 @@ std::string format_str(
   return "";
 }
 
-ElementRef apply_tag_ref(
-  ElementRef element,
-  const std::unordered_map<std::string, ElementRef> &ref_elements_by_document
+Element apply_tag_ref(
+  const Element& element,
+  const std::unordered_map<std::string, Element> &elements_by_document
 ) {
-  const auto& path = element->as_sequence();
-  size_t path_len = path.size();
+  const auto path = element.as_sequence();
 
-  std::string key = path[0]->as<std::string>();
-  auto search = ref_elements_by_document.find(key);
-  if (search == ref_elements_by_document.end()) {
+  std::string key = (*path)[0].as<std::string>();
+  auto search = elements_by_document.find(key);
+  if (search == elements_by_document.end()) {
     spdlog::error("Can't ref to the document '{}'", key);
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
   auto referenced_element = search->second;
-  for (size_t i = 1; i < path_len; ++i) {
-    referenced_element = referenced_element->get(path[i]->as<::string_pool::String>());
+  for (size_t i = 1, l = path->size(); i < l; ++i) {
+    referenced_element = referenced_element.get(
+      (*path)[i].as<::string_pool::String>()
+    );
   }
 
   return referenced_element;
 }
 
-ElementRef apply_tag_sref(
-  ElementRef element,
-  ElementRef root
+Element apply_tag_sref(
+  const Element& element,
+  Element root
 ) {
-  if (!element->is_sequence() || element->as_sequence().empty()) {
-    spdlog::error(
-      "The structure with the tag '{}' must be a non empty sequence",
-      TAG_SREF
-    );
-    return UNDEFINED_ELEMENT;
+  const auto path = element.as_sequence();
+  for (size_t i = 0, l = path->size(); i < l; ++i) {
+    root = root.get((*path)[i].as<::string_pool::String>());
   }
 
-  for (const auto& element : element->as_sequence()) {
-    root = root->get(element->as<::string_pool::String>());
-  }
-
-  if (!root->is_scalar()) {
+  if (!root.is_scalar()) {
     spdlog::error(
       "The element referenced by '{}' must be a scalar",
       TAG_SREF
     );
-    return UNDEFINED_ELEMENT;
+    return Element();
   }
 
   return root;
@@ -557,83 +566,153 @@ ElementRef apply_tag_sref(
 /*
  * All the structure checks must be done here
  */
-ElementRef make_and_check_element(
+Element make_and_check_element(
     ::string_pool::Pool* pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
   auto element = make_element(pool, node, reference_to);
 
-  if (element->tag() == TAG_REF) {
-    if (!element->is_sequence()) {
-      spdlog::error("The entry with the '{}' tag must be a sequence", TAG_REF);
-      return UNDEFINED_ELEMENT;
-    }
-
-    const auto& ref_path = element->as_sequence();
-    if (ref_path.empty()) {
-      spdlog::error("The key 'path' in a '{}' must be a sequence with at least one element", TAG_REF);
-      return UNDEFINED_ELEMENT;
-    }
-
-    for (const auto x : ref_path) {
-      if (!x->is_scalar()) {
-        spdlog::error("All the elements of the key 'path' in a '{}' must be scalars", TAG_REF);
-        return UNDEFINED_ELEMENT;
-      }
-    }
-
-    reference_to.insert(ref_path.front()->as<std::string>());
+  if (element.type() == REF_NODE) {
+    const auto path = element.as_sequence();
+    if (!is_a_valid_path(path, TAG_REF)) return Element();
+    reference_to.insert(path->front().as<std::string>());
+  } else if (element.type() == SREF_NODE) {
+    if (!is_a_valid_path(element.as_sequence(), TAG_SREF)) return Element();
   }
 
   return element;
 }
 
-ElementRef make_element(
+bool is_a_valid_path(
+  const Sequence* path,
+  const std::string& tag
+) {
+  if (path->empty()) {
+    spdlog::error(
+      "The key 'path' in a '{}' must be a sequence with at least one element",
+      tag
+    );
+    return false;
+  }
+
+  for (size_t i = 0, l = path->size(); i < l; ++i) {
+    if (!(*path)[i].is_string()) {
+      spdlog::error(
+        "All the elements of the key 'path' in a '{}' must be strings",
+        tag
+      );
+      return false;
+    }
+  }
+
+  return true;
+}
+
+Element make_element(
     ::string_pool::Pool* pool,
     YAML::Node &node,
     std::unordered_set<std::string> &reference_to
 ) {
   switch (node.Type()) {
     case YAML::NodeType::Null:
-      return std::make_shared<Element>(NULL_NODE);
+      if ((node.Tag() == "") || (node.Tag() == TAG_NULL)) {
+        return Element(NULL_NODE);
+      } else if (node.Tag() == TAG_OVERRIDE) {
+        return Element(OVERRIDE_NULL_NODE);
+      }
+      spdlog::error("Unknown tag '{}' for a null value", node.Tag());
+      return Element();
 
-    case YAML::NodeType::Scalar: {
-      std::string tag {node.Tag()};
-      sanitize_tag(tag);
-      return std::make_shared<Element>(
-        pool->add(node.as<std::string>()),
-        pool->add(tag)
+    case YAML::NodeType::Scalar:
+      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
+        return Element(pool->add(node.as<std::string>()));
+      } else if (node.Tag() == TAG_STR) {
+        return Element(pool->add(node.as<std::string>()));
+      } else if (node.Tag() == TAG_INT) {
+        auto str{node.as<std::string>()};
+        int64_t value = std::strtoll(str.c_str(), nullptr, 10);
+        if (errno == 0) return Element(value);
+        spdlog::warn("Can't parse '{}' as a int", str);
+        return Element();
+      } else if (node.Tag() == TAG_FLOAT) {
+        auto str{node.as<std::string>()};
+        double value = std::strtod(str.c_str(), nullptr);
+        if (errno == 0) return Element(value);
+        spdlog::warn("Can't parse '{}' as a float", str);
+        return Element();
+      } else if (node.Tag() == TAG_BOOL) {
+        auto str{node.as<std::string>()};
+        if (str == "true") {
+          return Element(true);
+        } else if (str == "false") {
+          return Element(false);
+        }
+        spdlog::warn("Can't parse '{}' as a bool", str);
+        return Element();
+      } else if (node.Tag() == TAG_DELETE) {
+        return Element(DELETE_NODE);
+      } else if (node.Tag() == TAG_OVERRIDE) {
+        return Element(pool->add(node.as<std::string>()), true);
+      }
+      spdlog::error(
+        "Unknown tag '{}' for the scalar value {}",
+        node.Tag(),
+        node.as<std::string>()
       );
-    }
+      return Element();
 
     case YAML::NodeType::Sequence: {
-      auto sequence = std::make_shared<Sequence>();
-      sequence->reserve(node.size());
+      auto seq_box = new SequenceBox;
+      auto seq = seq_box->get();
+      seq->reserve(node.size());
       for (auto it : node) {
-        sequence->push_back(make_and_check_element(pool, it, reference_to));
+        seq->push_back(make_and_check_element(pool, it, reference_to));
       }
-      std::string tag {node.Tag()};
-      sanitize_tag(tag);
-      return std::make_shared<Element>(sequence, pool->add(tag));
+      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
+        return Element(seq_box);
+      } else if (node.Tag() == TAG_FORMAT) {
+        return Element(seq_box, FORMAT_NODE);
+      } else if (node.Tag() == TAG_SREF) {
+        return Element(seq_box, SREF_NODE);
+      } else if (node.Tag() == TAG_REF) {
+        return Element(seq_box, REF_NODE);
+      } else if (node.Tag() == TAG_OVERRIDE) {
+        return Element(seq_box, OVERRIDE_SEQUENCE_NODE);
+      }
+      spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
+      return Element();
     }
 
     case YAML::NodeType::Map: {
-      auto map = std::make_shared<Map>();
+      auto map_box = new MapBox;
+      auto map = map_box->get();
       map->reserve(node.size());
       for (auto it : node) {
         auto k = make_and_check_element(pool, it.first, reference_to);
-        auto v = make_and_check_element(pool, it.second, reference_to);
+        auto kk = k.try_as<::string_pool::String>();
+        if (!kk.first) {
+          spdlog::error("The key of a map must be a string");
+          return Element();
+        }
 
-        (*map)[k->as<::string_pool::String>()] = v;
+        (*map)[std::move(kk.second)] = make_and_check_element(
+          pool,
+          it.second,
+          reference_to
+        );
       }
-      std::string tag {node.Tag()};
-      sanitize_tag(tag);
-      return std::make_shared<Element>(map, pool->add(tag));
+      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
+        return Element(map_box);
+      } else if (node.Tag() == TAG_OVERRIDE) {
+        return Element(map_box, OVERRIDE_MAP_NODE);
+      }
+      spdlog::error("Unknown tag '{}' for a map value", node.Tag());
+      return Element();
     }
   }
 
-  return UNDEFINED_ELEMENT;
+  return Element();
 }
 
 // Get logic
@@ -690,16 +769,6 @@ bool has_last_version(
   }
 
   return override_metadata.raw_config_by_version.crbegin()->second != nullptr;
-}
-
-void sanitize_tag(std::string& tag) {
-  if (tag.size() >= 18) {
-    static const char* official_tag {"tag:yaml.org,2002:"};
-    for (size_t i = 0; i < 18; ++i) {
-      if (tag[i] != official_tag[i]) return;
-    }
-    tag.replace(0, 18, "!!");
-  }
 }
 
 } /* builder */

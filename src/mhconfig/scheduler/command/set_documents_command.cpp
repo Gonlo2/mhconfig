@@ -47,7 +47,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 
   for (size_t i = 0, l = wait_build_->elements_to_build.size(); i < l; ++i) {
     auto& build_element = wait_build_->elements_to_build[i];
-    if (build_element.is_new_config) {
+    if (build_element.to_build) {
       spdlog::debug("Setting the document '{}'", build_element.name);
 
       auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
@@ -78,6 +78,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
           for (size_t i = wait_built->elements_to_build.size(); i--;) {
             if (wait_built->elements_to_build[i].name == build_element.name) {
               wait_built->elements_to_build[i].config = build_element.config;
+              wait_built->elements_to_build[i].to_build = false;
               break;
             }
           }
@@ -226,7 +227,7 @@ NamespaceExecutionResult SetDocumentsCommand::execute_on_namespace(
 bool SetDocumentsCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
-  wait_build_->request->set_element(UNDEFINED_ELEMENT.get());
+  wait_build_->request->set_element(UNDEFINED_ELEMENT);
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(

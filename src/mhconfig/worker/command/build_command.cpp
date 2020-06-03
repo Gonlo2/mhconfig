@@ -8,55 +8,64 @@ namespace command
 {
 
 bool fill_json(
-  mhconfig::Element* root,
+  const mhconfig::Element& root,
   nlohmann::json& output
 ) {
-  switch (root->type()) {
-    case ::mhconfig::UNDEFINED_NODE:
+  switch (root.type()) {
+    case NodeType::UNDEFINED_NODE:
       return false;
 
-    case ::mhconfig::NULL_NODE:
+    case NodeType::NULL_NODE:
+    case NodeType::OVERRIDE_NULL_NODE:
       return true;
 
-    case NodeType::SCALAR_NODE: // Fallback
-    case NodeType::STR_NODE: {
-      auto r = root->try_as<std::string>();
+    case NodeType::STR_NODE: // Fallback
+    case NodeType::OVERRIDE_STR_NODE: {
+      auto r = root.try_as<std::string>();
       output = r.second;
       return r.first;
     }
 
-    case NodeType::INT_NODE: {
-      auto r = root->try_as<int64_t>();
+    case NodeType::INT_NODE: // Fallback
+    case NodeType::OVERRIDE_INT_NODE: {
+      auto r = root.try_as<int64_t>();
       output = r.second;
       return r.first;
     }
 
-    case NodeType::FLOAT_NODE: {
-      auto r = root->try_as<double>();
+    case NodeType::FLOAT_NODE: // Fallback
+    case NodeType::OVERRIDE_FLOAT_NODE: {
+      auto r = root.try_as<double>();
       output = r.second;
       return r.first;
     }
 
-    case NodeType::BOOL_NODE: {
-      auto r = root->try_as<bool>();
+    case NodeType::BOOL_NODE: // Fallback
+    case NodeType::OVERRIDE_BOOL_NODE: {
+      auto r = root.try_as<bool>();
       output = r.second;
       return r.first;
     }
 
-    case ::mhconfig::MAP_NODE: {
-      for (const auto& it : root->as_map()) {
-        if (!fill_json(it.second.get(), output[it.first.str()])) {
+    case NodeType::MAP_NODE: // Fallback
+    case NodeType::OVERRIDE_MAP_NODE: {
+      for (const auto& it : *root.as_map()) {
+        if (!fill_json(it.second, output[it.first.str()])) {
           return false;
         }
       }
       return true;
     }
 
-    case ::mhconfig::SEQUENCE_NODE: {
-      auto& seq = root->as_sequence();
-      std::vector<nlohmann::json> values(seq.size());
-      for (size_t i = seq.size(); i--;) {
-        if (!fill_json(seq[i].get(), values[i])) {
+    case NodeType::SEQUENCE_NODE: // Fallback
+    case NodeType::FORMAT_NODE: // Fallback
+    case NodeType::SREF_NODE: // Fallback
+    case NodeType::REF_NODE: // Fallback
+    case NodeType::OVERRIDE_SEQUENCE_NODE: {
+      auto seq = root.as_sequence();
+      std::vector<nlohmann::json> values(seq->size());
+      for (size_t i = seq->size(); i--;) {
+        if (!fill_json((*seq)[i], values[i])) {
           return false;
         }
       }
@@ -73,8 +82,7 @@ BuildCommand::BuildCommand(
   std::shared_ptr<::string_pool::Pool> pool,
   std::shared_ptr<build::wait_built_t>&& wait_build
 )
-  : Command(),
-  namespace_id_(namespace_id),
+  : namespace_id_(namespace_id),
   pool_(pool),
   wait_build_(std::move(wait_build))
 {
@@ -94,15 +102,14 @@ bool BuildCommand::force_take_metric() const {
 bool BuildCommand::execute(
   context_t& context
 ) {
-  std::unordered_map<std::string, ElementRef> ref_elements_by_document;
+  std::unordered_map<std::string, Element> ref_elements_by_document;
   for (auto& build_element : wait_build_->elements_to_build) {
     spdlog::debug("Building the document '{}'", build_element.name);
 
-    build_element.is_new_config = build_element.config == nullptr;
-    if (build_element.is_new_config) {
+    if (build_element.to_build) {
       size_t override_id = 0;
-      ElementRef config = nullptr;
-      while ((override_id < wait_build_->request->overrides().size()) && (config == nullptr)) {
+      Element config;
+      while ((override_id < wait_build_->request->overrides().size()) && config.is_undefined()) {
         auto search = build_element.raw_config_by_override
           .find(wait_build_->request->overrides()[override_id]);
         if (search != build_element.raw_config_by_override.end()) {
@@ -124,9 +131,15 @@ bool BuildCommand::execute(
         ++override_id;
       }
 
-      build_element.config = (config == nullptr)
-        ? UNDEFINED_ELEMENT
-        : mhconfig::builder::apply_tags(pool_.get(), config, config, ref_elements_by_document);
+      if (!config.is_undefined()) {
+        mhconfig::builder::apply_tags(
+          pool_.get(),
+          config,
+          config,
+          ref_elements_by_document,
+          build_element.config
+        );
+      }
     }
 
     ref_elements_by_document[build_element.name] = build_element.config;
@@ -135,7 +148,7 @@ bool BuildCommand::execute(
   if (wait_build_->template_ == nullptr) {
     ::mhconfig::proto::GetResponse get_response;
     ::mhconfig::api::config::fill_elements(
-      wait_build_->elements_to_build.back().config.get(),
+      wait_build_->elements_to_build.back().config,
       &get_response,
       get_response.add_elements()
     );
@@ -156,7 +169,7 @@ bool BuildCommand::execute(
     wait_build_->is_preprocesed_value_ok = false;
     try {
       nlohmann::json data;
-      if (fill_json(wait_build_->elements_to_build.back().config.get(), data)) {
+      if (fill_json(wait_build_->elements_to_build.back().config, data)) {
         inja::TemplateStorage included_templates;
         inja::FunctionStorage callbacks;
 

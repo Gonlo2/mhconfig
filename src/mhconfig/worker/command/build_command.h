@@ -21,7 +21,7 @@ namespace command
 using namespace mhconfig::ds::config_namespace;
 
 bool fill_json(
-  mhconfig::Element* root,
+  const mhconfig::Element& root,
   nlohmann::json& output
 );
 

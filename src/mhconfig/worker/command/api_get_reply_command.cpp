@@ -46,7 +46,7 @@ bool ApiGetReplyCommand::execute(
     case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED: {
       ::mhconfig::proto::GetResponse get_response;
       ::mhconfig::api::config::fill_elements(
-        merged_config_->value.get(),
+        merged_config_->value,
         &get_response,
         get_response.add_elements()
       );
@@ -69,12 +69,12 @@ bool ApiGetReplyCommand::execute(
         );
       } else {
         spdlog::warn("Can't optimize the config of the document");
-        request_->set_element(merged_config_->value.get());
+        request_->set_element(merged_config_->value);
       }
       break;
     }
     case MergedConfigStatus::OK_CONFIG_OPTIMIZING:
-      request_->set_element(merged_config_->value.get());
+      request_->set_element(merged_config_->value);
       break;
     case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
       request_->set_element_bytes(

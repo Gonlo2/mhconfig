@@ -67,6 +67,10 @@ String::String(String&& o) noexcept : data_(o.data_) {
 }
 
 String& String::operator=(const String& o) noexcept {
+  if(&o == this) return *this;
+  if (!is_small() && (data_ != 0)) {
+    ((InternalString*) data_)->decrement_refcount();
+  }
   data_ = o.data_;
   if (!is_small() && (data_ != 0)) {
     ((InternalString*) data_)->increment_refcount();
@@ -75,8 +79,7 @@ String& String::operator=(const String& o) noexcept {
 }
 
 String& String::operator=(String&& o) noexcept {
-  data_ = o.data_;
-  o.data_ = 0;
+  std::swap(data_, o.data_);
   return *this;
 }
 

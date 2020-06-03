@@ -233,6 +233,7 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
       case MergedConfigStatus::OK_CONFIG_OPTIMIZED: {
         spdlog::debug("The document '{}' is ok", build_element.name);
         build_element.config = merged_config->value;
+        build_element.to_build = false;
         break;
       }
       case MergedConfigStatus::OK_TEMPLATE:

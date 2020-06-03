@@ -32,24 +32,25 @@ enum KeyElement {
 
 template <typename T>
 uint32_t fill_elements(
-  mhconfig::Element* root,
+  const Element& root,
   T* container,
-  ::mhconfig::proto::Element* output
+  proto::Element* output
 ) {
-  switch (root->type()) {
-    case ::mhconfig::UNDEFINED_NODE: {
+  switch (root.type()) {
+    case NodeType::UNDEFINED_NODE: {
       output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
       return 1;
     }
 
-    case ::mhconfig::NULL_NODE: {
+    case NodeType::NULL_NODE: // Fallback
+    case NodeType::OVERRIDE_NULL_NODE: {
       output->set_type(output->type() | ValueElement::NULL_VALUE_ELEMENT);
       return 1;
     }
 
-    case NodeType::SCALAR_NODE: // Fallback
-    case NodeType::STR_NODE: {
-      auto r = root->try_as<std::string>();
+    case NodeType::STR_NODE: // Fallback
+    case NodeType::OVERRIDE_STR_NODE: {
+      auto r = root.try_as<std::string>();
       if (r.first) {
         output->set_type(output->type() | ValueElement::STR_VALUE_ELEMENT);
         output->set_value_str(r.second);
@@ -59,8 +60,9 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::INT_NODE: {
-      auto r = root->try_as<int64_t>();
+    case NodeType::INT_NODE: // Fallback
+    case NodeType::OVERRIDE_INT_NODE: {
+      auto r = root.try_as<int64_t>();
       if (r.first) {
         output->set_type(output->type() | ValueElement::INT_VALUE_ELEMENT);
         output->set_value_int(r.second);
@@ -70,8 +72,9 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::FLOAT_NODE: {
-      auto r = root->try_as<double>();
+    case NodeType::FLOAT_NODE: // Fallback
+    case NodeType::OVERRIDE_FLOAT_NODE: {
+      auto r = root.try_as<double>();
       if (r.first) {
         output->set_type(output->type() | ValueElement::FLOAT_VALUE_ELEMENT);
         output->set_value_float(r.second);
@@ -81,8 +84,9 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::BOOL_NODE: {
-      auto r = root->try_as<bool>();
+    case NodeType::BOOL_NODE: // Fallback
+    case NodeType::OVERRIDE_BOOL_NODE: {
+      auto r = root.try_as<bool>();
       if (r.first) {
         output->set_type(output->type() | ValueElement::BOOL_VALUE_ELEMENT);
         output->set_value_bool(r.second);
@@ -92,16 +96,18 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case ::mhconfig::MAP_NODE: {
+    case ::mhconfig::MAP_NODE: // Fallback
+    case ::mhconfig::OVERRIDE_MAP_NODE: {
       output->set_type(output->type() | ValueElement::MAP_VALUE_ELEMENT);
-      output->set_size(root->as_map().size());
+      auto map = root.as_map();
+      output->set_size(map->size());
 
       uint32_t parent_sibling_offset = 1;
       ::mhconfig::proto::Element* value = output;
-      for (const auto& it : root->as_map()) {
+      for (const auto& it : *map) {
         value = container->add_elements();
 
-        uint32_t sibling_offset = fill_elements(it.second.get(), container, value);
+        uint32_t sibling_offset = fill_elements(it.second, container, value);
         value->set_type(value->type() | (KeyElement::STR_KEY_ELEMENT<<4));
         value->set_key_str(it.first.str());
         value->set_sibling_offset(sibling_offset-1);
@@ -113,16 +119,21 @@ uint32_t fill_elements(
       return parent_sibling_offset;
     }
 
-    case ::mhconfig::SEQUENCE_NODE: {
+    case ::mhconfig::SEQUENCE_NODE: // Fallback
+    case ::mhconfig::FORMAT_NODE: // Fallback
+    case ::mhconfig::SREF_NODE: // Fallback
+    case ::mhconfig::REF_NODE: // Fallback
+    case ::mhconfig::OVERRIDE_SEQUENCE_NODE: {
       output->set_type(output->type() | ValueElement::SEQUENCE_VALUE_ELEMENT);
-      output->set_size(root->as_sequence().size());
+      auto seq = root.as_sequence();
+      output->set_size(seq->size());
 
       uint32_t parent_sibling_offset = 1;
       ::mhconfig::proto::Element* value = output;
-      for (const auto x : root->as_sequence()) {
+      for (size_t i = 0, l = seq->size(); i < l; ++i) {
         value = container->add_elements();
 
-        uint32_t sibling_offset = fill_elements(x.get(), container, value);
+        uint32_t sibling_offset = fill_elements((*seq)[i], container, value);
         value->set_sibling_offset(sibling_offset-1);
 
         parent_sibling_offset += sibling_offset;
