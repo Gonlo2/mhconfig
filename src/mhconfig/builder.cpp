@@ -321,7 +321,12 @@ bool apply_tags(
         }
       }
 
-      result = any_changed ? Element(map_box, element.type()) : element;
+      if (any_changed) {
+        result = Element(map_box, element.type());
+      } else {
+        delete map_box;
+        result = element;
+      }
       break;
     }
 
@@ -350,7 +355,12 @@ bool apply_tags(
         }
       }
 
-      result = any_changed ? Element(seq_box, element.type()) : element;
+      if (any_changed) {
+        result = Element(seq_box, element.type());
+      } else {
+        delete seq_box;
+        result = element;
+      }
       break;
     }
     default:
@@ -631,12 +641,14 @@ Element make_element(
         return Element(pool->add(node.as<std::string>()));
       } else if (node.Tag() == TAG_INT) {
         auto str{node.as<std::string>()};
+        errno = 0;
         int64_t value = std::strtoll(str.c_str(), nullptr, 10);
         if (errno == 0) return Element(value);
         spdlog::warn("Can't parse '{}' as a int", str);
         return Element();
       } else if (node.Tag() == TAG_FLOAT) {
         auto str{node.as<std::string>()};
+        errno = 0;
         double value = std::strtod(str.c_str(), nullptr);
         if (errno == 0) return Element(value);
         spdlog::warn("Can't parse '{}' as a float", str);
@@ -680,6 +692,7 @@ Element make_element(
       } else if (node.Tag() == TAG_OVERRIDE) {
         return Element(seq_box, OVERRIDE_SEQUENCE_NODE);
       }
+      delete seq_box;
       spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
       return Element();
     }
@@ -692,6 +705,7 @@ Element make_element(
         auto k = make_and_check_element(pool, it.first, reference_to);
         auto kk = k.try_as<::string_pool::String>();
         if (!kk.first) {
+          delete map_box;
           spdlog::error("The key of a map must be a string");
           return Element();
         }
@@ -707,6 +721,7 @@ Element make_element(
       } else if (node.Tag() == TAG_OVERRIDE) {
         return Element(map_box, OVERRIDE_MAP_NODE);
       }
+      delete map_box;
       spdlog::error("Unknown tag '{}' for a map value", node.Tag());
       return Element();
     }

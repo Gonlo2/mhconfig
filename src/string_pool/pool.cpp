@@ -32,10 +32,7 @@ inline void InternalString::decrement_refcount() {
     switch (refcount_.fetch_sub(1, std::memory_order_acq_rel)) {
       case 1:
         spdlog::trace("This is the last string, decrementing the chunk refcount");
-        if (chunk_->decrement_refcount()) {
-          chunk_->~Chunk();
-          free(chunk_);
-        }
+        chunk_->decrement_refcount();
         break;
       case 2:
         spdlog::trace("The only string left is the one in the set, marking the space to release");
@@ -177,10 +174,7 @@ Pool::Pool(
 
 Pool::~Pool() {
   for (Chunk* chunk : chunks_) {
-    if (chunk->remove_pool()) {
-      chunk->~Chunk();
-      free(chunk);
-    }
+    chunk->remove_pool();
   }
 
   stats_.num_strings = 0;
@@ -280,10 +274,10 @@ Chunk::~Chunk() {
 }
 
 
-bool Chunk::remove_pool() {
+void Chunk::remove_pool() {
   std::unique_lock lock_chunk(mutex_);
   pool_ = nullptr;
-  return decrement_refcount();
+  decrement_refcount();
 }
 
 void Chunk::released_string(uint32_t size) {

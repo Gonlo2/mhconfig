@@ -159,6 +159,7 @@ namespace mhconfig {
         data_.emplace<OVERRIDE_SEQUENCE_NODE>(sequence);
         break;
       default:
+        assert(false);
         break;
     }
   }

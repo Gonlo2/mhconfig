@@ -243,10 +243,13 @@ private:
   Chunk& operator=(const Chunk& o) = delete;
   Chunk& operator=(Chunk&& o) = delete;
 
-  bool remove_pool();
+  void remove_pool();
 
-  inline bool decrement_refcount() {
-    return refcount_.fetch_sub(1, std::memory_order_acq_rel) == 1;
+  inline void decrement_refcount() {
+    if (refcount_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      this->~Chunk();
+      delete this;
+    }
   }
 
   void released_string(uint32_t size);
