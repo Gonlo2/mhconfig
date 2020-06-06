@@ -3,6 +3,9 @@
 
 #include <memory>
 
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
+
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/api/stream/watch_stream_impl.h"
@@ -74,17 +77,17 @@ private:
 
   void increment_version_of_the_affected_documents(
     config_namespace_t& config_namespace,
-    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
+    absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
   );
 
   void insert_updated_documents(
     config_namespace_t& config_namespace,
-    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
+    absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
   );
 
   void get_affected_documents(
     const config_namespace_t& config_namespace,
-    std::unordered_set<std::string>& affected_documents
+    absl::flat_hash_set<std::string>& affected_documents
   );
 
 };

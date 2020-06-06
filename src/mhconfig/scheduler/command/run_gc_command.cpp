@@ -142,6 +142,8 @@ void RunGcCommand::remove_dead_pointers(
 ) {
   spdlog::debug("To remove dead pointers");
 
+  std::vector<std::string> overrides_key_to_remove;
+
   size_t number_of_removed_dead_pointers = 0;
   size_t number_of_processed_pointers = 0;
   for (auto& it : context.namespace_by_path) {
@@ -156,16 +158,16 @@ void RunGcCommand::remove_dead_pointers(
     number_of_processed_pointers += it.second
       ->merged_config_by_overrides_key.size();
 
-    for (
-      auto it_2 = it.second->merged_config_by_overrides_key.begin();
-      it_2 != it.second->merged_config_by_overrides_key.end();
-    ) {
-      if (it_2->second.expired()) {
-        it_2 = it.second->merged_config_by_overrides_key.erase(it_2);
-        ++number_of_removed_dead_pointers;
-      } else {
-        ++it_2;
+    overrides_key_to_remove.clear();
+    for (const auto it_2 : it.second->merged_config_by_overrides_key) {
+      if (it_2.second.expired()) {
+        overrides_key_to_remove.push_back(it_2.first);
       }
+    }
+
+    number_of_removed_dead_pointers += overrides_key_to_remove.size();
+    for (const auto& k : overrides_key_to_remove) {
+      it.second->merged_config_by_overrides_key.erase(k);
     }
   }
 
@@ -185,51 +187,49 @@ void RunGcCommand::remove_namespaces(
   );
 
   uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
+  std::vector<uint64_t> namespaces_to_remove;
 
-  size_t number_of_removed_namespaces = 0;
   size_t number_of_processed_namespaces = context.namespace_by_id.size();
-  for (
-    auto it = context.namespace_by_id.begin();
-    it != context.namespace_by_id.end();
-  ) {
-    remove_expired_watchers(it->second->watchers);
+  for (auto it: context.namespace_by_id) {
+    remove_expired_watchers(it.second->watchers);
 
     spdlog::trace(
       "Checking the namespace '{}' with id {} (timestamp: {}, num_watchers: {})",
-      it->second->root_path,
-      it->first,
-      it->second->last_access_timestamp,
-      it->second->watchers.size()
+      it.second->root_path,
+      it.first,
+      it.second->last_access_timestamp,
+      it.second->watchers.size()
     );
 
     if (
-      (it->second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp)
-      && it->second->watchers.empty()
+      (it.second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp)
+      && it.second->watchers.empty()
     ) {
       spdlog::debug(
         "Removing the namespace '{}' with id {}",
-        it->second->root_path,
-        it->first
+        it.second->root_path,
+        it.first
       );
 
-      auto search = context.namespace_by_path.find(it->second->root_path);
+      auto search = context.namespace_by_path.find(it.second->root_path);
       if (
         (search != context.namespace_by_path.end())
-        && (search->second->id == it->first)
+        && (search->second->id == it.first)
       ) {
         context.namespace_by_path.erase(search);
       }
 
-      it = context.namespace_by_id.erase(it);
-      ++number_of_removed_namespaces;
-    } else {
-      ++it;
+      namespaces_to_remove.push_back(it.first);
     }
+  }
+
+  for (uint64_t id : namespaces_to_remove) {
+    context.namespace_by_id.erase(id);
   }
 
   spdlog::debug(
     "Removed namespaces (removed: {}, processed: {})",
-    number_of_removed_namespaces,
+    namespaces_to_remove.size(),
     number_of_processed_namespaces
   );
 }
@@ -243,6 +243,9 @@ void RunGcCommand::remove_versions(
   );
 
   uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
+
+  std::vector<std::string> documents_to_remove;
+  std::vector<std::string> overrides_to_remove;
 
   for (auto& it : context.namespace_by_path) {
     auto config_namespace = it.second;
@@ -263,19 +266,14 @@ void RunGcCommand::remove_versions(
         .front()
         .second;
 
-      for (
-        auto it_2 = config_namespace->document_metadata_by_document.begin();
-        it_2 != config_namespace->document_metadata_by_document.end();
-      ) {
-        auto& override_by_key = it_2->second->override_by_key;
-        for (
-          auto it_3 = override_by_key.begin();
-          it_3 != override_by_key.end();
-        ) {
-          auto& watchers = it_3->second.watchers;
+      documents_to_remove.clear();
+      for (auto it_2: config_namespace->document_metadata_by_document) {
+        overrides_to_remove.clear();
+        for (auto it_3: it_2.second.override_by_key) {
+          auto& watchers = it_3.second.watchers;
           remove_expired_watchers(watchers);
 
-          auto& raw_config_by_version = it_3->second.raw_config_by_version;
+          auto& raw_config_by_version = it_3.second.raw_config_by_version;
 
           auto it_4 = raw_config_by_version.begin();
           while (
@@ -284,8 +282,8 @@ void RunGcCommand::remove_versions(
             spdlog::debug(
               "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
               it_4->first,
-              it_2->first,
-              it_3->first,
+              it_2.first,
+              it_3.first,
               it.first
             );
             it_4 = raw_config_by_version.erase(it_4);
@@ -295,8 +293,8 @@ void RunGcCommand::remove_versions(
             spdlog::debug(
               "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
               it_4->first,
-              it_2->first,
-              it_3->first,
+              it_2.first,
+              it_3.first,
               it.first
             );
             it_4 = raw_config_by_version.erase(it_4);
@@ -305,20 +303,24 @@ void RunGcCommand::remove_versions(
           if (raw_config_by_version.empty() && watchers.empty()) {
             spdlog::debug(
               "Removed override '{}' in the namespace '{}'",
-              it_3->first,
+              it_3.first,
               it.first
             );
-            it_3 = override_by_key.erase(it_3);
-          } else {
-            ++it_3;
+            overrides_to_remove.push_back(it_3.first);
           }
         }
 
-        if (override_by_key.empty()) {
-          it_2 = config_namespace->document_metadata_by_document.erase(it_2);
-        } else {
-          ++it_2;
+        for (const auto& k : overrides_to_remove) {
+          it_2.second.override_by_key.erase(k);
         }
+
+        if (it_2.second.override_by_key.empty()) {
+          documents_to_remove.push_back(it_2.first);
+        }
+      }
+
+      for (const auto& k : documents_to_remove) {
+        config_namespace->document_metadata_by_document.erase(k);
       }
     }
   }

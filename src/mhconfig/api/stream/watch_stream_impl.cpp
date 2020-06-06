@@ -244,6 +244,7 @@ void WatchStreamImpl::subscribe(
 }
 
 bool WatchStreamImpl::unregister(uint32_t uid) {
+  // TODO remove the recursive mutex
   std::lock_guard<std::recursive_mutex> mlock(mutex_);
   return watcher_by_id_.erase(uid);
 }

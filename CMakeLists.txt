@@ -13,7 +13,7 @@ project(mhconfig)
 enable_language(C CXX)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
-  set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter -pedantic")
+  set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
   set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3 -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE")
   set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO")
 endif()
@@ -25,6 +25,7 @@ find_package(Catch2 REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
+add_subdirectory(build/third_party/abseil-cpp)
 
 # location of header files
 include_directories(${PROJECT_SOURCE_DIR}/src)
@@ -57,6 +58,7 @@ target_link_libraries(mhconfig debug libtcmalloc.so)
 target_link_libraries(mhconfig optimized libtcmalloc_minimal.so)
 target_link_libraries(mhconfig stdc++.a stdc++fs.a)
 target_link_libraries(mhconfig gRPC::grpc++)
+target_link_libraries(mhconfig absl::synchronization absl::flat_hash_map)
 
 
 # tests

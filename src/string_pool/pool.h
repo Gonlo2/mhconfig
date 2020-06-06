@@ -2,10 +2,11 @@
 #define STRING_POOL__POOL_H
 
 #include <stdio.h>
-#include <unordered_set>
-#include <mutex>
-#include <shared_mutex>
 #include <iostream>
+
+#include <absl/container/flat_hash_set.h>
+#include <absl/synchronization/mutex.h>
+#include <absl/hash/hash.h>
 
 #include "spdlog/spdlog.h"
 
@@ -107,6 +108,11 @@ namespace string_pool
 
     std::string str() const;
 
+    template <typename H>
+    friend H AbslHashValue(H h, const String& s) {
+      return H::combine(std::move(h), s.hash());
+    }
+
   private:
     friend bool operator==(const String& lhs, const String& rhs);
     friend bool operator==(const String& lhs, const std::string& rhs);
@@ -204,8 +210,8 @@ public:
 private:
   friend class Chunk;
 
-  std::unordered_set<String> set_;
-  std::shared_mutex mutex_;
+  absl::flat_hash_set<String> set_;
+  absl::Mutex mutex_;
   std::vector<Chunk*> chunks_;
   stats_t stats_;
   std::unique_ptr<StatsObserver> stats_observer_;
@@ -229,7 +235,7 @@ private:
   uint32_t next_data_;
   uint32_t next_string_in_use_;
   Pool* pool_;
-  std::shared_mutex mutex_;
+  absl::Mutex mutex_;
   uint16_t strings_in_use_[CHUNK_STRING_SIZE];
   char data_[CHUNK_DATA_SIZE];
   InternalString strings_[CHUNK_STRING_SIZE];
@@ -256,12 +262,13 @@ private:
 
   String add(const std::string& str, stats_t& stats);
 
-  inline void compact(std::unordered_set<String>& set, stats_t& stats) {
-    std::unique_lock lock_chunk(mutex_);
-    return unsafe_compact(set, stats);
+  inline void compact(absl::flat_hash_set<String>& set, stats_t& stats) {
+    mutex_.Lock();
+    unsafe_compact(set, stats);
+    mutex_.Unlock();
   }
 
-  void unsafe_compact(std::unordered_set<String>& set, stats_t& stats);
+  void unsafe_compact(absl::flat_hash_set<String>& set, stats_t& stats);
 
   void reallocate(InternalString* s);
 };
@@ -276,15 +283,22 @@ inline bool operator==(const InternalString& lhs, const InternalString& rhs) {
     if (lhs.chunk_ != nullptr) return false;
     return memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
   } else if (lhs.chunk_ != nullptr) {
-    std::shared_lock llock(lhs.chunk_->mutex_);
+    bool result;
+    lhs.chunk_->mutex_.ReaderLock();
     if (rhs.chunk_ != nullptr) {
-      std::shared_lock rlock(rhs.chunk_->mutex_);
-      return memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
+      rhs.chunk_->mutex_.ReaderLock();
+      result = memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
+      rhs.chunk_->mutex_.ReaderUnlock();
+    } else {
+      result = memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
     }
-    return memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
+    lhs.chunk_->mutex_.ReaderUnlock();
+    return result;
   } else if (rhs.chunk_ != nullptr) {
-    std::shared_lock rlock(rhs.chunk_->mutex_);
-    return memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
+    rhs.chunk_->mutex_.ReaderLock();
+    bool result = memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
+    rhs.chunk_->mutex_.ReaderUnlock();
+    return result;
   }
 
   return memcmp(lhs.data_, rhs.data_, lhs.size_) == 0;
@@ -298,8 +312,10 @@ inline bool operator==(const InternalString& lhs, const std::string& rhs) {
   if (lhs.size_ != rhs.size()) return false;
 
   if (lhs.chunk_ != nullptr) {
-    std::shared_lock lock(lhs.chunk_->mutex_);
-    return memcmp(lhs.data_, rhs.c_str(), lhs.size_) == 0;
+    lhs.chunk_->mutex_.ReaderLock();
+    bool result = memcmp(lhs.data_, rhs.c_str(), lhs.size_) == 0;
+    lhs.chunk_->mutex_.ReaderUnlock();
+    return result;
   }
 
   return memcmp(lhs.data_, rhs.c_str(), lhs.size_) == 0;

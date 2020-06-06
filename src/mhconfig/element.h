@@ -1,7 +1,6 @@
 #ifndef MHCONFIG__ELEMENT_H
 #define MHCONFIG__ELEMENT_H
 
-#include <unordered_map>
 #include <vector>
 #include <utility>
 #include <memory>
@@ -16,6 +15,8 @@
 #include "jmutils/box.h"
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
+
+#include <absl/container/flat_hash_map.h>
 
 namespace mhconfig {
   enum NodeType {
@@ -45,7 +46,7 @@ namespace mhconfig {
   class Element;
 
   typedef ::string_pool::String Literal;
-  typedef std::unordered_map<::string_pool::String, Element> Map;
+  typedef absl::flat_hash_map<::string_pool::String, Element> Map;
   typedef std::vector<Element> Sequence;
   typedef jmutils::Box<Map, uint32_t> MapBox;
   typedef jmutils::Box<Sequence, uint32_t> SequenceBox;

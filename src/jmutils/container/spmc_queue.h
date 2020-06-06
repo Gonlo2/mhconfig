@@ -5,13 +5,12 @@
 #include <memory>
 #include <queue>
 #include <thread>
-#include <mutex>
-#include <shared_mutex>
 #include <utility>
 #include <atomic>
 #include <array>
 #include <vector>
-#include <condition_variable>
+
+#include <absl/synchronization/mutex.h>
 
 #include <iostream>
 #include <exception>
@@ -30,8 +29,8 @@ public:
   {
   public:
     Receiver(
-      std::shared_mutex& full_mutex,
-      std::condition_variable_any& full_cond
+      absl::Mutex& full_mutex,
+      absl::CondVar& full_cond
     )
       : producer_size_(0),
       consumer_size_(0),
@@ -48,8 +47,11 @@ public:
 
     bool pop(T& value) {
       if (!optimistic_pop(value)) {
-        std::unique_lock lock(empty_mutex_);
-        empty_cond_.wait(lock, [this, &value]{ return optimistic_pop(value); });
+        empty_mutex_.Lock();
+        while (!optimistic_pop(value)) {
+          empty_cond_.Wait(&empty_mutex_);
+        }
+        empty_mutex_.Unlock();
       }
       return true;
     }
@@ -63,11 +65,11 @@ public:
     size_t end_;
     std::atomic<size_t> size_;
 
-    std::shared_mutex& full_mutex_;
-    std::condition_variable_any& full_cond_;
+    absl::Mutex& full_mutex_;
+    absl::CondVar& full_cond_;
 
-    std::mutex empty_mutex_;
-    std::condition_variable empty_cond_;
+    absl::Mutex empty_mutex_;
+    absl::CondVar empty_cond_;
 
     std::array<T, (1ul<<SizeLog2)> data_;
 
@@ -77,11 +79,11 @@ public:
       }
 
       if (consumer_size_ != 0) {
-        std::shared_lock lock(full_mutex_);
+        full_mutex_.ReaderLock();
         std::swap(data_[start_], value);
         size_.fetch_sub(1, std::memory_order_relaxed);
-        lock.unlock();
-        full_cond_.notify_one();
+        full_cond_.Signal();
+        full_mutex_.ReaderUnlock();
         start_ = (start_+1) & ((1<<SizeLog2)-1);
         consumer_size_ -= 1;
         return true;
@@ -113,9 +115,12 @@ public:
   }
 
   void push(T&& value) {
-    if (!optimistic_push(value)) {
-      std::unique_lock lock(full_mutex_);
-      full_cond_.wait(lock, [this, &value]{ return optimistic_push(value); });
+    if (!optimistic_push<true>(value)) {
+      full_mutex_.Lock();
+      while (!optimistic_push<false>(value)) {
+        full_cond_.Wait(&full_mutex_);
+      }
+      full_mutex_.Unlock();
     }
   }
 
@@ -123,9 +128,10 @@ private:
   uint32_t current_receiver_;
   std::vector<ReceiverRef> receivers_;
   std::queue<T> queue_;
-  std::shared_mutex full_mutex_;
-  std::condition_variable_any full_cond_;
+  absl::Mutex full_mutex_;
+  absl::CondVar full_cond_;
 
+  template <bool lock>
   inline bool optimistic_push(T& value) {
     for (size_t i = receivers_.size(); i; --i) {
       current_receiver_ = (current_receiver_+1) % receivers_.size();
@@ -136,11 +142,11 @@ private:
       }
 
       if (receiver->producer_size_ != (1ul<<SizeLog2)) {
-        std::unique_lock lock(receiver->empty_mutex_);
+        if (lock) receiver->empty_mutex_.Lock();
         std::swap(receiver->data_[receiver->end_], value);
         receiver->size_.fetch_add(1, std::memory_order_relaxed);
-        lock.unlock();
-        receiver->empty_cond_.notify_one();
+        receiver->empty_cond_.Signal();
+        if (lock) receiver->empty_mutex_.Unlock();
         receiver->end_ = (receiver->end_+1) & ((1<<SizeLog2)-1);
         receiver->producer_size_ += 1;
         return true;

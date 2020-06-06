@@ -47,9 +47,9 @@ struct scheduler_context_t {
   WorkerQueue& worker_queue;
   std::unique_ptr<metrics::MetricsService> metrics;
 
-  std::unordered_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path;
-  std::unordered_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id;
-  std::unordered_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path;
+  absl::flat_hash_map<std::string, std::shared_ptr<config_namespace_t>> namespace_by_path;
+  absl::flat_hash_map<uint64_t, std::shared_ptr<config_namespace_t>> namespace_by_id;
+  absl::flat_hash_map<std::string, std::vector<command::CommandRef>> commands_waiting_for_namespace_by_path;
 
   scheduler_context_t(
     WorkerQueue& worker_queue_,

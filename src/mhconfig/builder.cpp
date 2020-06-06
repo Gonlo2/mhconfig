@@ -37,19 +37,9 @@ std::shared_ptr<config_namespace_t> index_files(
         return false;
       }
 
-      std::shared_ptr<document_metadata_t> document_metadata = nullptr;
-      auto search = config_namespace->document_metadata_by_document
-        .find(result.document);
-      if (search == config_namespace->document_metadata_by_document.end()) {
-        search = config_namespace->document_metadata_by_document.emplace(
-          result.document,
-          std::make_shared<document_metadata_t>()
-        ).first;
-      }
-
       result.raw_config->id = config_namespace->next_raw_config_id++;
-      search->second
-        ->override_by_key[result.override_]
+      config_namespace->document_metadata_by_document[result.document]
+        .override_by_key[result.override_]
         .raw_config_by_version[1] = result.raw_config;
 
       return true;
@@ -61,28 +51,23 @@ std::shared_ptr<config_namespace_t> index_files(
   }
 
   for (auto document_metadata_it : config_namespace->document_metadata_by_document) {
-    for (auto override_it : document_metadata_it.second->override_by_key) {
+    for (auto override_it : document_metadata_it.second.override_by_key) {
       for (auto& reference_to : override_it.second.raw_config_by_version[1]->reference_to) {
-        std::shared_ptr<document_metadata_t> referenced_document_metadata;
-        {
-          auto search = config_namespace->document_metadata_by_document
-            .find(reference_to);
-          if (search == config_namespace->document_metadata_by_document.end()) {
-            spdlog::error(
-              "The document '{}' in the override '{}' has a '{}' tag to the inexistent document '{}'",
-              document_metadata_it.first,
-              override_it.first,
-              TAG_REF,
-              reference_to
-            );
+        auto search = config_namespace->document_metadata_by_document
+          .find(reference_to);
 
-            return config_namespace;
-          } else {
-            referenced_document_metadata = search->second;
-          }
+        if (search == config_namespace->document_metadata_by_document.end()) {
+          spdlog::error(
+            "The document '{}' in the override '{}' has a '{}' tag to the inexistent document '{}'",
+            document_metadata_it.first,
+            override_it.first,
+            TAG_REF,
+            reference_to
+          );
+          return config_namespace;
         }
 
-        referenced_document_metadata->referenced_by[document_metadata_it.first].v += 1;
+        search->second.referenced_by[document_metadata_it.first].v += 1;
       }
     }
   }
@@ -110,11 +95,16 @@ load_raw_config_result_t load_yaml_raw_config(
     [pool](const std::string& data, load_raw_config_result_t& result) {
       YAML::Node node = YAML::Load(data);
 
+      absl::flat_hash_set<std::string> reference_to;
       result.raw_config->value = make_and_check_element(
         pool,
         node,
-        result.raw_config->reference_to
+        reference_to
       );
+      result.raw_config->reference_to.reserve(reference_to.size());
+      for (const auto& x : reference_to) {
+        result.raw_config->reference_to.push_back(x);
+      }
     }
   );
 }
@@ -154,7 +144,7 @@ load_raw_config_result_t load_template_raw_config(
 Element override_with(
   const Element& a,
   const Element& b,
-  const std::unordered_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &elements_by_document
 ) {
   if (b.is_override()) {
     return b.clone_without_virtual();
@@ -294,7 +284,7 @@ bool apply_tags(
   ::string_pool::Pool* pool,
   const Element& element,
   const Element& root,
-  const std::unordered_map<std::string, Element> &elements_by_document,
+  const absl::flat_hash_map<std::string, Element> &elements_by_document,
   Element& result
 ) {
   bool any_changed = false;
@@ -532,7 +522,7 @@ std::string format_str(
 
 Element apply_tag_ref(
   const Element& element,
-  const std::unordered_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &elements_by_document
 ) {
   const auto path = element.as_sequence();
 
@@ -577,9 +567,9 @@ Element apply_tag_sref(
  * All the structure checks must be done here
  */
 Element make_and_check_element(
-    ::string_pool::Pool* pool,
-    YAML::Node &node,
-    std::unordered_set<std::string> &reference_to
+  ::string_pool::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
 ) {
   auto element = make_element(pool, node, reference_to);
 
@@ -620,9 +610,9 @@ bool is_a_valid_path(
 }
 
 Element make_element(
-    ::string_pool::Pool* pool,
-    YAML::Node &node,
-    std::unordered_set<std::string> &reference_to
+  ::string_pool::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
 ) {
   switch (node.Type()) {
     case YAML::NodeType::Null:

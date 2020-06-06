@@ -300,6 +300,7 @@ This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) f
 
 ## Third party libraries
 
+* abseil: https://abseil.io/
 * fmt: https://github.com/fmtlib/fmt
 * grpc: https://grpc.io/
 * inja: https://github.com/pantor/inja

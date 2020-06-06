@@ -5,13 +5,12 @@
 #include <memory>
 #include <queue>
 #include <thread>
-#include <mutex>
-#include <shared_mutex>
 #include <utility>
 #include <atomic>
 #include <array>
 #include <vector>
-#include <condition_variable>
+
+#include <absl/synchronization/mutex.h>
 
 #include <iostream>
 #include <exception>
@@ -30,8 +29,8 @@ public:
   {
   public:
     Sender(
-      std::shared_mutex& empty_mutex,
-      std::condition_variable_any& empty_cond
+      absl::Mutex& empty_mutex,
+      absl::CondVar& empty_cond
     )
       : producer_size_(0),
       consumer_size_(0),
@@ -48,8 +47,11 @@ public:
 
     bool push(T&& value) {
       if (!optimistic_push(value)) {
-        std::unique_lock lock(full_mutex_);
-        full_cond_.wait(lock, [this, &value]{ return optimistic_push(value); });
+        full_mutex_.Lock();
+        while (!optimistic_push(value)) {
+          full_cond_.Wait(&full_mutex_);
+        }
+        full_mutex_.Unlock();
       }
       return true;
     }
@@ -63,11 +65,10 @@ public:
     size_t end_;
     std::atomic<size_t> size_;
 
-    std::shared_mutex& empty_mutex_;
-    std::condition_variable_any& empty_cond_;
-
-    std::mutex full_mutex_;
-    std::condition_variable full_cond_;
+    absl::Mutex& empty_mutex_;
+    absl::CondVar& empty_cond_;
+    absl::Mutex full_mutex_;
+    absl::CondVar full_cond_;
 
     std::array<T, (1ul<<SizeLog2)> data_;
 
@@ -77,11 +78,11 @@ public:
       }
 
       if (producer_size_ != (1ul<<SizeLog2)) {
-        std::shared_lock lock(empty_mutex_);
+        empty_mutex_.ReaderLock();
         std::swap(data_[end_], value);
         size_.fetch_add(1, std::memory_order_relaxed);
-        lock.unlock();
-        empty_cond_.notify_one();
+        empty_cond_.Signal();
+        empty_mutex_.ReaderUnlock();
         end_ = (end_+1) & ((1<<SizeLog2)-1);
         producer_size_ += 1;
         return true;
@@ -104,22 +105,22 @@ public:
   MPSCQueue(MPSCQueue&&) = delete;
 
   SenderRef new_sender() {
-    auto sender = std::make_shared<Sender>(
-      empty_mutex_,
-      empty_cond_
-    );
+    auto sender = std::make_shared<Sender>(empty_mutex_, empty_cond_);
     senders_.push_back(sender);
     return sender;
   }
 
   void pop(T& value) {
     // First we try to obtain a value using the cached size
-    if (!optimistic_pop(value)) {
+    if (!optimistic_pop<true>(value)) {
       // If we are here that means that all the cached sizes are zero so maybe
       // the queue is empty but we need to check if someone push some value
       // after the check
-      std::unique_lock lock(empty_mutex_);
-      empty_cond_.wait(lock, [this, &value]{ return optimistic_pop(value); });
+      empty_mutex_.Lock();
+      while (!optimistic_pop<false>(value)) {
+        empty_cond_.Wait(&empty_mutex_);
+      }
+      empty_mutex_.Unlock();
     }
   }
 
@@ -132,9 +133,10 @@ private:
   uint32_t current_sender_;
   std::vector<SenderRef> senders_;
   std::queue<T> queue_;
-  std::shared_mutex empty_mutex_;
-  std::condition_variable_any empty_cond_;
+  absl::Mutex empty_mutex_;
+  absl::CondVar empty_cond_;
 
+  template <bool lock>
   inline bool optimistic_pop(T& value) {
     for (size_t i = senders_.size()+1; i; --i) {
       current_sender_ = (current_sender_+1) % (senders_.size()+1);
@@ -152,11 +154,11 @@ private:
         }
 
         if (sender->consumer_size_ != 0) {
-          std::unique_lock lock(sender->full_mutex_);
+          if (lock) sender->full_mutex_.Lock();
           std::swap(sender->data_[sender->start_], value);
           sender->size_.fetch_sub(1, std::memory_order_relaxed);
-          lock.unlock();
-          sender->full_cond_.notify_one();
+          sender->full_cond_.Signal();
+          if (lock) sender->full_mutex_.Unlock();
           sender->start_ = (sender->start_+1) & ((1<<SizeLog2)-1);
           sender->consumer_size_ -= 1;
           return true;

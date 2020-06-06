@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+#include <absl/container/flat_hash_map.h>
+
 #include "mhconfig/scheduler/command/set_documents_command.h"
 #include "mhconfig/worker/command/command.h"
 #include "mhconfig/api/request/get_request.h"

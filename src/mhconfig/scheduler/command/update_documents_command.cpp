@@ -90,7 +90,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     spdlog::debug("Decreasing the referenced_by counter of the previous raw config");
     decrease_references(config_namespace);
 
-    std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_to_trigger;
+    absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_to_trigger;
 
     spdlog::debug("Updating the ids of the affected documents");
     increment_version_of_the_affected_documents(config_namespace, watchers_to_trigger);
@@ -157,21 +157,21 @@ void UpdateDocumentsCommand::fill_config_to_remove(
   config_namespace_t& config_namespace,
   std::vector<std::pair<std::string, std::string>>& result
 ) {
-  std::unordered_map<std::string, std::set<std::string>> new_configs;
+  absl::flat_hash_map<std::string, std::set<std::string>> new_configs;
   for (size_t i = 0; i < items_.size(); ++i) {
     new_configs[items_[i].document].insert(items_[i].override_);
   }
 
-  for (const auto& document_metadata_it: config_namespace.document_metadata_by_document) {
+  for (const auto document_metadata_it: config_namespace.document_metadata_by_document) {
     auto search = new_configs.find(document_metadata_it.first);
     if (search == new_configs.end()) {
-      for (const auto& override_it : document_metadata_it.second->override_by_key) {
+      for (const auto override_it : document_metadata_it.second.override_by_key) {
         if (has_last_version(override_it.second)) {
           result.emplace_back(document_metadata_it.first, override_it.first);
         }
       }
     } else {
-      for (const auto& override_it : document_metadata_it.second->override_by_key) {
+      for (const auto override_it : document_metadata_it.second.override_by_key) {
         if ((search->second.count(override_it.first) == 0) && has_last_version(override_it.second)) {
           result.emplace_back(document_metadata_it.first, override_it.first);
         }
@@ -192,7 +192,7 @@ void UpdateDocumentsCommand::filter_existing_documents(
 
       if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
         with_raw_config(
-          document_metadata_search->second.get(),
+          document_metadata_search->second,
           items_[i].override_,
           0,
           [&](const auto& raw_config) {
@@ -224,14 +224,14 @@ void UpdateDocumentsCommand::decrease_references(
 
     if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
       with_raw_config(
-        document_metadata_search->second.get(),
+        document_metadata_search->second,
         item.override_,
         0,
         [&](const auto& raw_config) {
           for (const auto& reference_to : raw_config->reference_to) {
             auto& referenced_by = config_namespace
               .document_metadata_by_document[reference_to]
-              ->referenced_by;
+              .referenced_by;
 
             spdlog::debug(
               "Decreasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
@@ -253,15 +253,15 @@ void UpdateDocumentsCommand::decrease_references(
 
 void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
   config_namespace_t& config_namespace,
-  std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
+  absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
 ) {
-  std::unordered_map<std::string, std::unordered_set<std::string>> updated_documents_by_override;
+  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>> updated_documents_by_override;
   for (auto& item : items_) {
     updated_documents_by_override[item.override_].insert(item.document);
   }
 
   for (auto& updated_documents_it : updated_documents_by_override) {
-    std::unordered_set<std::string> affected_documents(
+    absl::flat_hash_set<std::string> affected_documents(
       updated_documents_it.second.begin(),
       updated_documents_it.second.end()
     );
@@ -273,8 +273,8 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
     }
 
     for (const auto& document : affected_documents) {
-      auto document_metadata = config_namespace
-        .document_metadata_by_document[document].get();
+      auto& document_metadata = config_namespace
+        .document_metadata_by_document[document];
 
       with_raw_config(
         document_metadata,
@@ -292,16 +292,15 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
           auto new_raw_config = raw_config->clone();
           new_raw_config->id = config_namespace.next_raw_config_id++;
 
-          document_metadata->override_by_key[updated_documents_it.first]
+          document_metadata.override_by_key[updated_documents_it.first]
             .raw_config_by_version[config_namespace.current_version] = new_raw_config;
         }
       );
 
-
-      auto override_search = document_metadata->override_by_key
+      auto override_search = document_metadata.override_by_key
         .find(updated_documents_it.first);
 
-      if (override_search != document_metadata->override_by_key.end()) {
+      if (override_search != document_metadata.override_by_key.end()) {
         auto& watchers = override_search->second.watchers;
         for (size_t i = 0; i < watchers.size();) {
           if (auto watcher = watchers[i].lock()) {
@@ -318,7 +317,7 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
 
 void UpdateDocumentsCommand::insert_updated_documents(
   config_namespace_t& config_namespace,
-  std::unordered_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
+  absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
 ) {
   for (auto& item : items_) {
     auto document_metadata_search = config_namespace.document_metadata_by_document
@@ -331,42 +330,25 @@ void UpdateDocumentsCommand::insert_updated_documents(
         item.override_
       );
       if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-        document_metadata_search->second->override_by_key[item.override_]
+        document_metadata_search->second.override_by_key[item.override_]
           .raw_config_by_version[config_namespace.current_version] = nullptr;
       }
     } else {
       for (const auto& reference_to : item.raw_config->reference_to) {
-        std::shared_ptr<document_metadata_t> referenced_document_metadata;
-        {
-          auto search = config_namespace.document_metadata_by_document
-            .find(reference_to);
-          if (search == config_namespace.document_metadata_by_document.end()) {
-            referenced_document_metadata = std::make_shared<document_metadata_t>();
-            config_namespace.document_metadata_by_document[reference_to] = referenced_document_metadata;
-          } else {
-            referenced_document_metadata = search->second;
-          }
-        }
+        auto& referenced_document_metadata = config_namespace.document_metadata_by_document[reference_to];
 
         spdlog::debug(
           "Increasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
           item.document,
           reference_to,
-          referenced_document_metadata->referenced_by[item.document].v,
+          referenced_document_metadata.referenced_by[item.document].v,
           item.override_
         );
 
-        referenced_document_metadata->referenced_by[item.document].v += 1;
+        referenced_document_metadata.referenced_by[item.document].v += 1;
       }
 
-      std::shared_ptr<document_metadata_t> document_metadata;
-      if (document_metadata_search == config_namespace.document_metadata_by_document.end()) {
-        document_metadata = std::make_shared<document_metadata_t>();
-        config_namespace.document_metadata_by_document[item.document] = document_metadata;
-      } else {
-        document_metadata = document_metadata_search->second;
-      }
-
+      auto& document_metadata = config_namespace.document_metadata_by_document[item.document];
       spdlog::debug(
         "Updating a raw config (document: '{}', override: '{}', new_id: {})",
         item.document,
@@ -375,16 +357,16 @@ void UpdateDocumentsCommand::insert_updated_documents(
       );
 
       item.raw_config->id = config_namespace.next_raw_config_id++;
-      document_metadata->override_by_key[item.override_]
+      document_metadata.override_by_key[item.override_]
         .raw_config_by_version[config_namespace.current_version] = item.raw_config;
     }
 
     if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
       auto override_search = document_metadata_search->second
-        ->override_by_key
+        .override_by_key
         .find(item.override_);
 
-      if (override_search != document_metadata_search->second->override_by_key.end()) {
+      if (override_search != document_metadata_search->second.override_by_key.end()) {
         auto& watchers = override_search->second.watchers;
         for (size_t i = 0; i < watchers.size();) {
           if (auto watcher = watchers[i].lock()) {
@@ -401,7 +383,7 @@ void UpdateDocumentsCommand::insert_updated_documents(
 
 void UpdateDocumentsCommand::get_affected_documents(
   const config_namespace_t& config_namespace,
-  std::unordered_set<std::string>& affected_documents
+  absl::flat_hash_set<std::string>& affected_documents
 ) {
   std::vector<std::string> to_check(
     affected_documents.begin(),
@@ -414,7 +396,7 @@ void UpdateDocumentsCommand::get_affected_documents(
 
     auto search = config_namespace.document_metadata_by_document.find(doc);
     if (search != config_namespace.document_metadata_by_document.end()) {
-      for (const auto& referenced_document_it : search->second->referenced_by) {
+      for (const auto& referenced_document_it : search->second.referenced_by) {
         auto inserted = affected_documents.insert(referenced_document_it.first);
         if (inserted.second) {
           to_check.push_back(referenced_document_it.first);

@@ -2,7 +2,6 @@
 #define JMUTILS__BOX_H
 
 #include <atomic>
-#include "spdlog/spdlog.h"
 
 namespace jmutils
 {

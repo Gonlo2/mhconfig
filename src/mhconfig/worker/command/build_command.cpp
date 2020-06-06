@@ -102,7 +102,7 @@ bool BuildCommand::force_take_metric() const {
 bool BuildCommand::execute(
   context_t& context
 ) {
-  std::unordered_map<std::string, Element> ref_elements_by_document;
+  absl::flat_hash_map<std::string, Element> ref_elements_by_document;
   for (auto& build_element : wait_build_->elements_to_build) {
     spdlog::debug("Building the document '{}'", build_element.name);
 

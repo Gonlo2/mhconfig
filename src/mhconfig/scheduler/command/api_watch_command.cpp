@@ -64,11 +64,11 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   bool notify = false;
 
   {
-    auto document_metadata = config_namespace
+    auto& document_metadata = config_namespace
       .document_metadata_by_document[message_->document()];
 
     for (const auto& override_: message_->overrides()) {
-      auto& override_metadata = document_metadata->override_by_key[override_];
+      auto& override_metadata = document_metadata.override_by_key[override_];
       //TODO Check if the overrides are distinct
       override_metadata.watchers.push_back(message_);
       notify |= !override_metadata.raw_config_by_version.empty()
@@ -80,11 +80,11 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   // although only the last one is used, review if is neccesary deal with multiples
   // templates or this is a silly use case.
   if (!message_->template_().empty()) {
-    auto document_metadata = config_namespace
+    auto& document_metadata = config_namespace
       .document_metadata_by_document[message_->template_()];
 
     for (const auto& override_: message_->overrides()) {
-      auto& override_metadata = document_metadata->override_by_key[override_];
+      auto& override_metadata = document_metadata.override_by_key[override_];
       //TODO Check if the overrides are distinct
       override_metadata.watchers.push_back(message_);
       notify |= !override_metadata.raw_config_by_version.empty()

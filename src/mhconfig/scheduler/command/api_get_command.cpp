@@ -144,15 +144,17 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   const std::string& overrides_key,
   std::shared_ptr<inja::Template>&& template_
 ) {
+  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>> referenced_documents;
   // The references are allowed only if the graph is a DAG,
   // so we check it here
-  auto is_a_dag_result = check_if_ref_graph_is_a_dag(
+  bool is_a_dag = check_if_ref_graph_is_a_dag(
     config_namespace,
     get_request_->document(),
     get_request_->overrides(),
-    get_request_->version()
+    get_request_->version(),
+    referenced_documents
   );
-  if (!is_a_dag_result.first) {
+  if (!is_a_dag) {
     get_request_->set_status(
       ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG
     );
@@ -162,12 +164,9 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
 
   // If the graph is a DAG we could do a topological sort
   // of the required documents
-  auto documents_in_order = do_topological_sort_over_ref_graph(
-    is_a_dag_result.second
-  );
+  auto documents_in_order = do_topological_sort_over_ref_graph(referenced_documents);
 
   auto wait_built = std::make_shared<build::wait_built_t>();
-
   wait_built->specific_version = get_specific_version(
     config_namespace,
     get_request_->version()
@@ -178,13 +177,13 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   wait_built->num_pending_elements = 0;
   wait_built->elements_to_build.resize(documents_in_order.size());
 
-  for (size_t i = 0; i < documents_in_order.size(); ++i) {
+  for (size_t i = 0, l = documents_in_order.size(); i < l; ++i) {
     auto& build_element = wait_built->elements_to_build[i];
     build_element.name = documents_in_order[i];
     spdlog::debug("Checking the document '{}'", build_element.name);
 
-    auto document_metadata = config_namespace
-      .document_metadata_by_document[build_element.name].get();
+    auto& document_metadata = config_namespace
+      .document_metadata_by_document[build_element.name];
 
     build_element.overrides_key.reserve(get_request_->overrides().size()*4);
     add_config_overrides_key(
@@ -264,29 +263,29 @@ NamespaceExecutionResult ApiGetCommand::prepare_build_request(
   return NamespaceExecutionResult::OK;
 }
 
-std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> ApiGetCommand::check_if_ref_graph_is_a_dag(
+bool ApiGetCommand::check_if_ref_graph_is_a_dag(
   config_namespace_t& config_namespace,
   const std::string& document,
   const std::vector<std::string>& overrides,
-  uint32_t version
+  uint32_t version,
+  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
 ) {
-  std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> result;
-
   std::vector<std::string> dfs_path;
-  std::unordered_set<std::string> dfs_path_set;
-  result.first = check_if_ref_graph_is_a_dag_rec(
+  absl::flat_hash_set<std::string> dfs_path_set;
+
+  bool is_a_dag = check_if_ref_graph_is_a_dag_rec(
     config_namespace,
     document,
     overrides,
     version,
     dfs_path,
     dfs_path_set,
-    result.second
+    referenced_documents
   );
 
-  result.second[document] = std::unordered_set<std::string>();
+  referenced_documents[document] = absl::flat_hash_set<std::string>();
 
-  return result;
+  return is_a_dag;
 }
 
 bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
@@ -295,8 +294,8 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   const std::vector<std::string>& overrides,
   uint32_t version,
   std::vector<std::string>& dfs_path,
-  std::unordered_set<std::string>& dfs_path_set,
-  std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
+  absl::flat_hash_set<std::string>& dfs_path_set,
+  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
 ) {
   if (dfs_path_set.count(document)) {
     std::stringstream path_ss;
@@ -314,20 +313,18 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
 
   if (referenced_documents.count(document)) return true;
 
-  auto document_metadata_search = config_namespace.document_metadata_by_document.find(
-    document
-  );
+  auto document_metadata_search = config_namespace.document_metadata_by_document
+    .find(document);
   if (document_metadata_search == config_namespace.document_metadata_by_document.end()) {
     spdlog::warn("Can't found a config file with the name '{}'", document);
     return false;
   }
-  auto document_metadata = document_metadata_search->second.get();
 
   thread_local static std::string overrides_key;
   overrides_key.clear();
   overrides_key.reserve(overrides.size()*4);
   add_config_overrides_key(
-    document_metadata,
+    document_metadata_search->second,
     overrides,
     version,
     overrides_key
@@ -343,15 +340,13 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   dfs_path.push_back(document);
   dfs_path_set.insert(document);
 
-  for (uint32_t i = 0; i < overrides.size(); ++i) {
+  for (size_t i = 0, l = overrides.size(); i < l; ++i) {
     bool is_a_dag = true;
     with_raw_config(
-      document_metadata,
+      document_metadata_search->second,
       overrides[i],
       version,
-      [this, &config_namespace, &document, &overrides, version, &dfs_path,
-        &dfs_path_set, &referenced_documents, &is_a_dag
-      ](auto& raw_config) {
+      [&](auto& raw_config) {
         for (const auto& ref_document : raw_config->reference_to) {
           referenced_documents[ref_document].insert(document);
           is_a_dag = check_if_ref_graph_is_a_dag_rec(
@@ -377,12 +372,12 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
 }
 
 std::vector<std::string> ApiGetCommand::do_topological_sort_over_ref_graph(
-  const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
+  const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
 ) {
   std::vector<std::string> reversed_topological_sort;
-  std::unordered_set<std::string> visited_documents;
+  absl::flat_hash_set<std::string> visited_documents;
 
-  for (const auto& it : referenced_documents) {
+  for (const auto it : referenced_documents) {
     do_topological_sort_over_ref_graph_rec(
       it.first,
       referenced_documents,
@@ -398,8 +393,8 @@ std::vector<std::string> ApiGetCommand::do_topological_sort_over_ref_graph(
 
 void ApiGetCommand::do_topological_sort_over_ref_graph_rec(
   const std::string& document,
-  const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents,
-  std::unordered_set<std::string>& visited_documents,
+  const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents,
+  absl::flat_hash_set<std::string>& visited_documents,
   std::vector<std::string>& inverted_topological_sort
 ) {
   auto is_inserted = visited_documents.insert(document);

@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include <zlib.h>
+#include <absl/container/flat_hash_set.h>
 
 #include "mhconfig/string_pool.h"
 #include "mhconfig/worker/command/command.h"
@@ -216,7 +217,7 @@ bool index_files(
 Element override_with(
   const Element& a,
   const Element& b,
-  const std::unordered_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &elements_by_document
 );
 
 NodeType get_virtual_node_type(
@@ -227,7 +228,7 @@ bool apply_tags(
   ::string_pool::Pool* pool,
   const Element& element,
   const Element& root,
-  const std::unordered_map<std::string, Element> &elements_by_document,
+  const absl::flat_hash_map<std::string, Element> &elements_by_document,
   Element& result
 );
 
@@ -243,7 +244,7 @@ std::string format_str(
 
 Element apply_tag_ref(
   const Element& element,
-  const std::unordered_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &elements_by_document
 );
 
 Element apply_tag_sref(
@@ -257,7 +258,7 @@ Element apply_tag_sref(
 Element make_and_check_element(
   ::string_pool::Pool* pool,
   YAML::Node &node,
-  std::unordered_set<std::string> &reference_to
+  absl::flat_hash_set<std::string> &reference_to
 );
 
 bool is_a_valid_path(
@@ -268,7 +269,7 @@ bool is_a_valid_path(
 Element make_element(
   ::string_pool::Pool* pool,
   YAML::Node &node,
-  std::unordered_set<std::string> &reference_to
+  absl::flat_hash_set<std::string> &reference_to
 );
 
 // Get logic
@@ -285,7 +286,7 @@ std::shared_ptr<merged_config_t> get_merged_config(
 
 template<typename F>
 inline void with_raw_config(
-  const document_metadata_t* document_metadata,
+  const document_metadata_t& document_metadata,
   const std::string& override_,
   uint32_t version,
   F lambda
@@ -296,10 +297,10 @@ inline void with_raw_config(
     version
   );
 
-  auto override_search = document_metadata->override_by_key
+  auto override_search = document_metadata.override_by_key
     .find(override_);
 
-  if (override_search == document_metadata->override_by_key.end()) {
+  if (override_search == document_metadata.override_by_key.end()) {
     spdlog::trace("Don't exists the override '{}'", override_);
     return;
   }

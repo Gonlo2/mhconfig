@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <string>
 #include <memory>
 
@@ -18,6 +17,8 @@
 #include "mhconfig/element.h"
 #include "jmutils/common.h"
 
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/btree_map.h>
 
 namespace mhconfig
 {
@@ -35,7 +36,7 @@ struct raw_config_t {
   uint32_t crc32{0};
   Element value;
   std::shared_ptr<inja::Template> template_{nullptr};
-  std::unordered_set<std::string> reference_to;
+  std::vector<std::string> reference_to;
 
   std::shared_ptr<raw_config_t> clone() {
     auto result = std::make_shared<raw_config_t>();
@@ -73,15 +74,15 @@ struct merged_config_t {
 };
 
 struct override_metadata_t {
-  std::map<uint32_t, std::shared_ptr<raw_config_t>> raw_config_by_version;
+  absl::btree_map<uint32_t, std::shared_ptr<raw_config_t>> raw_config_by_version;
   std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
 };
 
 //TODO Check if it's better use a unique_ptr for this to avoid copy
 // the data in the hash table rebuilds
 struct document_metadata_t {
-  std::unordered_map<std::string, override_metadata_t> override_by_key;
-  std::unordered_map<std::string, ::jmutils::zero_value_t<uint32_t>> referenced_by;
+  absl::flat_hash_map<std::string, override_metadata_t> override_by_key;
+  absl::flat_hash_map<std::string, ::jmutils::zero_value_t<uint32_t>> referenced_by;
 };
 
 // TODO move to the builder file
@@ -93,7 +94,7 @@ namespace build {
     std::string overrides_key;
     bool to_build{true};
 
-    std::unordered_map<
+    absl::flat_hash_map<
       std::string,
       std::shared_ptr<raw_config_t>
     > raw_config_by_override;
@@ -122,12 +123,9 @@ struct config_namespace_t {
 
   std::shared_ptr<::string_pool::Pool> pool;
 
-  std::unordered_map<
-    std::string,
-    std::shared_ptr<document_metadata_t>
-  > document_metadata_by_document;
+  absl::flat_hash_map<std::string, document_metadata_t> document_metadata_by_document;
 
-  std::unordered_map<
+  absl::flat_hash_map<
     std::string,
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
@@ -136,7 +134,7 @@ struct config_namespace_t {
     std::shared_ptr<merged_config_t>
   > merged_config_by_gc_generation[NUMBER_OF_GC_GENERATIONS];
 
-  std::unordered_map<
+  absl::flat_hash_map<
     std::string,
     std::vector<std::shared_ptr<build::wait_built_t>>
   > wait_builts_by_key;

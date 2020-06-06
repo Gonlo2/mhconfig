@@ -13,8 +13,10 @@ InternalString::InternalString() {
 
 inline std::string InternalString::str() const {
   if (chunk_ != nullptr) {
-    std::shared_lock lock(chunk_->mutex_);
-    return std::string(data_, size_);
+    chunk_->mutex_.ReaderLock();
+    auto result = std::string(data_, size_);
+    chunk_->mutex_.ReaderUnlock();
+    return result;
   }
   return std::string(data_, size_);
 }
@@ -194,15 +196,18 @@ const String Pool::add(const std::string& str) {
     //TODO Rethink the string build part to avoid create the str and
     //change the unique mutex with a shared one to allow parallel
     //calls if the string already exists in the set
-    std::unique_lock lock(mutex_);
+    mutex_.Lock();
 
     auto search = set_.find(s);
     if (search != set_.end()) {
+      mutex_.Unlock();
       return *search;
     }
 
     spdlog::trace("Adding a new string");
-    return *set_.insert(store_string(str)).first;
+    auto result = *set_.insert(store_string(str)).first;
+    mutex_.Unlock();
+    return result;
   }
 
   return s;
@@ -213,12 +218,13 @@ const stats_t& Pool::stats() const {
 }
 
 void Pool::compact() {
-  std::unique_lock lock_chunk(mutex_);
   spdlog::trace("Compacting the chunks");
 
+  mutex_.Lock();
   for (Chunk* chunk : chunks_) {
     chunk->compact(set_, stats_);
   }
+  mutex_.Unlock();
 }
 
 const String Pool::store_string(const std::string& str) {
@@ -275,9 +281,10 @@ Chunk::~Chunk() {
 
 
 void Chunk::remove_pool() {
-  std::unique_lock lock_chunk(mutex_);
+  mutex_.Lock();
   pool_ = nullptr;
   decrement_refcount();
+  mutex_.Unlock();
 }
 
 void Chunk::released_string(uint32_t size) {
@@ -293,16 +300,18 @@ void Chunk::released_string(uint32_t size) {
     CHUNK_DATA_SIZE>>1
   );
   if (fragmented_size > (CHUNK_DATA_SIZE>>1)) {
-    std::unique_lock lock_chunk(mutex_);
+    mutex_.Lock();
     if ((pool_ != nullptr) && (fragmented_size_.load(std::memory_order_acq_rel) > (CHUNK_DATA_SIZE>>1))) {
-      std::unique_lock lock_pool(pool_->mutex_);
+      pool_->mutex_.Lock();
       unsafe_compact(pool_->set_, pool_->stats_);
+      pool_->mutex_.Unlock();
     }
+    mutex_.Unlock();
   }
 }
 
 String Chunk::add(const std::string& str, stats_t& stats) {
-  std::unique_lock lock_chunk(mutex_);
+  mutex_.Lock();
 
   refcount_.fetch_add(1, std::memory_order_relaxed);
 
@@ -314,11 +323,13 @@ String Chunk::add(const std::string& str, stats_t& stats) {
   spdlog::trace("Moving the next_data pointer {} bytes", data_size);
   next_data_ += data_size;
   stats.used_bytes += data_size;
+  String result((uint64_t)&strings_[next_string_in_use_++]);
+  mutex_.Unlock();
 
-  return String((uint64_t)&strings_[next_string_in_use_++]);
+  return result;
 }
 
-void Chunk::unsafe_compact(std::unordered_set<String>& set, stats_t& stats) {
+void Chunk::unsafe_compact(absl::flat_hash_set<String>& set, stats_t& stats) {
   spdlog::trace("Compacting the chunk {}", (void*)this);
   int32_t used_bytes = fragmented_size_.fetch_sub(1073741824, std::memory_order_acq_rel);
   stats.used_bytes -= used_bytes;

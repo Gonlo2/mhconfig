@@ -57,11 +57,12 @@ private:
     std::shared_ptr<inja::Template>&& template_
   );
 
-  std::pair<bool, std::unordered_map<std::string, std::unordered_set<std::string>>> check_if_ref_graph_is_a_dag(
+  bool check_if_ref_graph_is_a_dag(
     config_namespace_t& config_namespace,
     const std::string& document,
     const std::vector<std::string>& overrides,
-    uint32_t version
+    uint32_t version,
+    absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
   );
 
   bool check_if_ref_graph_is_a_dag_rec(
@@ -70,24 +71,24 @@ private:
     const std::vector<std::string>& overrides,
     uint32_t version,
     std::vector<std::string>& dfs_path,
-    std::unordered_set<std::string>& dfs_path_set,
-    std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
+    absl::flat_hash_set<std::string>& dfs_path_set,
+    absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
   );
 
   std::vector<std::string> do_topological_sort_over_ref_graph(
-    const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents
+    const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
   );
 
   void do_topological_sort_over_ref_graph_rec(
     const std::string& document,
-    const std::unordered_map<std::string, std::unordered_set<std::string>>& referenced_documents,
-    std::unordered_set<std::string>& visited_documents,
+    const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents,
+    absl::flat_hash_set<std::string>& visited_documents,
     std::vector<std::string>& inverted_topological_sort
   );
 
   // Help functions
   inline void add_config_overrides_key(
-    const document_metadata_t* document_metadata,
+    const document_metadata_t& document_metadata,
     const std::vector<std::string>& overrides,
     uint32_t version,
     std::string& overrides_key
@@ -105,7 +106,7 @@ private:
   }
 
   inline void add_template_overrides_key(
-    const document_metadata_t* document_metadata,
+    const document_metadata_t& document_metadata,
     const std::vector<std::string>& overrides,
     uint32_t version,
     std::string& overrides_key,
@@ -137,7 +138,7 @@ private:
       template_ = nullptr;
       if (search != config_namespace.document_metadata_by_document.end()) {
         add_template_overrides_key(
-          search->second.get(),
+          search->second,
           get_request_->overrides(),
           get_request_->version(),
           overrides_key,
@@ -168,7 +169,7 @@ private:
       return false;
     }
     add_config_overrides_key(
-      search->second.get(),
+      search->second,
       get_request_->overrides(),
       get_request_->version(),
       overrides_key

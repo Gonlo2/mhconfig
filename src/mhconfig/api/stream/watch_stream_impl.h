@@ -9,6 +9,8 @@
 #include "mhconfig/scheduler/command/command.h"
 #include "mhconfig/scheduler/command/api_watch_command.h"
 
+#include <absl/container/flat_hash_map.h>
+
 #include <grpcpp/impl/codegen/serialization_traits.h>
 
 #include "spdlog/spdlog.h"
@@ -144,7 +146,7 @@ protected:
 
 private:
   grpc::ByteBuffer next_req_;
-  std::unordered_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
+  absl::flat_hash_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
 };
 
 

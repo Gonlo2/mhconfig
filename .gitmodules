@@ -19,3 +19,6 @@
 [submodule "third_party/inja"]
 	path = third_party/inja
 	url = git@github.com:Gonlo2/inja.git
+[submodule "third_party/abseil-cpp"]
+	path = third_party/abseil-cpp
+	url = git@github.com:abseil/abseil-cpp.git
