@@ -238,8 +238,6 @@ message WatchRequest {
 }
 
 message WatchResponse {
-  // the id assigned to the watcher.
-  uint32 uid = 1;
   enum Status {
     OK = 0;
     // if some error take place the watcher will be removed
@@ -263,11 +261,16 @@ message WatchResponse {
     // wish to do so
     REMOVED = 22;
   }
-  Status status = 2;
-  uint64 namespace_id = 3;
-  uint32 version = 4;
-  repeated Element elements = 5;
-  string template_rendered = 6;
+  Status status = 1;
+  uint64 namespace_id = 2;
+  uint32 version = 3;
+  // The uid of the elements need be the same of the request
+  // to allow reuse the serialization cache
+  repeated Element elements = 4;
+  string template_rendered = 5;
+
+  // the id assigned to the watcher.
+  uint32 uid = 10;
 }
 ```
 
