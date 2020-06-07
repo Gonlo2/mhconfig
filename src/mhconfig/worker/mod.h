@@ -53,8 +53,8 @@ private:
       end_time - start_time
     ).count();
 
-    context_.async_metrics_service->observe(
-      metrics::MetricsService::ObservableId::WORKER_DURATION_NANOSECONDS,
+    context_.async_metrics_service->add(
+      metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
       {{"type", command_name}},
       duration_ns
     );

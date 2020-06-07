@@ -38,9 +38,9 @@ struct raw_config_t {
   std::shared_ptr<inja::Template> template_{nullptr};
   std::vector<std::string> reference_to;
 
-  std::shared_ptr<raw_config_t> clone() {
+  std::shared_ptr<raw_config_t> clone(uint32_t new_id) {
     auto result = std::make_shared<raw_config_t>();
-    result->id = id;
+    result->id = new_id;
     result->crc32 = crc32;
     result->value = value;
     result->template_ = template_;
@@ -118,7 +118,6 @@ struct config_namespace_t {
   uint64_t id;
   uint64_t last_access_timestamp : 56;
   bool ok : 8;
-  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
   std::string root_path;
 
   std::shared_ptr<::string_pool::Pool> pool;
@@ -129,6 +128,13 @@ struct config_namespace_t {
     std::string,
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
+
+  absl::flat_hash_map<
+    std::pair<std::string, std::string>,
+    ::jmutils::zero_value_t<uint32_t>
+  > asked_configs;
+
+  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
 
   std::vector<
     std::shared_ptr<merged_config_t>

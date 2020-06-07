@@ -289,11 +289,12 @@ void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
             config_namespace.next_raw_config_id
           );
 
-          auto new_raw_config = raw_config->clone();
-          new_raw_config->id = config_namespace.next_raw_config_id++;
+          auto new_raw_config = raw_config->clone(
+            config_namespace.next_raw_config_id++
+          );
 
           document_metadata.override_by_key[updated_documents_it.first]
-            .raw_config_by_version[config_namespace.current_version] = new_raw_config;
+            .raw_config_by_version[config_namespace.current_version] = std::move(new_raw_config);
         }
       );
 

@@ -59,56 +59,151 @@ namespace metrics
       .Name("string_pool_used_bytes")
       .Help("The number of used bytes in the pool")
       .Register(*registry_);
+
+    family_asked_configs_gauge_ = &prometheus::BuildGauge()
+      .Name("asked_configs")
+      .Help("The asked configs")
+      .Register(*registry_);
+
+    family_registered_watchers_gauge_ = &prometheus::BuildGauge()
+      .Name("registered_watchers")
+      .Help("The registered watchers")
+      .Register(*registry_);
   }
 
-  void SyncMetricsService::observe(
-    ObservableId id,
+  void SyncMetricsService::add(
+    MetricId id,
     std::map<std::string, std::string>&& labels,
     double value
   ) {
     switch (id) {
-      case ObservableId::API_DURATION_NANOSECONDS:
+      case MetricId::API_DURATION_NANOSECONDS:
         family_api_duration_summary_->Add(labels, quantiles_)
           .Observe(value);
         return;
-      case ObservableId::SCHEDULER_DURATION_NANOSECONDS:
+      case MetricId::SCHEDULER_DURATION_NANOSECONDS:
         family_scheduler_duration_summary_->Add(labels, quantiles_)
           .Observe(value);
         return;
-      case ObservableId::WORKER_DURATION_NANOSECONDS:
+      case MetricId::WORKER_DURATION_NANOSECONDS:
         family_worker_duration_summary_->Add(labels, quantiles_)
           .Observe(value);
         return;
-      case ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES:
+      case MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES:
         family_optimized_merged_config_used_bytes_summary_->Add(labels, quantiles_)
           .Observe(value);
         return;
+      case MetricId::STRING_POOL_NUM_STRINGS:
+        family_string_pool_num_strings_gauge_->Add(labels)
+          .Set(value);
+        return;
+      case MetricId::STRING_POOL_NUM_CHUNKS:
+        family_string_pool_num_chunks_gauge_->Add(labels)
+          .Set(value);
+        return;
+      case MetricId::STRING_POOL_RECLAIMED_BYTES:
+        family_string_pool_reclaimed_bytes_gauge_->Add(labels)
+          .Set(value);
+        return;
+      case MetricId::STRING_POOL_USED_BYTES:
+        family_string_pool_used_bytes_gauge_->Add(labels)
+          .Set(value);
+        return;
+      case MetricId::ASKED_CONFIGS:
+        family_asked_configs_gauge_->Add(labels)
+          .Set(value);
+        return;
+      case MetricId::REGISTERED_WATCHERS:
+        family_registered_watchers_gauge_->Add(labels)
+          .Set(value);
+        return;
     }
 
-    spdlog::warn("Unknown observable metric id {}", id);
+    spdlog::warn("Unknown metric id {} to add", id);
   }
 
-  void SyncMetricsService::set(
-    GaugeId id,
-    std::map<std::string, std::string>&& labels,
-    double value
+  void SyncMetricsService::clear(
+    MetricId id
   ) {
     switch (id) {
-      case GaugeId::STRING_POOL_NUM_STRINGS:
-        family_string_pool_num_strings_gauge_->Add(labels).Set(value);
+      case MetricId::API_DURATION_NANOSECONDS:
+        family_api_duration_summary_->Clear();
         return;
-      case GaugeId::STRING_POOL_NUM_CHUNKS:
-        family_string_pool_num_chunks_gauge_->Add(labels).Set(value);
+      case MetricId::SCHEDULER_DURATION_NANOSECONDS:
+        family_scheduler_duration_summary_->Clear();
         return;
-      case GaugeId::STRING_POOL_RECLAIMED_BYTES:
-        family_string_pool_reclaimed_bytes_gauge_->Add(labels).Set(value);
+      case MetricId::WORKER_DURATION_NANOSECONDS:
+        family_worker_duration_summary_->Clear();
         return;
-      case GaugeId::STRING_POOL_USED_BYTES:
-        family_string_pool_used_bytes_gauge_->Add(labels).Set(value);
+      case MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES:
+        family_optimized_merged_config_used_bytes_summary_->Clear();
+        return;
+      case MetricId::STRING_POOL_NUM_STRINGS:
+        family_string_pool_num_strings_gauge_->Clear();
+        return;
+      case MetricId::STRING_POOL_NUM_CHUNKS:
+        family_string_pool_num_chunks_gauge_->Clear();
+        return;
+      case MetricId::STRING_POOL_RECLAIMED_BYTES:
+        family_string_pool_reclaimed_bytes_gauge_->Clear();
+        return;
+      case MetricId::STRING_POOL_USED_BYTES:
+        family_string_pool_used_bytes_gauge_->Clear();
+        return;
+      case MetricId::ASKED_CONFIGS:
+        family_asked_configs_gauge_->Clear();
+        return;
+      case MetricId::REGISTERED_WATCHERS:
+        family_registered_watchers_gauge_->Clear();
         return;
     }
 
-    spdlog::warn("Unknown gauge metric id {}", id);
+    spdlog::warn("Unknown metric id {} to clear", id);
+  }
+
+  void SyncMetricsService::set_namespaces_metrics(
+    std::vector<namespace_metrics_t>&& namespaces_metrics
+  ) {
+    clear(ASKED_CONFIGS);
+    clear(REGISTERED_WATCHERS);
+
+    for (const auto& namespace_metrics : namespaces_metrics) {
+      for (const auto& it : namespace_metrics.asked_configs) {
+        add(
+          ASKED_CONFIGS,
+          {
+            {"root_path", namespace_metrics.name},
+            {"override", it.first.first},
+            {"name", it.first.second}
+          },
+          it.second.v
+        );
+      }
+
+      absl::flat_hash_map<std::pair<std::string, std::string>, ::jmutils::zero_value_t<uint32_t>> watchers;
+      for (const auto& ww : namespace_metrics.watchers) {
+        if (auto w = ww.lock()) {
+          for (const auto& override_ : w->overrides()) {
+            watchers[std::make_pair(override_, w->document())].v += 1;
+            if (!w->template_().empty()) {
+              watchers[std::make_pair(override_, w->template_())].v += 1;
+            }
+          }
+        }
+      }
+
+      for (const auto& it : watchers) {
+        add(
+          REGISTERED_WATCHERS,
+          {
+            {"root_path", namespace_metrics.name},
+            {"override", it.first.first},
+            {"name", it.first.second}
+          },
+          it.second.v
+        );
+      }
+    }
   }
 
 } /* metrics */

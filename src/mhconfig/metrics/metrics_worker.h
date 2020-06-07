@@ -34,11 +34,11 @@ public:
   ) = 0;
 };
 
-class ObserveAsyncMetric : public AsyncMetric
+class AddMetric : public AsyncMetric
 {
 public:
-  ObserveAsyncMetric(
-    metrics::MetricsService::ObservableId id,
+  AddMetric(
+    metrics::MetricsService::MetricId id,
     std::map<std::string, std::string>&& labels,
     double value
   )
@@ -48,17 +48,17 @@ public:
   {
   }
 
-  virtual ~ObserveAsyncMetric() {
+  virtual ~AddMetric() {
   }
 
   std::string name() override {
-    return "OBSERVE_ASYNC_METRIC";
+    return "ADD_METRIC";
   }
 
   void apply(
     metrics::MetricsService& metrics
   ) override {
-    metrics.observe(
+    metrics.add(
       id_,
       std::move(labels_),
       value_
@@ -66,47 +66,38 @@ public:
   }
 
 private:
-  metrics::MetricsService::ObservableId id_;
+  metrics::MetricsService::MetricId id_;
   std::map<std::string, std::string> labels_;
   double value_;
 };
 
-class SetAsyncMetric : public AsyncMetric
+class SetNamespacesMetrics : public AsyncMetric
 {
 public:
-  SetAsyncMetric(
-    metrics::MetricsService::GaugeId id,
-    std::map<std::string, std::string>&& labels,
-    double value
+  SetNamespacesMetrics(
+    std::vector<MetricsService::namespace_metrics_t>&& namespaces_metrics
   )
-    : id_(id),
-    labels_(labels),
-    value_(value)
+    : namespaces_metrics_(std::move(namespaces_metrics))
   {
   }
 
-  virtual ~SetAsyncMetric() {
+  virtual ~SetNamespacesMetrics() {
   }
 
   std::string name() override {
-    return "SET_ASYNC_METRIC";
+    return "SET_NAMESPACES_METRICS";
   }
 
   void apply(
     metrics::MetricsService& metrics
   ) override {
-    metrics.set(
-      id_,
-      std::move(labels_),
-      value_
-    );
+    metrics.set_namespaces_metrics(std::move(namespaces_metrics_));
   }
 
 private:
-  metrics::MetricsService::GaugeId id_;
-  std::map<std::string, std::string> labels_;
-  double value_;
+  std::vector<MetricsService::namespace_metrics_t> namespaces_metrics_;
 };
+
 
 typedef jmutils::container::MPSCQueue<std::unique_ptr<AsyncMetric>, 12> MetricsQueue;
 
@@ -154,8 +145,8 @@ private:
       end_time - start_time
     ).count();
 
-    metrics_.observe(
-      metrics::MetricsService::ObservableId::WORKER_DURATION_NANOSECONDS,
+    metrics_.add(
+      metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
       {{"type", command_name}},
       duration_ns
     );

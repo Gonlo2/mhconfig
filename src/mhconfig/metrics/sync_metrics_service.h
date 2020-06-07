@@ -23,17 +23,20 @@ namespace metrics
 
     void init();
 
-    void observe(
-      ObservableId id,
+    void add(
+      MetricId id,
       std::map<std::string, std::string>&& labels,
       double value
     ) override;
 
-    void set(
-      GaugeId id,
-      std::map<std::string, std::string>&& labels,
-      double value
+    void clear(
+      MetricId id
     ) override;
+
+    void set_namespaces_metrics(
+      std::vector<namespace_metrics_t>&& namespaces_metrics
+    ) override;
+
   private:
     prometheus::Exposer exposer_;
     std::shared_ptr<prometheus::Registry> registry_;
@@ -54,6 +57,8 @@ namespace metrics
     prometheus::Family<prometheus::Gauge>* family_string_pool_num_chunks_gauge_{nullptr};
     prometheus::Family<prometheus::Gauge>* family_string_pool_reclaimed_bytes_gauge_{nullptr};
     prometheus::Family<prometheus::Gauge>* family_string_pool_used_bytes_gauge_{nullptr};
+    prometheus::Family<prometheus::Gauge>* family_asked_configs_gauge_{nullptr};
+    prometheus::Family<prometheus::Gauge>* family_registered_watchers_gauge_{nullptr};
   };
 
 } /* metrics */

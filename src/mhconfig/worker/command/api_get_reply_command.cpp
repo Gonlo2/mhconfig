@@ -52,8 +52,8 @@ bool ApiGetReplyCommand::execute(
       );
 
       if (get_response.SerializeToString(&merged_config_->preprocesed_value)) {
-        context.async_metrics_service->observe(
-          metrics::MetricsService::ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+        context.async_metrics_service->add(
+          metrics::MetricsService::MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
           {},
           merged_config_->preprocesed_value.size()
         );

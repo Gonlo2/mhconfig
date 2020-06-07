@@ -4,9 +4,6 @@
 [submodule "third_party/grpc"]
 	path = third_party/grpc
 	url = https://github.com/grpc/grpc
-[submodule "third_party/prometheus-cpp"]
-	path = third_party/prometheus-cpp
-	url = https://github.com/jupp0r/prometheus-cpp.git
 [submodule "third_party/spdlog"]
 	path = third_party/spdlog
 	url = git@github.com:Gonlo2/spdlog.git
@@ -22,3 +19,6 @@
 [submodule "third_party/abseil-cpp"]
 	path = third_party/abseil-cpp
 	url = git@github.com:abseil/abseil-cpp.git
+[submodule "third_party/prometheus-cpp"]
+	path = third_party/prometheus-cpp
+	url = git@github.com:Gonlo2/prometheus-cpp.git

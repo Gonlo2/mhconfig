@@ -14,23 +14,27 @@ namespace metrics
   AsyncMetricsService::~AsyncMetricsService() {
   }
 
-  void AsyncMetricsService::observe(
-    ObservableId id,
+  void AsyncMetricsService::add(
+    MetricId id,
     std::map<std::string, std::string>&& labels,
     double value
   ) {
     sender_->push(
-      std::make_unique<ObserveAsyncMetric>(id, std::move(labels), value)
+      std::make_unique<AddMetric>(id, std::move(labels), value)
     );
   }
 
-  void AsyncMetricsService::set(
-    GaugeId id,
-    std::map<std::string, std::string>&& labels,
-    double value
+  // TODO
+  void AsyncMetricsService::clear(
+    MetricId id
+  ) {
+  }
+
+  void AsyncMetricsService::set_namespaces_metrics(
+    std::vector<namespace_metrics_t>&& namespaces_metrics
   ) {
     sender_->push(
-      std::make_unique<SetAsyncMetric>(id, std::move(labels), value)
+      std::make_unique<SetNamespacesMetrics>(std::move(namespaces_metrics))
     );
   }
 

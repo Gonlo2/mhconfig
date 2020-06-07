@@ -16,16 +16,18 @@ namespace metrics
     );
     virtual ~AsyncMetricsService();
 
-    void observe(
-      ObservableId id,
+    void add(
+      MetricId id,
       std::map<std::string, std::string>&& labels,
       double value
     ) override;
 
-    void set(
-      GaugeId id,
-      std::map<std::string, std::string>&& labels,
-      double value
+    void clear(
+      MetricId id
+    ) override;
+
+    void set_namespaces_metrics(
+      std::vector<namespace_metrics_t>&& namespaces_metrics
     ) override;
 
   private:

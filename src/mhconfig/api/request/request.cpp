@@ -46,8 +46,8 @@ std::shared_ptr<Session> Request::proceed(
           end_time - start_time_
         ).count();
 
-        metrics.observe(
-          metrics::MetricsService::ObservableId::API_DURATION_NANOSECONDS,
+        metrics.add(
+          metrics::MetricsService::MetricId::API_DURATION_NANOSECONDS,
           {{"type", name()}},
           duration_ns
         );

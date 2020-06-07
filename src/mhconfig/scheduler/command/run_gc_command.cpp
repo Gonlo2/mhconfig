@@ -1,14 +1,5 @@
 #include "mhconfig/scheduler/command/run_gc_command.h"
 
-#include <memory>
-
-#include "mhconfig/builder.h"
-#include "mhconfig/api/request/get_request.h"
-#include "mhconfig/worker/command/update_command.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "jmutils/time.h"
-#include "jmutils/common.h"
-
 namespace mhconfig
 {
 namespace scheduler

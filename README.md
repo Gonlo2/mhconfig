@@ -296,6 +296,14 @@ message RunGCResponse {
 }
 ```
 
+## Metrics
+
+The server expose some metrics through a prometheus client, some of this metrics are:
+
+* The quantile 0.5, 0.9 and 0.99 of the requests duration (the stats are sampled).
+* The asked configuration and the registered watchers.
+* The quantile 0.5, 0.9 and 0.99 of the internal threads (the stats are sampled).
+* Some internal stats.
 
 ## License
 

@@ -68,8 +68,8 @@ private:
       end_time - start_time
     ).count();
 
-    context_.metrics->observe(
-      metrics::MetricsService::ObservableId::SCHEDULER_DURATION_NANOSECONDS,
+    context_.metrics->add(
+      metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
       {{"type", command_name}},
       duration_ns
     );

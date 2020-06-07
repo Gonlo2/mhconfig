@@ -64,12 +64,19 @@ NamespaceExecutionResult ApiGetCommand::execute_on_namespace(
     return NamespaceExecutionResult::OK;
   }
 
+  for (size_t i = 0, l = get_request_->overrides().size(); i < l; ++i) {
+    config_namespace.asked_configs[std::make_pair(get_request_->overrides()[i], get_request_->document())].v += 1;
+    if (!get_request_->template_().empty()) {
+      config_namespace.asked_configs[std::make_pair(get_request_->overrides()[i], get_request_->template_())].v += 1;
+    }
+  }
+
   // If the document exists and the user asked for a version
   // we check if the version is available
   if (
-      (get_request_->version() != 0)
-      && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
-      && (get_request_->version() < config_namespace.stored_versions_by_deprecation_timestamp.front().second)
+    (get_request_->version() != 0)
+    && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
+    && (get_request_->version() < config_namespace.stored_versions_by_deprecation_timestamp.front().second)
   ) {
     spdlog::trace("The asked version {} don't exists", get_request_->version());
 

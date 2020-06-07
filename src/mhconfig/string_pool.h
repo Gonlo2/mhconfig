@@ -27,26 +27,26 @@ public:
   void on_updated_stats(const ::string_pool::stats_t& stats, bool force) override {
     sequential_id_ = (sequential_id_+1) & 0xff;
     if (force || (sequential_id_ == 0)) {
-      metrics_.set(
-        metrics::MetricsService::GaugeId::STRING_POOL_NUM_STRINGS,
+      metrics_.add(
+        metrics::MetricsService::MetricId::STRING_POOL_NUM_STRINGS,
         {{"pool", id_}},
         stats.num_strings
       );
 
-      metrics_.set(
-        metrics::MetricsService::GaugeId::STRING_POOL_NUM_CHUNKS,
+      metrics_.add(
+        metrics::MetricsService::MetricId::STRING_POOL_NUM_CHUNKS,
         {{"pool", id_}},
         stats.num_chunks
       );
 
-      metrics_.set(
-        metrics::MetricsService::GaugeId::STRING_POOL_RECLAIMED_BYTES,
+      metrics_.add(
+        metrics::MetricsService::MetricId::STRING_POOL_RECLAIMED_BYTES,
         {{"pool", id_}},
         stats.reclaimed_bytes
       );
 
-      metrics_.set(
-        metrics::MetricsService::GaugeId::STRING_POOL_USED_BYTES,
+      metrics_.add(
+        metrics::MetricsService::MetricId::STRING_POOL_USED_BYTES,
         {{"pool", id_}},
         stats.used_bytes
       );

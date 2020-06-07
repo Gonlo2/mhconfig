@@ -157,8 +157,8 @@ bool BuildCommand::execute(
       &wait_build_->preprocesed_value
     );
     if (wait_build_->is_preprocesed_value_ok) {
-      context.async_metrics_service->observe(
-        metrics::MetricsService::ObservableId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+      context.async_metrics_service->add(
+        metrics::MetricsService::MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
         {},
         wait_build_->preprocesed_value.size()
       );
