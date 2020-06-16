@@ -19,7 +19,7 @@
 #include <absl/container/flat_hash_map.h>
 
 namespace mhconfig {
-  enum NodeType {
+  enum class NodeType {
     UNDEFINED_NODE = 0,
     MAP_NODE = 1,
     SEQUENCE_NODE = 2,
@@ -77,6 +77,18 @@ namespace mhconfig {
     bool // OVERRIDE_BOOL_NODE = 18,
   > Data;
 
+  namespace {
+    template <NodeType I, typename T>
+    constexpr auto& node_get(T&& v) {
+      return std::get<static_cast<size_t>(I)>(v);
+    }
+
+    template <NodeType I, class T, typename... Args>
+    constexpr auto& node_set(T&& v, Args&&... args) {
+      return v.template emplace<static_cast<size_t>(I)>(std::forward<Args>(args)...);
+    }
+  }
+
   namespace conversion
   {
     template <typename T>
@@ -96,8 +108,8 @@ namespace mhconfig {
     explicit Element(const int64_t value, bool override_ = false) noexcept;
     explicit Element(const double value, bool override_ = false) noexcept;
     explicit Element(const bool value, bool override_ = false) noexcept;
-    explicit Element(MapBox* map, NodeType type = MAP_NODE) noexcept;
-    explicit Element(SequenceBox* sequence, NodeType type = SEQUENCE_NODE) noexcept;
+    explicit Element(MapBox* map, NodeType type = NodeType::MAP_NODE) noexcept;
+    explicit Element(SequenceBox* sequence, NodeType type = NodeType::SEQUENCE_NODE) noexcept;
 
     Element(const Element& rhs) noexcept;
     Element(Element&& rhs) noexcept;
@@ -160,26 +172,26 @@ namespace mhconfig {
   namespace {
     inline void increment_refcount(Data& data) {
       switch ((NodeType) data.index()) {
-        case MAP_NODE:
-          std::get<MAP_NODE>(data)->increment_refcount();
+        case NodeType::MAP_NODE:
+          node_get<NodeType::MAP_NODE>(data)->increment_refcount();
           break;
-        case SEQUENCE_NODE:
-          std::get<SEQUENCE_NODE>(data)->increment_refcount();
+        case NodeType::SEQUENCE_NODE:
+          node_get<NodeType::SEQUENCE_NODE>(data)->increment_refcount();
           break;
-        case FORMAT_NODE:
-          std::get<FORMAT_NODE>(data)->increment_refcount();
+        case NodeType::FORMAT_NODE:
+          node_get<NodeType::FORMAT_NODE>(data)->increment_refcount();
           break;
-        case SREF_NODE:
-          std::get<SREF_NODE>(data)->increment_refcount();
+        case NodeType::SREF_NODE:
+          node_get<NodeType::SREF_NODE>(data)->increment_refcount();
           break;
-        case REF_NODE:
-          std::get<REF_NODE>(data)->increment_refcount();
+        case NodeType::REF_NODE:
+          node_get<NodeType::REF_NODE>(data)->increment_refcount();
           break;
-        case OVERRIDE_MAP_NODE:
-          std::get<OVERRIDE_MAP_NODE>(data)->increment_refcount();
+        case NodeType::OVERRIDE_MAP_NODE:
+          node_get<NodeType::OVERRIDE_MAP_NODE>(data)->increment_refcount();
           break;
-        case OVERRIDE_SEQUENCE_NODE:
-          std::get<OVERRIDE_SEQUENCE_NODE>(data)->increment_refcount();
+        case NodeType::OVERRIDE_SEQUENCE_NODE:
+          node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data)->increment_refcount();
           break;
         default:
           break;
@@ -188,26 +200,26 @@ namespace mhconfig {
 
     inline void decrement_refcount(Data& data) {
       switch ((NodeType) data.index()) {
-        case MAP_NODE:
-          std::get<MAP_NODE>(data)->decrement_refcount();
+        case NodeType::MAP_NODE:
+          node_get<NodeType::MAP_NODE>(data)->decrement_refcount();
           break;
-        case SEQUENCE_NODE:
-          std::get<SEQUENCE_NODE>(data)->decrement_refcount();
+        case NodeType::SEQUENCE_NODE:
+          node_get<NodeType::SEQUENCE_NODE>(data)->decrement_refcount();
           break;
-        case FORMAT_NODE:
-          std::get<FORMAT_NODE>(data)->decrement_refcount();
+        case NodeType::FORMAT_NODE:
+          node_get<NodeType::FORMAT_NODE>(data)->decrement_refcount();
           break;
-        case SREF_NODE:
-          std::get<SREF_NODE>(data)->decrement_refcount();
+        case NodeType::SREF_NODE:
+          node_get<NodeType::SREF_NODE>(data)->decrement_refcount();
           break;
-        case REF_NODE:
-          std::get<REF_NODE>(data)->decrement_refcount();
+        case NodeType::REF_NODE:
+          node_get<NodeType::REF_NODE>(data)->decrement_refcount();
           break;
-        case OVERRIDE_MAP_NODE:
-          std::get<OVERRIDE_MAP_NODE>(data)->decrement_refcount();
+        case NodeType::OVERRIDE_MAP_NODE:
+          node_get<NodeType::OVERRIDE_MAP_NODE>(data)->decrement_refcount();
           break;
-        case OVERRIDE_SEQUENCE_NODE:
-          std::get<OVERRIDE_SEQUENCE_NODE>(data)->decrement_refcount();
+        case NodeType::OVERRIDE_SEQUENCE_NODE:
+          node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data)->decrement_refcount();
           break;
         default:
           break;

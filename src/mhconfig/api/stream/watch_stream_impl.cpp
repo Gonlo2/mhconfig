@@ -22,27 +22,27 @@ void WatchOutputMessageImpl::set_uid(uint32_t uid) {
   proto_response_->set_uid(uid);
 }
 
-void WatchOutputMessageImpl::set_status(watch::Status status) {
+void WatchOutputMessageImpl::set_status(WatchStatus status) {
   switch (status) {
-    case watch::Status::OK:
+    case WatchStatus::OK:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
       break;
-    case watch::Status::ERROR:
+    case WatchStatus::ERROR:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
       break;
-    case watch::Status::INVALID_VERSION:
+    case WatchStatus::INVALID_VERSION:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
       break;
-    case watch::Status::REF_GRAPH_IS_NOT_DAG:
+    case WatchStatus::REF_GRAPH_IS_NOT_DAG:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
       break;
-    case watch::Status::UID_IN_USE:
+    case WatchStatus::UID_IN_USE:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
       break;
-    case watch::Status::UNKNOWN_UID:
+    case WatchStatus::UNKNOWN_UID:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
       break;
-    case watch::Status::REMOVED:
+    case WatchStatus::REMOVED:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
       break;
   }
@@ -178,16 +178,16 @@ const std::string& WatchGetRequest::template_() const {
 void WatchGetRequest::set_status(::mhconfig::api::request::GetRequest::Status status) {
   switch (status) {
     case ::mhconfig::api::request::GetRequest::Status::OK:
-      output_message_->set_status(watch::Status::OK);
+      output_message_->set_status(WatchStatus::OK);
       break;
     case ::mhconfig::api::request::GetRequest::Status::ERROR:
-      output_message_->set_status(watch::Status::ERROR);
+      output_message_->set_status(WatchStatus::ERROR);
       break;
     case ::mhconfig::api::request::GetRequest::Status::INVALID_VERSION:
-      output_message_->set_status(watch::Status::INVALID_VERSION);
+      output_message_->set_status(WatchStatus::INVALID_VERSION);
       break;
     case ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG:
-      output_message_->set_status(watch::Status::REF_GRAPH_IS_NOT_DAG);
+      output_message_->set_status(WatchStatus::REF_GRAPH_IS_NOT_DAG);
       break;
   }
 }
@@ -269,7 +269,7 @@ void WatchStreamImpl::request(
       size_t removed_elements = watcher_by_id_.erase(msg->uid());
       auto out_msg = msg->make_output_message();
       out_msg->set_status(
-        (removed_elements == 0) ? watch::Status::UNKNOWN_UID : watch::Status::REMOVED
+        (removed_elements == 0) ? WatchStatus::UNKNOWN_UID : WatchStatus::REMOVED
       );
       out_msg->send();
     } else {
@@ -283,13 +283,13 @@ void WatchStreamImpl::request(
         );
       } else {
         auto out_msg = msg->make_output_message();
-        out_msg->set_status(watch::Status::UID_IN_USE);
+        out_msg->set_status(WatchStatus::UID_IN_USE);
         out_msg->send();
       }
     }
   } else {
     auto out_msg = msg->make_output_message();
-    out_msg->set_status(watch::Status::ERROR);
+    out_msg->set_status(WatchStatus::ERROR);
     out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }
 }

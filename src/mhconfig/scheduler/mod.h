@@ -37,7 +37,7 @@ public:
 private:
   friend class jmutils::parallelism::Worker<Scheduler, command::CommandRef>;
 
-  enum ConfigNamespaceState {
+  enum class ConfigNamespaceState {
     OK,
     BUILDING,
     ERROR

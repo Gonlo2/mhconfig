@@ -43,7 +43,7 @@ protected:
   virtual void finish() = 0;
 
 private:
-  enum RequestStatus {
+  enum class RequestStatus {
     CREATE,
     PROCESS,
     FINISH

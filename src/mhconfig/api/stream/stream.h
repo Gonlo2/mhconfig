@@ -117,7 +117,7 @@ protected:
   }
 
 private:
-  enum Status {
+  enum class Status {
     CREATE,
     PROCESS,
     WRITING,

@@ -63,7 +63,7 @@ const static std::string TAG_REF{"!ref"};
 const static std::string TAG_DELETE{"!delete"};
 const static std::string TAG_OVERRIDE{"!override"};
 
-enum LoadRawConfigStatus {
+enum class LoadRawConfigStatus {
   OK,
   FILE_DONT_EXISTS,
   ERROR

@@ -17,7 +17,7 @@ namespace request
 class GetRequest : public Commitable
 {
 public:
-  enum Status {
+  enum class Status {
     OK,
     ERROR,
     INVALID_VERSION,

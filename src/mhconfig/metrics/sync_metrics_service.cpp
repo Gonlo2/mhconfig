@@ -164,13 +164,13 @@ namespace metrics
   void SyncMetricsService::set_namespaces_metrics(
     std::vector<namespace_metrics_t>&& namespaces_metrics
   ) {
-    clear(ASKED_CONFIGS);
-    clear(REGISTERED_WATCHERS);
+    clear(MetricId::ASKED_CONFIGS);
+    clear(MetricId::REGISTERED_WATCHERS);
 
     for (const auto& namespace_metrics : namespaces_metrics) {
       for (const auto& it : namespace_metrics.asked_configs) {
         add(
-          ASKED_CONFIGS,
+          MetricId::ASKED_CONFIGS,
           {
             {"root_path", namespace_metrics.name},
             {"override", it.first.first},
@@ -194,7 +194,7 @@ namespace metrics
 
       for (const auto& it : watchers) {
         add(
-          REGISTERED_WATCHERS,
+          MetricId::REGISTERED_WATCHERS,
           {
             {"root_path", namespace_metrics.name},
             {"override", it.first.first},

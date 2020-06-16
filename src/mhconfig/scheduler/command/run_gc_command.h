@@ -18,8 +18,10 @@ namespace scheduler
 namespace command
 {
 
-namespace run_gc {
-  enum Type {
+class RunGcCommand : public Command
+{
+public:
+  enum class Type {
     CACHE_GENERATION_0 = 0,
     CACHE_GENERATION_1 = 1,
     CACHE_GENERATION_2 = 2,
@@ -27,13 +29,9 @@ namespace run_gc {
     NAMESPACES = 4,
     VERSIONS = 5
   };
-}
 
-class RunGcCommand : public Command
-{
-public:
   RunGcCommand(
-    run_gc::Type type,
+    Type type,
     uint32_t max_live_in_seconds
   );
   virtual ~RunGcCommand();
@@ -47,7 +45,7 @@ public:
   ) override;
 
 private:
-  run_gc::Type type_;
+  Type type_;
   uint32_t max_live_in_seconds_;
 
   void remove_merge_configs(

@@ -38,12 +38,12 @@ void UpdateRequestImpl::set_namespace_id(uint64_t namespace_id) {
   response_->set_namespace_id(namespace_id);
 }
 
-void UpdateRequestImpl::set_status(update_request::Status status) {
+void UpdateRequestImpl::set_status(Status status) {
   switch (status) {
-    case update_request::Status::OK:
+    case Status::OK:
       response_->set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_OK);
       break;
-    case update_request::Status::ERROR:
+    case Status::ERROR:
       response_->set_status(::mhconfig::proto::UpdateResponse_Status::UpdateResponse_Status_ERROR);
       break;
   }

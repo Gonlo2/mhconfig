@@ -14,7 +14,7 @@ namespace api
 namespace config
 {
 
-enum ValueElement {
+enum class ValueElement {
   STR_VALUE_ELEMENT = 0,
   UNDEFINED_VALUE_ELEMENT = 1,
   INT_VALUE_ELEMENT = 2,
@@ -25,9 +25,22 @@ enum ValueElement {
   SEQUENCE_VALUE_ELEMENT = 7
 };
 
-enum KeyElement {
+enum class KeyElement {
   STR_KEY_ELEMENT = 0
 };
+
+
+namespace {
+  template <typename T>
+  inline void add_value_type(T* message, ValueElement element) {
+    message->set_type(message->type() | static_cast<uint32_t>(element));
+  }
+
+  template <typename T>
+  inline void add_key_type(T* message, KeyElement element) {
+    message->set_type(message->type() | (static_cast<uint32_t>(element)<<4));
+  }
+}
 
 
 template <typename T>
@@ -38,13 +51,13 @@ uint32_t fill_elements(
 ) {
   switch (root.type()) {
     case NodeType::UNDEFINED_NODE: {
-      output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       return 1;
     }
 
     case NodeType::NULL_NODE: // Fallback
     case NodeType::OVERRIDE_NULL_NODE: {
-      output->set_type(output->type() | ValueElement::NULL_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::NULL_VALUE_ELEMENT);
       return 1;
     }
 
@@ -52,10 +65,10 @@ uint32_t fill_elements(
     case NodeType::OVERRIDE_STR_NODE: {
       auto r = root.try_as<std::string>();
       if (r.first) {
-        output->set_type(output->type() | ValueElement::STR_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::STR_VALUE_ELEMENT);
         output->set_value_str(r.second);
       } else {
-        output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       }
       return 1;
     }
@@ -64,10 +77,10 @@ uint32_t fill_elements(
     case NodeType::OVERRIDE_INT_NODE: {
       auto r = root.try_as<int64_t>();
       if (r.first) {
-        output->set_type(output->type() | ValueElement::INT_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::INT_VALUE_ELEMENT);
         output->set_value_int(r.second);
       } else {
-        output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       }
       return 1;
     }
@@ -76,10 +89,10 @@ uint32_t fill_elements(
     case NodeType::OVERRIDE_FLOAT_NODE: {
       auto r = root.try_as<double>();
       if (r.first) {
-        output->set_type(output->type() | ValueElement::FLOAT_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::FLOAT_VALUE_ELEMENT);
         output->set_value_float(r.second);
       } else {
-        output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       }
       return 1;
     }
@@ -88,17 +101,17 @@ uint32_t fill_elements(
     case NodeType::OVERRIDE_BOOL_NODE: {
       auto r = root.try_as<bool>();
       if (r.first) {
-        output->set_type(output->type() | ValueElement::BOOL_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::BOOL_VALUE_ELEMENT);
         output->set_value_bool(r.second);
       } else {
-        output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       }
       return 1;
     }
 
-    case ::mhconfig::MAP_NODE: // Fallback
-    case ::mhconfig::OVERRIDE_MAP_NODE: {
-      output->set_type(output->type() | ValueElement::MAP_VALUE_ELEMENT);
+    case NodeType::MAP_NODE: // Fallback
+    case NodeType::OVERRIDE_MAP_NODE: {
+      add_value_type(output, ValueElement::MAP_VALUE_ELEMENT);
       auto map = root.as_map();
       output->set_size(map->size());
 
@@ -108,7 +121,7 @@ uint32_t fill_elements(
         value = container->add_elements();
 
         uint32_t sibling_offset = fill_elements(it.second, container, value);
-        value->set_type(value->type() | (KeyElement::STR_KEY_ELEMENT<<4));
+        add_key_type(value, KeyElement::STR_KEY_ELEMENT);
         value->set_key_str(it.first.str());
         value->set_sibling_offset(sibling_offset-1);
 
@@ -119,12 +132,12 @@ uint32_t fill_elements(
       return parent_sibling_offset;
     }
 
-    case ::mhconfig::SEQUENCE_NODE: // Fallback
-    case ::mhconfig::FORMAT_NODE: // Fallback
-    case ::mhconfig::SREF_NODE: // Fallback
-    case ::mhconfig::REF_NODE: // Fallback
-    case ::mhconfig::OVERRIDE_SEQUENCE_NODE: {
-      output->set_type(output->type() | ValueElement::SEQUENCE_VALUE_ELEMENT);
+    case NodeType::SEQUENCE_NODE: // Fallback
+    case NodeType::FORMAT_NODE: // Fallback
+    case NodeType::SREF_NODE: // Fallback
+    case NodeType::REF_NODE: // Fallback
+    case NodeType::OVERRIDE_SEQUENCE_NODE: {
+      add_value_type(output, ValueElement::SEQUENCE_VALUE_ELEMENT);
       auto seq = root.as_sequence();
       output->set_size(seq->size());
 
@@ -144,7 +157,7 @@ uint32_t fill_elements(
     }
   }
 
-  output->set_type(output->type() | ValueElement::UNDEFINED_VALUE_ELEMENT);
+  add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
   return 1;
 }
 

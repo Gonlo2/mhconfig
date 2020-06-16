@@ -29,7 +29,7 @@ bool UnregisterWatchersCommand::execute(
       watcher->unregister();
 
       auto output_message = watcher->make_output_message();
-      output_message->set_status(::mhconfig::api::stream::watch::Status::REMOVED);
+      output_message->set_status(::mhconfig::api::stream::WatchStatus::REMOVED);
       output_message->send();
     }
   }

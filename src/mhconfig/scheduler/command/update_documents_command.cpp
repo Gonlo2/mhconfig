@@ -126,7 +126,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
     }
   }
 
-  update_request_->set_status(::mhconfig::api::request::update_request::OK);
+  update_request_->set_status(::mhconfig::api::request::UpdateRequest::Status::OK);
   update_request_->set_version(config_namespace.current_version);
   send_api_response(worker_queue);
 
@@ -137,7 +137,7 @@ NamespaceExecutionResult UpdateDocumentsCommand::execute_on_namespace(
 bool UpdateDocumentsCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
-  update_request_->set_status(::mhconfig::api::request::update_request::ERROR);
+  update_request_->set_status(::mhconfig::api::request::UpdateRequest::Status::ERROR);
   send_api_response(worker_queue);
 
   return true;

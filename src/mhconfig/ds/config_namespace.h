@@ -49,7 +49,7 @@ struct raw_config_t {
   }
 };
 
-enum MergedConfigStatus {
+enum class MergedConfigStatus {
   UNDEFINED,
   BUILDING,
   OK_CONFIG_NO_OPTIMIZED,

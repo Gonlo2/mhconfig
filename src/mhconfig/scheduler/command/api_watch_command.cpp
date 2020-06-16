@@ -37,7 +37,7 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
   // First we check if the asked version is lower that the current one
   if (config_namespace.current_version < message_->version()) {
     auto output_message = message_->make_output_message();
-    output_message->set_status(::mhconfig::api::stream::watch::Status::INVALID_VERSION);
+    output_message->set_status(::mhconfig::api::stream::WatchStatus::INVALID_VERSION);
 
     worker_queue.push(
       std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
@@ -50,7 +50,7 @@ NamespaceExecutionResult ApiWatchCommand::execute_on_namespace(
 
   if (message_->document().empty() || (message_->document()[0] == '_')) {
     auto output_message = message_->make_output_message();
-    output_message->set_status(::mhconfig::api::stream::watch::Status::ERROR);
+    output_message->set_status(::mhconfig::api::stream::WatchStatus::ERROR);
 
     worker_queue.push(
       std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
@@ -118,7 +118,7 @@ bool ApiWatchCommand::on_get_namespace_error(
   message_->unregister();
 
   auto output_message = message_->make_output_message();
-  output_message->set_status(::mhconfig::api::stream::watch::Status::ERROR);
+  output_message->set_status(::mhconfig::api::stream::WatchStatus::ERROR);
 
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(

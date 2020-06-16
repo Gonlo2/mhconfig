@@ -8,7 +8,7 @@ namespace command
 {
 
 RunGcCommand::RunGcCommand(
-  run_gc::Type type,
+  Type type,
   uint32_t max_live_in_seconds
 ) : Command(),
     type_(type),
@@ -31,22 +31,22 @@ bool RunGcCommand::execute(
   scheduler_context_t& context
 ) {
   switch (type_) {
-    case run_gc::Type::CACHE_GENERATION_0:
+    case Type::CACHE_GENERATION_0:
       remove_merge_configs(context, 0);
       break;
-    case run_gc::Type::CACHE_GENERATION_1:
+    case Type::CACHE_GENERATION_1:
       remove_merge_configs(context, 1);
       break;
-    case run_gc::Type::CACHE_GENERATION_2:
+    case Type::CACHE_GENERATION_2:
       remove_merge_configs(context, 2);
       break;
-    case run_gc::Type::DEAD_POINTERS:
+    case Type::DEAD_POINTERS:
       remove_dead_pointers(context);
       break;
-    case run_gc::Type::NAMESPACES:
+    case Type::NAMESPACES:
       remove_namespaces(context);
       break;
-    case run_gc::Type::VERSIONS:
+    case Type::VERSIONS:
       remove_versions(context);
       break;
   }

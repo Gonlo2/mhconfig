@@ -65,14 +65,14 @@ namespace command
 
 static const std::string EMPTY_STRING{""};
 
-enum CommandType {
+enum class CommandType {
   ADD_NAMESPACE,
   GET_NAMESPACE_BY_PATH,
   GET_NAMESPACE_BY_ID,
   GENERIC
 };
 
-enum NamespaceExecutionResult {
+enum class NamespaceExecutionResult {
   OK,
   ERROR,
   SOFTDELETE_NAMESPACE

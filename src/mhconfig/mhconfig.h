@@ -140,7 +140,7 @@ namespace mhconfig
             } else {
               sender->push(
                 std::make_unique<scheduler::command::RunGcCommand>(
-                  static_cast<::mhconfig::api::request::run_gc::Type>(i),
+                  static_cast<scheduler::command::RunGcCommand::Type>(i),
                   max_live_in_seconds
                 )
               );

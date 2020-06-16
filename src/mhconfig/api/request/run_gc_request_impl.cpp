@@ -52,20 +52,20 @@ void RunGCRequestImpl::request(
   reply();
 }
 
-run_gc::Type RunGCRequestImpl::type() {
+scheduler::command::RunGcCommand::Type RunGCRequestImpl::type() {
   switch (request_->type()) {
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
-      return scheduler::command::run_gc::Type::CACHE_GENERATION_0;
+      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_0;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
-      return scheduler::command::run_gc::Type::CACHE_GENERATION_1;
+      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_1;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_2:
-      return scheduler::command::run_gc::Type::CACHE_GENERATION_2;
+      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_2;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_DEAD_POINTERS:
-      return scheduler::command::run_gc::Type::DEAD_POINTERS;
+      return scheduler::command::RunGcCommand::Type::DEAD_POINTERS;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_NAMESPACES:
-      return scheduler::command::run_gc::Type::NAMESPACES;
+      return scheduler::command::RunGcCommand::Type::NAMESPACES;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_VERSIONS:
-      return scheduler::command::run_gc::Type::VERSIONS;
+      return scheduler::command::RunGcCommand::Type::VERSIONS;
   }
 }
 

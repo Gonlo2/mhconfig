@@ -63,7 +63,7 @@ bool UpdateCommand::execute(
     );
   } else {
     update_request_->set_namespace_id(namespace_id_);
-    update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
+    update_request_->set_status(::mhconfig::api::request::UpdateRequest::Status::ERROR);
     update_request_->commit();
   }
 

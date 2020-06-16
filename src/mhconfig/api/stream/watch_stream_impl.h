@@ -34,7 +34,7 @@ public:
   virtual ~WatchOutputMessageImpl();
 
   void set_uid(uint32_t uid) override;
-  void set_status(watch::Status status) override;
+  void set_status(WatchStatus status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(const mhconfig::Element& element) override;

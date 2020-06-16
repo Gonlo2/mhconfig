@@ -150,8 +150,8 @@ Element override_with(
     return b.clone_without_virtual();
   }
 
-  bool is_first_a_ref = a.type() == REF_NODE;
-  if (is_first_a_ref || (b.type() == REF_NODE)) {
+  bool is_first_a_ref = a.type() == NodeType::REF_NODE;
+  if (is_first_a_ref || (b.type() == NodeType::REF_NODE)) {
     auto referenced_element = apply_tag_ref(
       is_first_a_ref ? a : b,
       elements_by_document
@@ -165,9 +165,9 @@ Element override_with(
   }
 
   switch (get_virtual_node_type(b)) {
-    case STR_NODE: {
+    case NodeType::STR_NODE: {
       NodeType type = get_virtual_node_type(a);
-      if (type != STR_NODE) {
+      if (type != NodeType::STR_NODE) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
           a.repr(),
@@ -180,7 +180,7 @@ Element override_with(
       return b;
     }
 
-    case MAP_NODE: {
+    case NodeType::MAP_NODE: {
       if (!a.is_map()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
@@ -198,7 +198,7 @@ Element override_with(
       map->reserve(map_a->size() + map_b->size());
 
       for (const auto& x : *map_a) {
-        if (x.second.type() != DELETE_NODE) {
+        if (x.second.type() != NodeType::DELETE_NODE) {
           (*map)[x.first] = x.second;
         }
       }
@@ -206,10 +206,10 @@ Element override_with(
       for (const auto& x : *map_b) {
         const auto& search = map->find(x.first);
         if (search == map->end()) {
-          if (x.second.type() != DELETE_NODE) {
+          if (x.second.type() != NodeType::DELETE_NODE) {
             (*map)[x.first] = x.second;
           }
-        } else if (x.second.type() == DELETE_NODE) {
+        } else if (x.second.type() == NodeType::DELETE_NODE) {
           map->erase(search);
         } else {
           (*map)[x.first] = override_with(
@@ -223,7 +223,7 @@ Element override_with(
       return Element(map_box);
     }
 
-    case SEQUENCE_NODE: {
+    case NodeType::SEQUENCE_NODE: {
       if (!a.is_sequence()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
@@ -241,13 +241,13 @@ Element override_with(
       seq->reserve(seq_a->size() + seq_b->size());
 
       for (size_t i = 0, l = seq_a->size(); i < l; ++i) {
-        if ((*seq_a)[i].type() != DELETE_NODE) {
+        if ((*seq_a)[i].type() != NodeType::DELETE_NODE) {
           seq->push_back((*seq_a)[i]);
         }
       }
 
       for (size_t i = 0, l = seq_b->size(); i < l; ++i) {
-        if ((*seq_b)[i].type() != DELETE_NODE) {
+        if ((*seq_b)[i].type() != NodeType::DELETE_NODE) {
           seq->push_back((*seq_b)[i]);
         }
       }
@@ -272,7 +272,7 @@ NodeType get_virtual_node_type(
     case NodeType::INT_NODE: // Fallback
     case NodeType::FLOAT_NODE: // Fallback
     case NodeType::BOOL_NODE: // Fallback
-      return STR_NODE;
+      return NodeType::STR_NODE;
     default:
       break;
   }
@@ -290,14 +290,14 @@ bool apply_tags(
   bool any_changed = false;
 
   switch (element.type()) {
-    case MAP_NODE: // Fallback
-    case OVERRIDE_MAP_NODE: {
+    case NodeType::MAP_NODE: // Fallback
+    case NodeType::OVERRIDE_MAP_NODE: {
       auto map_box = new MapBox;
       auto map = map_box->get();
       map->reserve(element.as_map()->size());
 
       for (const auto& it : *element.as_map()) {
-        if (it.second.type() == DELETE_NODE) {
+        if (it.second.type() == NodeType::DELETE_NODE) {
           any_changed = true;
         } else {
           auto changed = apply_tags(
@@ -320,18 +320,18 @@ bool apply_tags(
       break;
     }
 
-    case SEQUENCE_NODE: // Fallback
-    case FORMAT_NODE: // Fallback
-    case SREF_NODE: // Fallback
-    case REF_NODE: // Fallback
-    case OVERRIDE_SEQUENCE_NODE: {
+    case NodeType::SEQUENCE_NODE: // Fallback
+    case NodeType::FORMAT_NODE: // Fallback
+    case NodeType::SREF_NODE: // Fallback
+    case NodeType::REF_NODE: // Fallback
+    case NodeType::OVERRIDE_SEQUENCE_NODE: {
       auto seq_box = new SequenceBox;
       auto seq = seq_box->get();
       auto current_sequence = element.as_sequence();
       seq->reserve(current_sequence->size());
 
       for (size_t i = 0, l = current_sequence->size(); i < l; ++i) {
-        if ((*current_sequence)[i].type() == DELETE_NODE) {
+        if ((*current_sequence)[i].type() == NodeType::DELETE_NODE) {
           any_changed = true;
         } else {
           bool changed = apply_tags(
@@ -357,17 +357,17 @@ bool apply_tags(
       result = element;
   }
 
-  if (result.type() == SREF_NODE) {
+  if (result.type() == NodeType::SREF_NODE) {
     result = apply_tag_sref(result, root);
     any_changed = true;
   }
 
-  if (result.type() == REF_NODE) {
+  if (result.type() == NodeType::REF_NODE) {
     result = apply_tag_ref(result, elements_by_document);
     any_changed = true;
   }
 
-  if (result.type() == FORMAT_NODE) {
+  if (result.type() == NodeType::FORMAT_NODE) {
     result = apply_tag_format(pool, result);
     any_changed = true;
   }
@@ -573,11 +573,11 @@ Element make_and_check_element(
 ) {
   auto element = make_element(pool, node, reference_to);
 
-  if (element.type() == REF_NODE) {
+  if (element.type() == NodeType::REF_NODE) {
     const auto path = element.as_sequence();
     if (!is_a_valid_path(path, TAG_REF)) return Element();
     reference_to.insert(path->front().as<std::string>());
-  } else if (element.type() == SREF_NODE) {
+  } else if (element.type() == NodeType::SREF_NODE) {
     if (!is_a_valid_path(element.as_sequence(), TAG_SREF)) return Element();
   }
 
@@ -617,9 +617,9 @@ Element make_element(
   switch (node.Type()) {
     case YAML::NodeType::Null:
       if ((node.Tag() == "") || (node.Tag() == TAG_NULL)) {
-        return Element(NULL_NODE);
+        return Element(NodeType::NULL_NODE);
       } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(OVERRIDE_NULL_NODE);
+        return Element(NodeType::OVERRIDE_NULL_NODE);
       }
       spdlog::error("Unknown tag '{}' for a null value", node.Tag());
       return Element();
@@ -653,7 +653,7 @@ Element make_element(
         spdlog::warn("Can't parse '{}' as a bool", str);
         return Element();
       } else if (node.Tag() == TAG_DELETE) {
-        return Element(DELETE_NODE);
+        return Element(NodeType::DELETE_NODE);
       } else if (node.Tag() == TAG_OVERRIDE) {
         return Element(pool->add(node.as<std::string>()), true);
       }
@@ -674,13 +674,13 @@ Element make_element(
       if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
         return Element(seq_box);
       } else if (node.Tag() == TAG_FORMAT) {
-        return Element(seq_box, FORMAT_NODE);
+        return Element(seq_box, NodeType::FORMAT_NODE);
       } else if (node.Tag() == TAG_SREF) {
-        return Element(seq_box, SREF_NODE);
+        return Element(seq_box, NodeType::SREF_NODE);
       } else if (node.Tag() == TAG_REF) {
-        return Element(seq_box, REF_NODE);
+        return Element(seq_box, NodeType::REF_NODE);
       } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(seq_box, OVERRIDE_SEQUENCE_NODE);
+        return Element(seq_box, NodeType::OVERRIDE_SEQUENCE_NODE);
       }
       delete seq_box;
       spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
@@ -709,7 +709,7 @@ Element make_element(
       if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
         return Element(map_box);
       } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(map_box, OVERRIDE_MAP_NODE);
+        return Element(map_box, NodeType::OVERRIDE_MAP_NODE);
       }
       delete map_box;
       spdlog::error("Unknown tag '{}' for a map value", node.Tag());

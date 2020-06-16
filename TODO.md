@@ -11,3 +11,4 @@
 - Check if the service handle correctly empty overrides.
 - Review the cmake configuration (too slow).
 - Create a time worker for the garbage collector and the usage stats.
+- Check if it's better add a `trace` api method to check usage metrics instead record all the metrics all the time.

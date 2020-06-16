@@ -30,7 +30,7 @@ bool SetOptimizedConfigCommand::execute(
 ) {
   // The most silly command ever existed
   merged_config_->status = MergedConfigStatus::OK_CONFIG_OPTIMIZED;
-  return NamespaceExecutionResult::OK;
+  return true;
 }
 
 } /* command */

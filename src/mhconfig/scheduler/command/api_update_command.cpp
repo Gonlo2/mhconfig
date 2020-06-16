@@ -56,7 +56,7 @@ NamespaceExecutionResult ApiUpdateCommand::execute_on_namespace(
 bool ApiUpdateCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
-  update_request_->set_status(::mhconfig::api::request::update_request::Status::ERROR);
+  update_request_->set_status(::mhconfig::api::request::UpdateRequest::Status::ERROR);
   worker_queue.push(
     std::make_unique<::mhconfig::worker::command::ApiReplyCommand>(
       std::move(update_request_)

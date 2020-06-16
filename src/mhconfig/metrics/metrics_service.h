@@ -16,7 +16,7 @@ namespace metrics
   class MetricsService
   {
   public:
-    enum MetricId {
+    enum class MetricId {
       // Observable
       API_DURATION_NANOSECONDS,
       SCHEDULER_DURATION_NANOSECONDS,

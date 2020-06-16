@@ -47,7 +47,7 @@ protected:
   ) override;
   void finish() override;
 
-  run_gc::Type type();
+  scheduler::command::RunGcCommand::Type type();
   uint32_t max_live_in_seconds();
 };
 

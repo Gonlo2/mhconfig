@@ -11,10 +11,7 @@ namespace api
 namespace stream
 {
 
-namespace watch
-{
-
-enum Status {
+enum class WatchStatus {
   OK,
   ERROR,
   INVALID_VERSION,
@@ -23,8 +20,6 @@ enum Status {
   UNKNOWN_UID,
   REMOVED
 };
-
-} /* watch */
 
 class WatchOutputMessage : public OutputMessage
 {
@@ -35,7 +30,7 @@ public:
   }
 
   virtual void set_uid(uint32_t uid) = 0;
-  virtual void set_status(watch::Status status) = 0;
+  virtual void set_status(WatchStatus status) = 0;
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(const mhconfig::Element& element) = 0;

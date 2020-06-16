@@ -3,26 +3,45 @@
 namespace mhconfig {
   std::string to_string(NodeType type) {
     switch (type) {
-      case UNDEFINED_NODE: return "UNDEFINED";
-      case MAP_NODE: return "MAP";
-      case SEQUENCE_NODE: return "SEQUENCE";
-      case NULL_NODE: return "NULL";
-      case STR_NODE: return "STRING";
-      case INT_NODE: return "INTEGER";
-      case FLOAT_NODE: return "FLOAT";
-      case BOOL_NODE: return "BOOLEAN";
+      case NodeType::UNDEFINED_NODE:
+        return "UNDEFINED";
+      case NodeType::MAP_NODE:
+        return "MAP";
+      case NodeType::SEQUENCE_NODE:
+        return "SEQUENCE";
+      case NodeType::NULL_NODE:
+        return "NULL";
+      case NodeType::STR_NODE:
+        return "STRING";
+      case NodeType::INT_NODE:
+        return "INTEGER";
+      case NodeType::FLOAT_NODE:
+        return "FLOAT";
+      case NodeType::BOOL_NODE:
+        return "BOOLEAN";
 
-      case FORMAT_NODE: return "FORMAT_NODE";
-      case SREF_NODE: return "SREF_NODE";
-      case REF_NODE: return "REF_NODE";
-      case DELETE_NODE: return "DELETE_NODE";
-      case OVERRIDE_MAP_NODE: return "OVERRIDE_MAP_NODE";
-      case OVERRIDE_SEQUENCE_NODE: return "OVERRIDE_SEQUENCE_NODE";
-      case OVERRIDE_NULL_NODE: return "OVERRIDE_NULL_NODE";
-      case OVERRIDE_STR_NODE: return "OVERRIDE_STR_NODE";
-      case OVERRIDE_INT_NODE: return "OVERRIDE_INT_NODE";
-      case OVERRIDE_FLOAT_NODE: return "OVERRIDE_FLOAT_NODE";
-      case OVERRIDE_BOOL_NODE: return "OVERRIDE_BOOL_NODE";
+      case NodeType::FORMAT_NODE:
+        return "FORMAT_NODE";
+      case NodeType::SREF_NODE:
+        return "SREF_NODE";
+      case NodeType::REF_NODE:
+        return "REF_NODE";
+      case NodeType::DELETE_NODE:
+        return "DELETE_NODE";
+      case NodeType::OVERRIDE_MAP_NODE:
+        return "OVERRIDE_MAP_NODE";
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
+        return "OVERRIDE_SEQUENCE_NODE";
+      case NodeType::OVERRIDE_NULL_NODE:
+        return "OVERRIDE_NULL_NODE";
+      case NodeType::OVERRIDE_STR_NODE:
+        return "OVERRIDE_STR_NODE";
+      case NodeType::OVERRIDE_INT_NODE:
+        return "OVERRIDE_INT_NODE";
+      case NodeType::OVERRIDE_FLOAT_NODE:
+        return "OVERRIDE_FLOAT_NODE";
+      case NodeType::OVERRIDE_BOOL_NODE:
+        return "OVERRIDE_BOOL_NODE";
     }
 
     return "unknown";
@@ -33,106 +52,106 @@ namespace mhconfig {
 
   Element::Element(NodeType type) noexcept {
     switch (type) {
-      case UNDEFINED_NODE:
-        data_.emplace<UNDEFINED_NODE>();
+      case NodeType::UNDEFINED_NODE:
+        node_set<NodeType::UNDEFINED_NODE>(data_);
         break;
-      case MAP_NODE:
-        data_.emplace<MAP_NODE>();
+      case NodeType::MAP_NODE:
+        node_set<NodeType::MAP_NODE>(data_);
         break;
-      case SEQUENCE_NODE:
-        data_.emplace<SEQUENCE_NODE>();
+      case NodeType::SEQUENCE_NODE:
+        node_set<NodeType::SEQUENCE_NODE>(data_);
         break;
-      case NULL_NODE:
-        data_.emplace<NULL_NODE>();
+      case NodeType::NULL_NODE:
+        node_set<NodeType::NULL_NODE>(data_);
         break;
-      case STR_NODE:
-        data_.emplace<STR_NODE>();
+      case NodeType::STR_NODE:
+        node_set<NodeType::STR_NODE>(data_);
         break;
-      case INT_NODE:
-        data_.emplace<INT_NODE>();
+      case NodeType::INT_NODE:
+        node_set<NodeType::INT_NODE>(data_);
         break;
-      case FLOAT_NODE:
-        data_.emplace<FLOAT_NODE>();
+      case NodeType::FLOAT_NODE:
+        node_set<NodeType::FLOAT_NODE>(data_);
         break;
-      case BOOL_NODE:
-        data_.emplace<BOOL_NODE>();
+      case NodeType::BOOL_NODE:
+        node_set<NodeType::BOOL_NODE>(data_);
         break;
-      case FORMAT_NODE:
-        data_.emplace<FORMAT_NODE>();
+      case NodeType::FORMAT_NODE:
+        node_set<NodeType::FORMAT_NODE>(data_);
         break;
-      case SREF_NODE:
-        data_.emplace<SREF_NODE>();
+      case NodeType::SREF_NODE:
+        node_set<NodeType::SREF_NODE>(data_);
         break;
-      case REF_NODE:
-        data_.emplace<REF_NODE>();
+      case NodeType::REF_NODE:
+        node_set<NodeType::REF_NODE>(data_);
         break;
-      case DELETE_NODE:
-        data_.emplace<DELETE_NODE>();
+      case NodeType::DELETE_NODE:
+        node_set<NodeType::DELETE_NODE>(data_);
         break;
-      case OVERRIDE_MAP_NODE:
-        data_.emplace<OVERRIDE_MAP_NODE>();
+      case NodeType::OVERRIDE_MAP_NODE:
+        node_set<NodeType::OVERRIDE_MAP_NODE>(data_);
         break;
-      case OVERRIDE_SEQUENCE_NODE:
-        data_.emplace<OVERRIDE_SEQUENCE_NODE>();
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
+        node_set<NodeType::OVERRIDE_SEQUENCE_NODE>(data_);
         break;
-      case OVERRIDE_NULL_NODE:
-        data_.emplace<OVERRIDE_NULL_NODE>();
+      case NodeType::OVERRIDE_NULL_NODE:
+        node_set<NodeType::OVERRIDE_NULL_NODE>(data_);
         break;
-      case OVERRIDE_STR_NODE:
-        data_.emplace<OVERRIDE_STR_NODE>();
+      case NodeType::OVERRIDE_STR_NODE:
+        node_set<NodeType::OVERRIDE_STR_NODE>(data_);
         break;
-      case OVERRIDE_INT_NODE:
-        data_.emplace<OVERRIDE_INT_NODE>();
+      case NodeType::OVERRIDE_INT_NODE:
+        node_set<NodeType::OVERRIDE_INT_NODE>(data_);
         break;
-      case OVERRIDE_FLOAT_NODE:
-        data_.emplace<OVERRIDE_FLOAT_NODE>();
+      case NodeType::OVERRIDE_FLOAT_NODE:
+        node_set<NodeType::OVERRIDE_FLOAT_NODE>(data_);
         break;
-      case OVERRIDE_BOOL_NODE:
-        data_.emplace<OVERRIDE_BOOL_NODE>();
+      case NodeType::OVERRIDE_BOOL_NODE:
+        node_set<NodeType::OVERRIDE_BOOL_NODE>(data_);
         break;
     }
   }
 
   Element::Element(const Literal& value, bool override_) noexcept {
     if (override_) {
-      data_.emplace<OVERRIDE_STR_NODE>(value);
+      node_set<NodeType::OVERRIDE_STR_NODE>(data_, value);
     } else {
-      data_.emplace<STR_NODE>(value);
+      node_set<NodeType::STR_NODE>(data_, value);
     }
   }
 
   Element::Element(int64_t value, bool override_) noexcept {
     if (override_) {
-      data_.emplace<OVERRIDE_INT_NODE>(value);
+      node_set<NodeType::OVERRIDE_INT_NODE>(data_, value);
     } else {
-      data_.emplace<INT_NODE>(value);
+      node_set<NodeType::INT_NODE>(data_, value);
     }
   }
 
   Element::Element(double value, bool override_) noexcept {
     if (override_) {
-      data_.emplace<OVERRIDE_FLOAT_NODE>(value);
+      node_set<NodeType::OVERRIDE_FLOAT_NODE>(data_, value);
     } else {
-      data_.emplace<FLOAT_NODE>(value);
+      node_set<NodeType::FLOAT_NODE>(data_, value);
     }
   }
 
   Element::Element(bool value, bool override_) noexcept {
     if (override_) {
-      data_.emplace<OVERRIDE_BOOL_NODE>(value);
+      node_set<NodeType::OVERRIDE_BOOL_NODE>(data_, value);
     } else {
-      data_.emplace<BOOL_NODE>(value);
+      node_set<NodeType::BOOL_NODE>(data_, value);
     }
   }
 
   Element::Element(MapBox* map, NodeType type) noexcept {
     map->increment_refcount();
     switch (type) {
-      case MAP_NODE:
-        data_.emplace<MAP_NODE>(map);
+      case NodeType::MAP_NODE:
+        node_set<NodeType::MAP_NODE>(data_, map);
         break;
-      case OVERRIDE_MAP_NODE:
-        data_.emplace<OVERRIDE_MAP_NODE>(map);
+      case NodeType::OVERRIDE_MAP_NODE:
+        node_set<NodeType::OVERRIDE_MAP_NODE>(data_, map);
         break;
       default:
         assert(false);
@@ -143,20 +162,20 @@ namespace mhconfig {
   Element::Element(SequenceBox* sequence, NodeType type) noexcept {
     sequence->increment_refcount();
     switch (type) {
-      case SEQUENCE_NODE:
-        data_.emplace<SEQUENCE_NODE>(sequence);
+      case NodeType::SEQUENCE_NODE:
+        node_set<NodeType::SEQUENCE_NODE>(data_, sequence);
         break;
-      case FORMAT_NODE:
-        data_.emplace<FORMAT_NODE>(sequence);
+      case NodeType::FORMAT_NODE:
+        node_set<NodeType::FORMAT_NODE>(data_, sequence);
         break;
-      case SREF_NODE:
-        data_.emplace<SREF_NODE>(sequence);
+      case NodeType::SREF_NODE:
+        node_set<NodeType::SREF_NODE>(data_, sequence);
         break;
-      case REF_NODE:
-        data_.emplace<REF_NODE>(sequence);
+      case NodeType::REF_NODE:
+        node_set<NodeType::REF_NODE>(data_, sequence);
         break;
-      case OVERRIDE_SEQUENCE_NODE:
-        data_.emplace<OVERRIDE_SEQUENCE_NODE>(sequence);
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
+        node_set<NodeType::OVERRIDE_SEQUENCE_NODE>(data_, sequence);
         break;
       default:
         assert(false);
@@ -191,16 +210,16 @@ namespace mhconfig {
 
   const Sequence* Element::as_sequence() const {
     switch (type()) {
-      case SEQUENCE_NODE:
-        return std::get<SEQUENCE_NODE>(data_)->get();
-      case FORMAT_NODE:
-        return std::get<FORMAT_NODE>(data_)->get();
-      case SREF_NODE:
-        return std::get<SREF_NODE>(data_)->get();
-      case REF_NODE:
-        return std::get<REF_NODE>(data_)->get();
-      case OVERRIDE_SEQUENCE_NODE:
-        return std::get<OVERRIDE_SEQUENCE_NODE>(data_)->get();
+      case NodeType::SEQUENCE_NODE:
+        return node_get<NodeType::SEQUENCE_NODE>(data_)->get();
+      case NodeType::FORMAT_NODE:
+        return node_get<NodeType::FORMAT_NODE>(data_)->get();
+      case NodeType::SREF_NODE:
+        return node_get<NodeType::SREF_NODE>(data_)->get();
+      case NodeType::REF_NODE:
+        return node_get<NodeType::REF_NODE>(data_)->get();
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
+        return node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data_)->get();
       default:
         return nullptr;
     }
@@ -208,10 +227,10 @@ namespace mhconfig {
 
   const Map* Element::as_map() const {
     switch (type()) {
-      case MAP_NODE:
-        return std::get<MAP_NODE>(data_)->get();
-      case OVERRIDE_MAP_NODE:
-        return std::get<OVERRIDE_MAP_NODE>(data_)->get();
+      case NodeType::MAP_NODE:
+        return node_get<NodeType::MAP_NODE>(data_)->get();
+      case NodeType::OVERRIDE_MAP_NODE:
+        return node_get<NodeType::OVERRIDE_MAP_NODE>(data_)->get();
       default:
         return nullptr;
     }
@@ -245,14 +264,14 @@ namespace mhconfig {
 
   bool Element::is_scalar() const {
     switch (type()) {
-      case STR_NODE: // Fallback
-      case INT_NODE: // Fallback
-      case FLOAT_NODE: // Fallback
-      case BOOL_NODE: // Fallback
-      case OVERRIDE_STR_NODE: // Fallback
-      case OVERRIDE_INT_NODE: // Fallback
-      case OVERRIDE_FLOAT_NODE: // Fallback
-      case OVERRIDE_BOOL_NODE:
+      case NodeType::STR_NODE: // Fallback
+      case NodeType::INT_NODE: // Fallback
+      case NodeType::FLOAT_NODE: // Fallback
+      case NodeType::BOOL_NODE: // Fallback
+      case NodeType::OVERRIDE_STR_NODE: // Fallback
+      case NodeType::OVERRIDE_INT_NODE: // Fallback
+      case NodeType::OVERRIDE_FLOAT_NODE: // Fallback
+      case NodeType::OVERRIDE_BOOL_NODE:
         return true;
       default:
         break;
@@ -262,8 +281,8 @@ namespace mhconfig {
 
   bool Element::is_string() const {
     switch (type()) {
-      case STR_NODE: // Fallback
-      case OVERRIDE_STR_NODE: // Fallback
+      case NodeType::STR_NODE: // Fallback
+      case NodeType::OVERRIDE_STR_NODE: // Fallback
         return true;
       default:
         break;
@@ -281,8 +300,8 @@ namespace mhconfig {
 
   bool Element::is_null() const {
     switch (type()) {
-      case NULL_NODE: // Fallback
-      case OVERRIDE_NULL_NODE:
+      case NodeType::NULL_NODE: // Fallback
+      case NodeType::OVERRIDE_NULL_NODE:
         return true;
       default:
         break;
@@ -291,18 +310,18 @@ namespace mhconfig {
   }
 
   bool Element::is_undefined() const {
-    return type() == UNDEFINED_NODE;
+    return type() == NodeType::UNDEFINED_NODE;
   }
 
   bool Element::is_override() const {
     switch (type()) {
-      case OVERRIDE_MAP_NODE: // Fallback
-      case OVERRIDE_SEQUENCE_NODE: // Fallback
-      case OVERRIDE_NULL_NODE: // Fallback
-      case OVERRIDE_STR_NODE: // Fallback
-      case OVERRIDE_INT_NODE: // Fallback
-      case OVERRIDE_FLOAT_NODE: // Fallback
-      case OVERRIDE_BOOL_NODE:
+      case NodeType::OVERRIDE_MAP_NODE: // Fallback
+      case NodeType::OVERRIDE_SEQUENCE_NODE: // Fallback
+      case NodeType::OVERRIDE_NULL_NODE: // Fallback
+      case NodeType::OVERRIDE_STR_NODE: // Fallback
+      case NodeType::OVERRIDE_INT_NODE: // Fallback
+      case NodeType::OVERRIDE_FLOAT_NODE: // Fallback
+      case NodeType::OVERRIDE_BOOL_NODE:
         return true;
       default:
         break;
@@ -312,44 +331,44 @@ namespace mhconfig {
 
   Element Element::clone_without_virtual() const {
     switch (type()) {
-      case UNDEFINED_NODE:
+      case NodeType::UNDEFINED_NODE:
         return Element();
-      case MAP_NODE:
-        return Element(std::get<MAP_NODE>(data_));
-      case SEQUENCE_NODE:
-        return Element(std::get<SEQUENCE_NODE>(data_));
-      case NULL_NODE:
-        return Element(NULL_NODE);
-      case STR_NODE:
-        return Element(std::get<STR_NODE>(data_));
-      case INT_NODE:
-        return Element(std::get<INT_NODE>(data_));
-      case FLOAT_NODE:
-        return Element(std::get<FLOAT_NODE>(data_));
-      case BOOL_NODE:
-        return Element(std::get<BOOL_NODE>(data_));
-      case FORMAT_NODE:
-        return Element(std::get<FORMAT_NODE>(data_));
-      case SREF_NODE:
-        return Element(std::get<SREF_NODE>(data_));
-      case REF_NODE:
-        return Element(std::get<REF_NODE>(data_));
-      case DELETE_NODE:
+      case NodeType::MAP_NODE:
+        return Element(node_get<NodeType::MAP_NODE>(data_));
+      case NodeType::SEQUENCE_NODE:
+        return Element(node_get<NodeType::SEQUENCE_NODE>(data_));
+      case NodeType::NULL_NODE:
+        return Element(NodeType::NULL_NODE);
+      case NodeType::STR_NODE:
+        return Element(node_get<NodeType::STR_NODE>(data_));
+      case NodeType::INT_NODE:
+        return Element(node_get<NodeType::INT_NODE>(data_));
+      case NodeType::FLOAT_NODE:
+        return Element(node_get<NodeType::FLOAT_NODE>(data_));
+      case NodeType::BOOL_NODE:
+        return Element(node_get<NodeType::BOOL_NODE>(data_));
+      case NodeType::FORMAT_NODE:
+        return Element(node_get<NodeType::FORMAT_NODE>(data_));
+      case NodeType::SREF_NODE:
+        return Element(node_get<NodeType::SREF_NODE>(data_));
+      case NodeType::REF_NODE:
+        return Element(node_get<NodeType::REF_NODE>(data_));
+      case NodeType::DELETE_NODE:
         return Element();
-      case OVERRIDE_MAP_NODE:
-        return Element(std::get<OVERRIDE_MAP_NODE>(data_));
-      case OVERRIDE_SEQUENCE_NODE:
-        return Element(std::get<OVERRIDE_SEQUENCE_NODE>(data_));
-      case OVERRIDE_NULL_NODE:
-        return Element(OVERRIDE_NULL_NODE);
-      case OVERRIDE_STR_NODE:
-        return Element(std::get<OVERRIDE_STR_NODE>(data_));
-      case OVERRIDE_INT_NODE:
-        return Element(std::get<OVERRIDE_INT_NODE>(data_));
-      case OVERRIDE_FLOAT_NODE:
-        return Element(std::get<OVERRIDE_FLOAT_NODE>(data_));
-      case OVERRIDE_BOOL_NODE:
-        return Element(std::get<OVERRIDE_BOOL_NODE>(data_));
+      case NodeType::OVERRIDE_MAP_NODE:
+        return Element(node_get<NodeType::OVERRIDE_MAP_NODE>(data_));
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
+        return Element(node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data_));
+      case NodeType::OVERRIDE_NULL_NODE:
+        return Element(NodeType::OVERRIDE_NULL_NODE);
+      case NodeType::OVERRIDE_STR_NODE:
+        return Element(node_get<NodeType::OVERRIDE_STR_NODE>(data_));
+      case NodeType::OVERRIDE_INT_NODE:
+        return Element(node_get<NodeType::OVERRIDE_INT_NODE>(data_));
+      case NodeType::OVERRIDE_FLOAT_NODE:
+        return Element(node_get<NodeType::OVERRIDE_FLOAT_NODE>(data_));
+      case NodeType::OVERRIDE_BOOL_NODE:
+        return Element(node_get<NodeType::OVERRIDE_BOOL_NODE>(data_));
     }
     assert(false);
   }
@@ -361,46 +380,46 @@ namespace mhconfig {
     ss << "type: " << to_string(type());
 
     switch (type()) {
-      case NULL_NODE: break;
-      case UNDEFINED_NODE: break;
+      case NodeType::NULL_NODE: break;
+      case NodeType::UNDEFINED_NODE: break;
 
-      case MAP_NODE: // Fallback
-      case OVERRIDE_MAP_NODE:
+      case NodeType::MAP_NODE: // Fallback
+      case NodeType::OVERRIDE_MAP_NODE:
         ss << ", size: " << as_map()->size();
         break;
 
-      case SEQUENCE_NODE: // Fallback
-      case FORMAT_NODE: // Fallback
-      case SREF_NODE: // Fallback
-      case REF_NODE: // Fallback
-      case OVERRIDE_SEQUENCE_NODE:
+      case NodeType::SEQUENCE_NODE: // Fallback
+      case NodeType::FORMAT_NODE: // Fallback
+      case NodeType::SREF_NODE: // Fallback
+      case NodeType::REF_NODE: // Fallback
+      case NodeType::OVERRIDE_SEQUENCE_NODE:
         ss << ", size: " << as_sequence()->size();
         break;
 
-      case STR_NODE:
-        ss << ", str: '" << std::get<STR_NODE>(data_).str();
+      case NodeType::STR_NODE:
+        ss << ", str: '" << node_get<NodeType::STR_NODE>(data_).str();
         break;
-      case INT_NODE:
-        ss << ", int: '" << std::get<INT_NODE>(data_);
+      case NodeType::INT_NODE:
+        ss << ", int: '" << node_get<NodeType::INT_NODE>(data_);
         break;
-      case FLOAT_NODE:
-        ss << ", float: '" << std::get<FLOAT_NODE>(data_);
+      case NodeType::FLOAT_NODE:
+        ss << ", float: '" << node_get<NodeType::FLOAT_NODE>(data_);
         break;
-      case BOOL_NODE:
-        ss << ", bool: '" << std::get<BOOL_NODE>(data_);
+      case NodeType::BOOL_NODE:
+        ss << ", bool: '" << node_get<NodeType::BOOL_NODE>(data_);
         break;
 
-      case OVERRIDE_STR_NODE:
-        ss << ", str: '" << std::get<OVERRIDE_STR_NODE>(data_).str();
+      case NodeType::OVERRIDE_STR_NODE:
+        ss << ", str: '" << node_get<NodeType::OVERRIDE_STR_NODE>(data_).str();
         break;
-      case OVERRIDE_INT_NODE:
-        ss << ", int: '" << std::get<OVERRIDE_INT_NODE>(data_);
+      case NodeType::OVERRIDE_INT_NODE:
+        ss << ", int: '" << node_get<NodeType::OVERRIDE_INT_NODE>(data_);
         break;
-      case OVERRIDE_FLOAT_NODE:
-        ss << ", float: '" << std::get<OVERRIDE_FLOAT_NODE>(data_);
+      case NodeType::OVERRIDE_FLOAT_NODE:
+        ss << ", float: '" << node_get<NodeType::OVERRIDE_FLOAT_NODE>(data_);
         break;
-      case OVERRIDE_BOOL_NODE:
-        ss << ", bool: '" << std::get<OVERRIDE_BOOL_NODE>(data_);
+      case NodeType::OVERRIDE_BOOL_NODE:
+        ss << ", bool: '" << node_get<NodeType::OVERRIDE_BOOL_NODE>(data_);
         break;
     }
 
@@ -415,9 +434,9 @@ namespace mhconfig {
     std::pair<bool, ::string_pool::String> as<::string_pool::String>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::STR_NODE:
-          return std::make_pair(true, std::get<STR_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::STR_NODE>(data));
         case NodeType::OVERRIDE_STR_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_STR_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_STR_NODE>(data));
         default:
           break;
       }
@@ -428,21 +447,21 @@ namespace mhconfig {
     std::pair<bool, std::string> as<std::string>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::STR_NODE:
-          return std::make_pair(true, std::get<STR_NODE>(data).str());
+          return std::make_pair(true, node_get<NodeType::STR_NODE>(data).str());
         case NodeType::OVERRIDE_STR_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_STR_NODE>(data).str());
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_STR_NODE>(data).str());
         case NodeType::BOOL_NODE:
-          return std::make_pair(true, std::get<BOOL_NODE>(data) ? "true" : "false");
+          return std::make_pair(true, node_get<NodeType::BOOL_NODE>(data) ? "true" : "false");
         case NodeType::OVERRIDE_BOOL_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_BOOL_NODE>(data) ? "true" : "false");
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_BOOL_NODE>(data) ? "true" : "false");
         case NodeType::INT_NODE:
-          return std::make_pair(true, std::to_string(std::get<INT_NODE>(data)));
+          return std::make_pair(true, std::to_string(node_get<NodeType::INT_NODE>(data)));
         case NodeType::OVERRIDE_INT_NODE:
-          return std::make_pair(true, std::to_string(std::get<OVERRIDE_INT_NODE>(data)));
+          return std::make_pair(true, std::to_string(node_get<NodeType::OVERRIDE_INT_NODE>(data)));
         case NodeType::FLOAT_NODE:
-          return std::make_pair(true, std::to_string(std::get<FLOAT_NODE>(data)));
+          return std::make_pair(true, std::to_string(node_get<NodeType::FLOAT_NODE>(data)));
         case NodeType::OVERRIDE_FLOAT_NODE:
-          return std::make_pair(true, std::to_string(std::get<OVERRIDE_FLOAT_NODE>(data)));
+          return std::make_pair(true, std::to_string(node_get<NodeType::OVERRIDE_FLOAT_NODE>(data)));
         default:
           break;
       }
@@ -453,9 +472,9 @@ namespace mhconfig {
     std::pair<bool, bool> as<bool>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::BOOL_NODE:
-          return std::make_pair(true, std::get<BOOL_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::BOOL_NODE>(data));
         case NodeType::OVERRIDE_BOOL_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_BOOL_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_BOOL_NODE>(data));
         default:
           break;
       }
@@ -466,9 +485,9 @@ namespace mhconfig {
     std::pair<bool, int64_t> as<int64_t>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::INT_NODE:
-          return std::make_pair(true, std::get<INT_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::INT_NODE>(data));
         case NodeType::OVERRIDE_INT_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_INT_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_INT_NODE>(data));
         default:
           break;
       }
@@ -479,9 +498,9 @@ namespace mhconfig {
     std::pair<bool, double> as<double>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::FLOAT_NODE:
-          return std::make_pair(true, std::get<FLOAT_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::FLOAT_NODE>(data));
         case NodeType::OVERRIDE_FLOAT_NODE:
-          return std::make_pair(true, std::get<OVERRIDE_FLOAT_NODE>(data));
+          return std::make_pair(true, node_get<NodeType::OVERRIDE_FLOAT_NODE>(data));
         default:
           break;
       }
