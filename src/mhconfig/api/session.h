@@ -26,10 +26,10 @@ std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_re
   return result;
 }
 
-template<typename T, typename... Args>
+template <typename T, typename... Args>
 inline std::shared_ptr<T> make_session(Args&&... args)
 {
-  auto session = std::make_shared<T>(args...);
+  auto session = std::make_shared<T>(std::forward<Args>(args)...);
   session->set_this_shared(session);
   return session;
 }

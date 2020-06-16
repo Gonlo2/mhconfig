@@ -9,8 +9,8 @@ namespace jmutils
   class Box final
   {
   public:
-    template<typename... Args>
-    Box(Args&&... args) noexcept : value_(args...) {
+    template <typename... Args>
+    Box(Args&&... args) noexcept : value_(std::forward<Args>(args)...) {
       refcount_.store(0);
     }
 

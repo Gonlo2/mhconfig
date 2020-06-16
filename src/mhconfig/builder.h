@@ -284,7 +284,7 @@ std::shared_ptr<merged_config_t> get_merged_config(
   const std::string& overrides_key
 );
 
-template<typename F>
+template <typename F>
 inline void with_raw_config(
   const document_metadata_t& document_metadata,
   const std::string& override_,
