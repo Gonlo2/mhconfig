@@ -57,11 +57,11 @@ namespace string_pool
     friend bool operator==(const InternalString& lhs, const InternalString& rhs);
     friend bool operator==(const InternalString& lhs, const std::string& rhs);
 
-    mutable std::atomic<int64_t> refcount_;
+    mutable std::atomic<int32_t> refcount_;
+    uint32_t size_;
     const char* data_;
     Chunk* chunk_;
     size_t hash_;
-    uint32_t size_;
 
     void init(const std::string& str, const char* data, Chunk* chunk);
 
