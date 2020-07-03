@@ -50,7 +50,7 @@ namespace mhconfig
             sync_metrics_service_
           )
         );
-        worker->start();
+        if (!worker->start()) return false;
         workers_.push_back(std::move(worker));
       }
 
@@ -79,7 +79,7 @@ namespace mhconfig
         worker_queue_,
         std::make_unique<metrics::AsyncMetricsService>(metrics_queue_.new_sender())
       );
-      scheduler_->start();
+      if (!scheduler_->start()) return false;
 
       metrics_worker_ = std::make_unique<::mhconfig::metrics::MetricsWorker>(
         metrics_queue_,

@@ -23,7 +23,7 @@ namespace scheduler
 using namespace mhconfig::api::request;
 using namespace mhconfig::ds::config_namespace;
 
-class Scheduler : public jmutils::parallelism::Worker<Scheduler, command::CommandRef>
+class Scheduler : public jmutils::Worker<Scheduler, command::CommandRef>
 {
 public:
   Scheduler(
@@ -35,7 +35,7 @@ public:
   virtual ~Scheduler();
 
 private:
-  friend class jmutils::parallelism::Worker<Scheduler, command::CommandRef>;
+  friend class jmutils::Worker<Scheduler, command::CommandRef>;
 
   enum class ConfigNamespaceState {
     OK,
@@ -46,33 +46,58 @@ private:
   SchedulerQueue& scheduler_queue_;
   scheduler_context_t context_;
 
-  inline void pop(
+  void on_start() noexcept {
+  }
+
+  inline bool pop(
     command::CommandRef& command
-  ) {
+  ) noexcept {
     scheduler_queue_.pop(command);
+    return true;
   }
 
   inline bool metricate(
     command::CommandRef& command,
     uint_fast32_t sequential_id
-  ) {
+  ) noexcept {
     return (sequential_id & 0xfff) == 0;
   }
 
+  inline std::string event_name(
+    command::CommandRef& command
+  ) noexcept {
+    return command->name();
+  }
+
+  inline bool execute(command::CommandRef&& command) noexcept {
+    try {
+      return process_command(std::move(command));
+    } catch (const std::exception &e) {
+      spdlog::error("Some error take place processing a command: {}", e.what());
+    } catch (...) {
+      spdlog::error("Some unknown error take place processing a command");
+    }
+
+    return false;
+  }
+
   inline void loop_stats(
-    std::string& command_name,
+    std::string& name,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
-  ) {
+  ) noexcept {
     double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
       end_time - start_time
     ).count();
 
     context_.metrics->add(
       metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
-      {{"type", command_name}},
+      {{"type", name}},
       duration_ns
     );
+  }
+
+  void on_stop() noexcept {
   }
 
   inline bool process_command(

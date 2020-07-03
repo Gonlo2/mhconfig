@@ -102,7 +102,7 @@ private:
 typedef jmutils::container::MPSCQueue<std::unique_ptr<AsyncMetric>, 12> MetricsQueue;
 
 //TODO
-class MetricsWorker : public jmutils::parallelism::Worker<MetricsWorker, std::unique_ptr<AsyncMetric>>
+class MetricsWorker : public jmutils::Worker<MetricsWorker, std::unique_ptr<AsyncMetric>>
 {
 public:
   MetricsWorker(
@@ -118,47 +118,59 @@ public:
   }
 
 private:
-  friend class jmutils::parallelism::Worker<MetricsWorker, std::unique_ptr<AsyncMetric>>;
+  friend class jmutils::Worker<MetricsWorker, std::unique_ptr<AsyncMetric>>;
 
   MetricsQueue& queue_;
   metrics::MetricsService& metrics_;
 
-  inline void pop(
+  void on_start() noexcept {
+  }
+
+  inline bool pop(
     std::unique_ptr<AsyncMetric>& command
-  ) {
+  ) noexcept {
     queue_.pop(command);
+    return true;
   }
 
   inline bool metricate(
     std::unique_ptr<AsyncMetric>& command,
     uint_fast32_t sequential_id
-  ) {
+  ) noexcept {
     return (sequential_id & 0xfff) == 0;
   }
 
+  inline std::string event_name(
+    std::unique_ptr<AsyncMetric>& command
+  ) noexcept {
+    return command->name();
+  }
+
+  inline bool execute(
+    std::unique_ptr<AsyncMetric>&& command
+  ) noexcept {
+    command->apply(metrics_);
+    return true;
+  }
+
   inline void loop_stats(
-    std::string& command_name,
+    std::string& name,
     jmutils::time::MonotonicTimePoint start_time,
     jmutils::time::MonotonicTimePoint end_time
-  ) {
+  ) noexcept {
     double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
       end_time - start_time
     ).count();
 
     metrics_.add(
       metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
-      {{"type", command_name}},
+      {{"type", name}},
       duration_ns
     );
   }
 
-  inline bool process_command(
-    std::unique_ptr<AsyncMetric>&& command
-  ) {
-    command->apply(metrics_);
-    return true;
+  void on_stop() noexcept {
   }
-
 };
 
 } /* metrics */

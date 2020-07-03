@@ -300,7 +300,7 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   const std::string& document,
   const std::vector<std::string>& overrides,
   uint32_t version,
-  std::vector<std::string>& dfs_path,
+  std::vector<std::string>& dfs_path,  // TODO Remove
   absl::flat_hash_set<std::string>& dfs_path_set,
   absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
 ) {
