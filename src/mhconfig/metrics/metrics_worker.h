@@ -8,11 +8,10 @@
 #include "jmutils/time.h"
 #include "jmutils/parallelism/worker.h"
 #include "string_pool/pool.h"
-#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/worker/command/setup_command.h"
+#include "mhconfig/command.h"
+#include "mhconfig/worker/setup_command.h"
 
 namespace mhconfig
 {

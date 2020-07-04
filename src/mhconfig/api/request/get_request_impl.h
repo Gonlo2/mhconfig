@@ -1,11 +1,10 @@
 #ifndef MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 #define MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 
-#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/common.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/scheduler/command/api_get_command.h"
+#include "mhconfig/command.h"
+#include "mhconfig/scheduler/api_get_command.h"
 
 #include <grpcpp/impl/codegen/serialization_traits.h>
 

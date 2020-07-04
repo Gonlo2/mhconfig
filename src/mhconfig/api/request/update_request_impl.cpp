@@ -77,7 +77,7 @@ void UpdateRequestImpl::request(
   relative_paths_ = to_vector(request_->relative_paths());
 
   scheduler_sender->push(
-    std::make_unique<scheduler::command::ApiUpdateCommand>(
+    std::make_unique<scheduler::ApiUpdateCommand>(
       shared_from_this()
     )
   );

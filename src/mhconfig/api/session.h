@@ -5,7 +5,7 @@
 #include <string>
 
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
-#include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/command.h"
 
 namespace mhconfig
 {

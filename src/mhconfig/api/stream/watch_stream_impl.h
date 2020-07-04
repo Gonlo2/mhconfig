@@ -1,13 +1,12 @@
 #ifndef MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 #define MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 
-#include "mhconfig/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/config/common.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/scheduler/command/api_watch_command.h"
+#include "mhconfig/command.h"
+#include "mhconfig/scheduler/api_watch_command.h"
 
 #include <absl/container/flat_hash_map.h>
 

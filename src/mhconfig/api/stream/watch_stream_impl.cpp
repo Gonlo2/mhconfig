@@ -277,7 +277,7 @@ void WatchStreamImpl::request(
       auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
       if (inserted.second) {
         scheduler_sender->push(
-          std::make_unique<scheduler::command::ApiWatchCommand>(
+          std::make_unique<scheduler::ApiWatchCommand>(
             msg
           )
         );

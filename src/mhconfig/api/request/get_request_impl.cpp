@@ -112,7 +112,7 @@ void GetRequestImpl::request(
     overrides_ = to_vector(request_->overrides());
 
     scheduler_sender->push(
-      std::make_unique<scheduler::command::ApiGetCommand>(
+      std::make_unique<scheduler::ApiGetCommand>(
         shared_from_this()
       )
     );

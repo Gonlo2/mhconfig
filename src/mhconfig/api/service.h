@@ -15,8 +15,7 @@
 #include <grpcpp/security/server_credentials.h>
 #include <google/protobuf/arena.h>
 
-#include "mhconfig/common.h"
-#include "mhconfig/scheduler/command/command.h"
+#include "mhconfig/command.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 #include "mhconfig/metrics/metrics_service.h"
 #include "mhconfig/metrics/async_metrics_service.h"

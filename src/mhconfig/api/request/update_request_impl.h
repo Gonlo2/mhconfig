@@ -4,8 +4,8 @@
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/update_request.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/scheduler/command/api_update_command.h"
+#include "mhconfig/command.h"
+#include "mhconfig/scheduler/api_update_command.h"
 
 namespace mhconfig
 {

@@ -43,7 +43,7 @@ void RunGCRequestImpl::request(
   SchedulerQueue::Sender* scheduler_sender
 ) {
   scheduler_sender->push(
-    std::make_unique<scheduler::command::RunGcCommand>(
+    std::make_unique<scheduler::RunGcCommand>(
       type(),
       max_live_in_seconds()
     )
@@ -52,20 +52,20 @@ void RunGCRequestImpl::request(
   reply();
 }
 
-scheduler::command::RunGcCommand::Type RunGCRequestImpl::type() {
+scheduler::RunGcCommand::Type RunGCRequestImpl::type() {
   switch (request_->type()) {
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
-      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_0;
+      return scheduler::RunGcCommand::Type::CACHE_GENERATION_0;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
-      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_1;
+      return scheduler::RunGcCommand::Type::CACHE_GENERATION_1;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_2:
-      return scheduler::command::RunGcCommand::Type::CACHE_GENERATION_2;
+      return scheduler::RunGcCommand::Type::CACHE_GENERATION_2;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_DEAD_POINTERS:
-      return scheduler::command::RunGcCommand::Type::DEAD_POINTERS;
+      return scheduler::RunGcCommand::Type::DEAD_POINTERS;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_NAMESPACES:
-      return scheduler::command::RunGcCommand::Type::NAMESPACES;
+      return scheduler::RunGcCommand::Type::NAMESPACES;
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_VERSIONS:
-      return scheduler::command::RunGcCommand::Type::VERSIONS;
+      return scheduler::RunGcCommand::Type::VERSIONS;
   }
 }
 

@@ -8,8 +8,8 @@
 #include <absl/container/flat_hash_set.h>
 
 #include "mhconfig/string_pool.h"
-#include "mhconfig/worker/command/command.h"
-#include "mhconfig/ds/config_namespace.h"
+#include "mhconfig/command.h"
+#include "mhconfig/config_namespace.h"
 #include "yaml-cpp/exceptions.h"
 #include "jmutils/common.h"
 #include "jmutils/box.h"
@@ -46,8 +46,6 @@ namespace {
     }
   };
 }
-
-using namespace mhconfig::ds::config_namespace;
 
 const static std::string TAG_NO_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};

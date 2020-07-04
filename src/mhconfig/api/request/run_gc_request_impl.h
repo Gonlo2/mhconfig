@@ -1,9 +1,8 @@
 #ifndef MHCONFIG__API__REQUEST__RUN_GC_REQUEST_IMPL_H
 #define MHCONFIG__API__REQUEST__RUN_GC_REQUEST_IMPL_H
 
-#include "mhconfig/common.h"
-#include "mhconfig/scheduler/command/command.h"
-#include "mhconfig/scheduler/command/run_gc_command.h"
+#include "mhconfig/command.h"
+#include "mhconfig/scheduler/run_gc_command.h"
 #include "mhconfig/api/request/run_gc_request.h"
 #include "mhconfig/api/request/request.h"
 
@@ -14,7 +13,7 @@ namespace api
 namespace request
 {
 
-using namespace mhconfig::scheduler::command;
+using namespace mhconfig::scheduler;
 
 class RunGCRequestImpl : public Request, public RunGCRequest, public std::enable_shared_from_this<RunGCRequestImpl>
 {
@@ -47,7 +46,7 @@ protected:
   ) override;
   void finish() override;
 
-  scheduler::command::RunGcCommand::Type type();
+  scheduler::RunGcCommand::Type type();
   uint32_t max_live_in_seconds();
 };
 

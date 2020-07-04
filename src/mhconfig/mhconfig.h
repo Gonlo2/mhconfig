@@ -3,15 +3,14 @@
 
 #include <string>
 
-#include "mhconfig/common.h"
 #include "mhconfig/api/service.h"
-#include "mhconfig/scheduler/mod.h"
-#include "mhconfig/worker/mod.h"
+#include "mhconfig/scheduler.h"
+#include "mhconfig/worker.h"
 
 #include "spdlog/spdlog.h"
 
-#include "mhconfig/scheduler/command/run_gc_command.h"
-#include "mhconfig/scheduler/command/obtain_usage_metrics_command.h"
+#include "mhconfig/scheduler/run_gc_command.h"
+#include "mhconfig/scheduler/obtain_usage_metrics_command.h"
 #include "mhconfig/metrics/sync_metrics_service.h"
 #include "mhconfig/metrics/async_metrics_service.h"
 #include "mhconfig/metrics/metrics_worker.h"
@@ -42,9 +41,9 @@ namespace mhconfig
 
       workers_.reserve(num_threads_workers_);
       for (size_t i = 0; i < num_threads_workers_; ++i) {
-        auto worker = std::make_unique<mhconfig::worker::Worker>(
+        auto worker = std::make_unique<mhconfig::Worker>(
           worker_queue_.new_receiver(),
-          mhconfig::worker::command::Command::context_t(
+          WorkerCommand::context_t(
             scheduler_queue_.new_sender(),
             std::make_unique<metrics::AsyncMetricsService>(metrics_queue_.new_sender()),
             sync_metrics_service_
@@ -74,14 +73,14 @@ namespace mhconfig
         scheduler_queue_.new_sender()
       );
 
-      scheduler_ = std::make_unique<mhconfig::scheduler::Scheduler>(
+      scheduler_ = std::make_unique<Scheduler>(
         scheduler_queue_,
         worker_queue_,
         std::make_unique<metrics::AsyncMetricsService>(metrics_queue_.new_sender())
       );
       if (!scheduler_->start()) return false;
 
-      metrics_worker_ = std::make_unique<::mhconfig::metrics::MetricsWorker>(
+      metrics_worker_ = std::make_unique<metrics::MetricsWorker>(
         metrics_queue_,
         sync_metrics_service_
       );
@@ -114,8 +113,8 @@ namespace mhconfig
     WorkerQueue worker_queue_;
     ::mhconfig::metrics::MetricsQueue metrics_queue_;
 
-    std::unique_ptr<mhconfig::scheduler::Scheduler> scheduler_;
-    std::vector<std::unique_ptr<mhconfig::worker::Worker>> workers_;
+    std::unique_ptr<Scheduler> scheduler_;
+    std::vector<std::unique_ptr<Worker>> workers_;
     std::unique_ptr<api::Service> service_;
     std::unique_ptr<::mhconfig::metrics::MetricsWorker> metrics_worker_;
     std::unique_ptr<std::thread> gc_thread_;
@@ -135,12 +134,12 @@ namespace mhconfig
           if (remaining_checks[i] == 0) {
             if (i == 6) { // TODO Extract this logic to a time worker
               sender->push(
-                std::make_unique<scheduler::command::ObtainUsageMetricsCommand>()
+                std::make_unique<scheduler::ObtainUsageMetricsCommand>()
               );
             } else {
               sender->push(
-                std::make_unique<scheduler::command::RunGcCommand>(
-                  static_cast<scheduler::command::RunGcCommand::Type>(i),
+                std::make_unique<scheduler::RunGcCommand>(
+                  static_cast<scheduler::RunGcCommand::Type>(i),
                   max_live_in_seconds
                 )
               );
