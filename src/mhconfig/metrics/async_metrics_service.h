@@ -22,14 +22,6 @@ namespace metrics
       double value
     ) override;
 
-    void clear(
-      MetricId id
-    ) override;
-
-    void set_namespaces_metrics(
-      std::vector<namespace_metrics_t>&& namespaces_metrics
-    ) override;
-
   private:
     std::shared_ptr<MetricsQueue::Sender> sender_;
   };

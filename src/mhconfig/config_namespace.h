@@ -125,11 +125,6 @@ struct config_namespace_t {
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
 
-  absl::flat_hash_map<
-    std::pair<std::string, std::string>,
-    ::jmutils::zero_value_t<uint32_t>
-  > asked_configs;
-
   std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
 
   std::vector<

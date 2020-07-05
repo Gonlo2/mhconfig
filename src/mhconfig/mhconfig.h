@@ -10,7 +10,6 @@
 #include "spdlog/spdlog.h"
 
 #include "mhconfig/scheduler/run_gc_command.h"
-#include "mhconfig/scheduler/obtain_usage_metrics_command.h"
 #include "mhconfig/metrics/sync_metrics_service.h"
 #include "mhconfig/metrics/async_metrics_service.h"
 #include "mhconfig/metrics/metrics_worker.h"
@@ -122,28 +121,22 @@ namespace mhconfig
     volatile bool running_{false};
 
     void run_gc(SchedulerQueue::SenderRef sender) {
-      uint32_t default_remaining_checks[7] = {1, 5, 17, 7, 11, 3, 4};
-      uint32_t remaining_checks[7] = {1, 5, 17, 7, 11, 3, 4};
+      uint32_t default_remaining_checks[6] = {1, 5, 17, 7, 11, 3};
+      uint32_t remaining_checks[6] = {1, 5, 17, 7, 11, 3};
 
       uint32_t seconds_between_checks = 20;
       uint32_t max_live_in_seconds = 10;
 
       auto next_check_time = std::chrono::system_clock::now();
       while (true) {
-        for (int i = 0; i < 7; ++i) {
+        for (int i = 0; i < 6; ++i) {
           if (remaining_checks[i] == 0) {
-            if (i == 6) { // TODO Extract this logic to a time worker
-              sender->push(
-                std::make_unique<scheduler::ObtainUsageMetricsCommand>()
-              );
-            } else {
-              sender->push(
-                std::make_unique<scheduler::RunGcCommand>(
-                  static_cast<scheduler::RunGcCommand::Type>(i),
-                  max_live_in_seconds
-                )
-              );
-            }
+            sender->push(
+              std::make_unique<scheduler::RunGcCommand>(
+                static_cast<scheduler::RunGcCommand::Type>(i),
+                max_live_in_seconds
+              )
+            );
 
             remaining_checks[i] = default_remaining_checks[i];
           } else {

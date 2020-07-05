@@ -62,12 +62,7 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
     return CommandResult::OK;
   }
 
-  for (size_t i = 0, l = get_request_->overrides().size(); i < l; ++i) {
-    config_namespace.asked_configs[std::make_pair(get_request_->overrides()[i], get_request_->document())].v += 1;
-    if (!get_request_->template_().empty()) {
-      config_namespace.asked_configs[std::make_pair(get_request_->overrides()[i], get_request_->template_())].v += 1;
-    }
-  }
+  // TODO It's possible trace the asked_configs here
 
   // If the document exists and the user asked for a version
   // we check if the version is available

@@ -70,34 +70,6 @@ private:
   double value_;
 };
 
-class SetNamespacesMetrics : public AsyncMetric
-{
-public:
-  SetNamespacesMetrics(
-    std::vector<MetricsService::namespace_metrics_t>&& namespaces_metrics
-  )
-    : namespaces_metrics_(std::move(namespaces_metrics))
-  {
-  }
-
-  virtual ~SetNamespacesMetrics() {
-  }
-
-  std::string name() override {
-    return "SET_NAMESPACES_METRICS";
-  }
-
-  void apply(
-    metrics::MetricsService& metrics
-  ) override {
-    metrics.set_namespaces_metrics(std::move(namespaces_metrics_));
-  }
-
-private:
-  std::vector<MetricsService::namespace_metrics_t> namespaces_metrics_;
-};
-
-
 typedef jmutils::container::MPSCQueue<std::unique_ptr<AsyncMetric>, 12> MetricsQueue;
 
 //TODO

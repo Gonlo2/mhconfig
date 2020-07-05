@@ -24,19 +24,5 @@ namespace metrics
     );
   }
 
-  // TODO
-  void AsyncMetricsService::clear(
-    MetricId id
-  ) {
-  }
-
-  void AsyncMetricsService::set_namespaces_metrics(
-    std::vector<namespace_metrics_t>&& namespaces_metrics
-  ) {
-    sender_->push(
-      std::make_unique<SetNamespacesMetrics>(std::move(namespaces_metrics))
-    );
-  }
-
 } /* metrics */
 } /* mhconfig */
