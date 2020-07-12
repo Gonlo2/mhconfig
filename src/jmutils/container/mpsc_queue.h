@@ -79,7 +79,7 @@ public:
 
       if (producer_size_ != (1ul<<SizeLog2)) {
         empty_mutex_.ReaderLock();
-        std::swap(data_[end_], value);
+        data_[end_] = std::move(value);
         size_.fetch_add(1, std::memory_order_relaxed);
         empty_cond_.Signal();
         empty_mutex_.ReaderUnlock();
@@ -142,7 +142,7 @@ private:
       current_sender_ = (current_sender_+1) % (senders_.size()+1);
       if (current_sender_ == senders_.size()) {
         if (!queue_.empty()) {
-          std::swap(queue_.front(), value);
+          value = std::move(queue_.front());
           queue_.pop();
           return true;
         }
@@ -155,7 +155,7 @@ private:
 
         if (sender->consumer_size_ != 0) {
           if (lock) sender->full_mutex_.Lock();
-          std::swap(sender->data_[sender->start_], value);
+          value = std::move(sender->data_[sender->start_]);
           sender->size_.fetch_sub(1, std::memory_order_relaxed);
           sender->full_cond_.Signal();
           if (lock) sender->full_mutex_.Unlock();

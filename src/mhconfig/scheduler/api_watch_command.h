@@ -45,6 +45,12 @@ public:
 
 private:
   std::shared_ptr<::mhconfig::api::stream::WatchInputMessage> message_;
+
+  bool validate_request(
+    const config_namespace_t& config_namespace,
+    WorkerQueue& worker_queue
+  );
+
 };
 
 } /* scheduler */

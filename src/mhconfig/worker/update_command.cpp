@@ -31,7 +31,7 @@ bool UpdateCommand::force_take_metric() const {
 bool UpdateCommand::execute(
   context_t& context
 ) {
-  std::vector<load_raw_config_result_t> items;
+  absl::flat_hash_map<std::string, load_raw_config_result_t> items;
   items.reserve(update_request_->relative_paths().size());
 
   bool ok;
@@ -39,11 +39,11 @@ bool UpdateCommand::execute(
     ok = index_files(
       pool_.get(),
       update_request_->root_path(),
-      [&](load_raw_config_result_t&& result) {
+      [&items](const auto& override_path, auto&& result) {
         if (result.status != LoadRawConfigStatus::OK) {
           return false;
         }
-        items.emplace_back(std::move(result));
+        items.emplace(override_path, std::move(result));
         return true;
       }
     );
@@ -69,41 +69,27 @@ bool UpdateCommand::execute(
 }
 
 bool UpdateCommand::add_items(
-  std::vector<load_raw_config_result_t>& items
+  absl::flat_hash_map<std::string, load_raw_config_result_t>& items
 ) {
   std::filesystem::path root_path(update_request_->root_path());
+  std::string override_path;
   for (const std::string& x : update_request_->relative_paths()) {
     std::filesystem::path relative_file_path(x);
     auto path = root_path / relative_file_path;
-    if (!is_a_valid_filename(path)) {
-      return false;
-    }
-
-    load_raw_config_result_t result;
-
-    if (path.filename().native()[0] == '_') {
-      result = load_template_raw_config(
-        path.filename().string(),
-        relative_file_path.parent_path().string(),
-        path
-      );
-    } else if (path.extension() == ".yaml") {
-      result = load_yaml_raw_config(
-        path.stem().string(),
-        relative_file_path.parent_path().string(),
-        path,
-        pool_.get()
-      );
-    } else {
-      assert(false);
-    }
-
+    auto result = index_file(pool_.get(), root_path, path);
     switch (result.status) {
       case LoadRawConfigStatus::OK: // Fallback
       case LoadRawConfigStatus::FILE_DONT_EXISTS:
-        items.push_back(result);
+        make_override_path(
+          result.override_,
+          result.document,
+          result.flavor,
+          override_path
+        );
+        items.emplace(override_path, std::move(result));
         continue;
 
+      case LoadRawConfigStatus::INVALID_FILENAME: // Fallback
       case LoadRawConfigStatus::ERROR:
         return false;
     }

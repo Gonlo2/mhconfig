@@ -33,7 +33,7 @@ public:
     std::unique_lock<std::mutex> mlock(mutex_);
     cond_.wait(mlock, [this]{ return !queue_.empty(); });
 
-    std::swap(queue_.front(), value);
+    value = std::move(queue_.front());
     queue_.pop();
   }
 

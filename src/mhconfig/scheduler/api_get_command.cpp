@@ -36,47 +36,8 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   );
   get_request_->set_namespace_id(config_namespace.id);
 
-  if (get_request_->document().empty() || (get_request_->document()[0] == '_')) {
-    spdlog::error(
-      "The asked document '{}' don't have a valid name",
-      get_request_->document()
-    );
-
-    get_request_->set_status(
-      ::mhconfig::api::request::GetRequest::Status::ERROR
-    );
-    send_api_response(worker_queue);
-    return CommandResult::OK;
-  }
-
-  if (!get_request_->template_().empty() && (get_request_->template_()[0] != '_')) {
-    spdlog::error(
-      "The asked template '{}' don't have a valid name",
-      get_request_->template_()
-    );
-
-    get_request_->set_status(
-      ::mhconfig::api::request::GetRequest::Status::ERROR
-    );
-    send_api_response(worker_queue);
-    return CommandResult::OK;
-  }
-
-  // TODO It's possible trace the asked_configs here
-
-  // If the document exists and the user asked for a version
-  // we check if the version is available
-  if (
-    (get_request_->version() != 0)
-    && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
-    && (get_request_->version() < config_namespace.stored_versions_by_deprecation_timestamp.front().second)
-  ) {
-    spdlog::trace("The asked version {} don't exists", get_request_->version());
-
-    get_request_->set_status(
-      ::mhconfig::api::request::GetRequest::Status::INVALID_VERSION
-    );
-    send_api_response(worker_queue);
+  // If the request isn't valid we exit
+  if (!validate_request(config_namespace, worker_queue)) {
     return CommandResult::OK;
   }
 
@@ -85,18 +46,19 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   // To search it we create the overrides key
   thread_local static std::string overrides_key;
   overrides_key.clear();
-  overrides_key.reserve((get_request_->overrides().size()+1)*4);
+  overrides_key.reserve(((get_request_->flavors().size()+1)*get_request_->overrides().size()+1)*4);
   std::shared_ptr<inja::Template> template_;
   if (!add_overrides_key(config_namespace, overrides_key, template_)) {
     send_api_response(worker_queue);
     return CommandResult::OK;
   }
 
-  auto merged_config = ::mhconfig::builder::get_merged_config(
-    config_namespace,
-    overrides_key
+  spdlog::debug(
+    "Searching the merged config of a overrides_key with size {}",
+    overrides_key.size()
   );
 
+  auto merged_config = builder::get_merged_config(config_namespace, overrides_key);
   if (merged_config != nullptr) {
     auto status = merged_config->status;
     switch (status) {
@@ -129,7 +91,11 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
     }
   }
 
-  spdlog::debug("Preparing build for document '{}'", get_request_->document());
+  spdlog::debug(
+    "Preparing built for document '{}' and template '{}'",
+    get_request_->document(),
+    get_request_->template_()
+  );
   return prepare_build_request(
     config_namespace,
     worker_queue,
@@ -138,35 +104,62 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   );
 }
 
+bool ApiGetCommand::validate_request(
+  const config_namespace_t& config_namespace,
+  WorkerQueue& worker_queue
+) {
+  bool ok = builder::are_valid_arguments(
+    get_request_->overrides(),
+    get_request_->flavors(),
+    get_request_->document(),
+    get_request_->template_()
+  );
+  if (!ok) {
+    get_request_->set_status(api::request::GetRequest::Status::ERROR);
+    send_api_response(worker_queue);
+    return false;
+  }
+
+  // If the document exists and the user asked for a version
+  // we check if the version is available
+  if (
+    (get_request_->version() != 0)
+    && !config_namespace.stored_versions_by_deprecation_timestamp.empty()
+    && (get_request_->version() < config_namespace.stored_versions_by_deprecation_timestamp.front().second)
+  ) {
+    spdlog::error("The asked version {} don't exists", get_request_->version());
+    get_request_->set_status(api::request::GetRequest::Status::INVALID_VERSION);
+    send_api_response(worker_queue);
+    return false;
+  }
+
+  return true;
+}
+
 SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
   config_namespace_t& config_namespace,
   WorkerQueue& worker_queue,
   const std::string& overrides_key,
   std::shared_ptr<inja::Template>&& template_
 ) {
-  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>> referenced_documents;
-  // The references are allowed only if the graph is a DAG,
-  // so we check it here
+  auto wait_built = std::make_shared<build::wait_built_t>();
+
+  std::vector<std::string> topological_sort;
+  absl::flat_hash_map<std::string, std::string> overrides_key_by_document;
+  // The references are allowed only if the graph is a DAG, so we check it here
+  // and build at the same time all the necessary values
   bool is_a_dag = check_if_ref_graph_is_a_dag(
     config_namespace,
-    get_request_->document(),
-    get_request_->overrides(),
-    get_request_->version(),
-    referenced_documents
+    topological_sort,
+    wait_built->raw_config_by_override_path,
+    overrides_key_by_document
   );
   if (!is_a_dag) {
-    get_request_->set_status(
-      ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG
-    );
+    get_request_->set_status(api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG);
     send_api_response(worker_queue);
     return CommandResult::OK;
   }
 
-  // If the graph is a DAG we could do a topological sort
-  // of the required documents
-  auto documents_in_order = do_topological_sort_over_ref_graph(referenced_documents);
-
-  auto wait_built = std::make_shared<build::wait_built_t>();
   wait_built->specific_version = get_specific_version(
     config_namespace,
     get_request_->version()
@@ -175,24 +168,16 @@ SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
   wait_built->template_ = std::move(template_);
   wait_built->overrides_key = overrides_key;
   wait_built->num_pending_elements = 0;
-  wait_built->elements_to_build.resize(documents_in_order.size());
+  wait_built->elements_to_build.resize(topological_sort.size());
 
-  for (size_t i = 0, l = documents_in_order.size(); i < l; ++i) {
+  for (size_t i = 0, l = topological_sort.size(); i < l; ++i) {
     auto& build_element = wait_built->elements_to_build[i];
-    build_element.name = documents_in_order[i];
+    build_element.name = std::move(topological_sort[i]);
     spdlog::debug("Checking the document '{}'", build_element.name);
 
-    auto& document_metadata = config_namespace
-      .document_metadata_by_document[build_element.name];
+    build_element.overrides_key = std::move(overrides_key_by_document[build_element.name]);
 
-    build_element.overrides_key.reserve(get_request_->overrides().size()*4);
-    add_config_overrides_key(
-      document_metadata,
-      get_request_->overrides(),
-      get_request_->version(),
-      build_element.overrides_key
-    );
-    auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
+    auto merged_config = builder::get_or_build_merged_config(
       config_namespace,
       build_element.overrides_key
     );
@@ -202,16 +187,6 @@ SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
           "The document '{}' is undefined, preparing the building",
           build_element.name
         );
-        for (const auto& k : get_request_->overrides()) {
-          with_raw_config(
-            document_metadata,
-            k,
-            get_request_->version(),
-            [&build_element, &k](auto& raw_config) {
-              build_element.raw_config_by_override[k] = raw_config;
-            }
-          );
-        }
         merged_config->status = MergedConfigStatus::BUILDING;
         break;
       }
@@ -265,158 +240,102 @@ SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
 
 bool ApiGetCommand::check_if_ref_graph_is_a_dag(
   config_namespace_t& config_namespace,
-  const std::string& document,
-  const std::vector<std::string>& overrides,
-  uint32_t version,
-  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
+  std::vector<std::string>& topological_sort,
+  absl::flat_hash_map<std::string, std::shared_ptr<raw_config_t>>& raw_config_by_override_path,
+  absl::flat_hash_map<std::string, std::string>& overrides_key_by_document
 ) {
-  std::vector<std::string> dfs_path;
   absl::flat_hash_set<std::string> dfs_path_set;
 
-  bool is_a_dag = check_if_ref_graph_is_a_dag_rec(
+  return check_if_ref_graph_is_a_dag_rec(
     config_namespace,
-    document,
-    overrides,
-    version,
-    dfs_path,
+    get_request_->flavors(),
+    get_request_->overrides(),
+    get_request_->document(),
+    get_request_->version(),
     dfs_path_set,
-    referenced_documents
+    topological_sort,
+    raw_config_by_override_path,
+    overrides_key_by_document
   );
-
-  referenced_documents[document] = absl::flat_hash_set<std::string>();
-
-  return is_a_dag;
 }
 
 bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
   config_namespace_t& config_namespace,
-  const std::string& document,
+  const std::vector<std::string>& flavors,
   const std::vector<std::string>& overrides,
+  const std::string& document,
   uint32_t version,
-  std::vector<std::string>& dfs_path,  // TODO Remove
   absl::flat_hash_set<std::string>& dfs_path_set,
-  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
+  std::vector<std::string>& topological_sort,
+  absl::flat_hash_map<std::string, std::shared_ptr<raw_config_t>>& raw_config_by_override_path,
+  absl::flat_hash_map<std::string, std::string>& overrides_key_by_document
 ) {
   if (dfs_path_set.count(document)) {
-    std::stringstream path_ss;
-    path_ss << "'" << dfs_path[0] << "'";
-    for (size_t i = 1; i < dfs_path.size(); ++i) {
-      path_ss << ", '" << dfs_path[i] << "'";
-    }
-
-    spdlog::error(
-      "The config dependencies defined with the '!ref' tag has a cycle with the document path [{}]",
-      path_ss.str()
-    );
+    spdlog::error("The config dependencies defined with the '!ref' tag has a cycle");
     return false;
   }
 
-  if (referenced_documents.count(document)) return true;
+  if (overrides_key_by_document.count(document)) return true;
 
-  auto document_metadata_search = config_namespace.document_metadata_by_document
-    .find(document);
-  if (document_metadata_search == config_namespace.document_metadata_by_document.end()) {
-    spdlog::warn("Can't found a config file with the name '{}'", document);
-    return false;
-  }
-
-  thread_local static std::string overrides_key;
-  overrides_key.clear();
-  overrides_key.reserve(overrides.size()*4);
-  add_config_overrides_key(
-    document_metadata_search->second,
-    overrides,
-    version,
-    overrides_key
-  );
-  auto config = ::mhconfig::builder::get_merged_config(
+  std::string& overrides_key = overrides_key_by_document[document];
+  overrides_key.reserve((flavors.size()+1)*overrides.size()*4);
+  for_each_document_override(
     config_namespace,
-    overrides_key
+    flavors,
+    overrides,
+    document,
+    version,
+    [&overrides_key, &raw_config_by_override_path](const auto& override_path, auto& raw_config) {
+      if (raw_config->has_content) {
+        raw_config_by_override_path[override_path] = raw_config;
+      }
+      jmutils::push_uint32(overrides_key, raw_config->id);
+    }
   );
-  if (config != nullptr) {
-    return true;
-  }
 
-  dfs_path.push_back(document);
-  dfs_path_set.insert(document);
+  bool is_a_dag = true;
 
-  for (size_t i = 0, l = overrides.size(); i < l; ++i) {
-    bool is_a_dag = true;
-    with_raw_config(
-      document_metadata_search->second,
-      overrides[i],
+  if (builder::get_merged_config(config_namespace, overrides_key) == nullptr) {
+    dfs_path_set.insert(document);
+
+    for_each_document_override(
+      config_namespace,
+      flavors,
+      overrides,
+      document,
       version,
-      [&](auto& raw_config) {
-        for (const auto& ref_document : raw_config->reference_to) {
-          referenced_documents[ref_document].insert(document);
-          is_a_dag = check_if_ref_graph_is_a_dag_rec(
-            config_namespace,
-            ref_document,
-            overrides,
-            version,
-            dfs_path,
-            dfs_path_set,
-            referenced_documents
-          );
-          if (!is_a_dag) return;
+      [&](const auto&, auto& raw_config) {
+        if (is_a_dag && raw_config->has_content) {
+          for (const auto& ref_document : raw_config->reference_to) {
+            is_a_dag = check_if_ref_graph_is_a_dag_rec(
+              config_namespace,
+              flavors,
+              overrides,
+              ref_document,
+              version,
+              dfs_path_set,
+              topological_sort,
+              raw_config_by_override_path,
+              overrides_key_by_document
+            );
+          }
         }
       }
     );
-    if (!is_a_dag) return false;
+
+    dfs_path_set.erase(document);
   }
 
-  dfs_path.pop_back();
-  dfs_path_set.erase(document);
+  topological_sort.push_back(document);
 
-  return true;
-}
-
-std::vector<std::string> ApiGetCommand::do_topological_sort_over_ref_graph(
-  const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
-) {
-  std::vector<std::string> reversed_topological_sort;
-  absl::flat_hash_set<std::string> visited_documents;
-
-  for (const auto it : referenced_documents) {
-    do_topological_sort_over_ref_graph_rec(
-      it.first,
-      referenced_documents,
-      visited_documents,
-      reversed_topological_sort
-    );
-  }
-
-  std::reverse(reversed_topological_sort.begin(), reversed_topological_sort.end());
-
-  return reversed_topological_sort;
-}
-
-void ApiGetCommand::do_topological_sort_over_ref_graph_rec(
-  const std::string& document,
-  const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents,
-  absl::flat_hash_set<std::string>& visited_documents,
-  std::vector<std::string>& inverted_topological_sort
-) {
-  auto is_inserted = visited_documents.insert(document);
-  if (is_inserted.second) {
-    for (const auto& ref_document : referenced_documents.at(document)) {
-      do_topological_sort_over_ref_graph_rec(
-        ref_document,
-        referenced_documents,
-        visited_documents,
-        inverted_topological_sort
-      );
-    }
-    inverted_topological_sort.push_back(document);
-  }
+  return is_a_dag;
 }
 
 bool ApiGetCommand::on_get_namespace_error(
   WorkerQueue& worker_queue
 ) {
-  get_request_->set_status(
-    ::mhconfig::api::request::GetRequest::Status::ERROR
-  );
+  spdlog::error("Some error take place obtaining the namespace '{}'", get_request_->root_path());
+  get_request_->set_status(api::request::GetRequest::Status::ERROR);
   send_api_response(worker_queue);
   return true;
 }

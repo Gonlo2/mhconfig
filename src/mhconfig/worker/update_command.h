@@ -40,7 +40,7 @@ private:
   std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request_;
 
   bool add_items(
-    std::vector<load_raw_config_result_t>& items
+    absl::flat_hash_map<std::string, load_raw_config_result_t>& items
   );
 };
 

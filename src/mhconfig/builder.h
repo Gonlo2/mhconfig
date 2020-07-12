@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include <zlib.h>
+
 #include <absl/container/flat_hash_set.h>
 
 #include "mhconfig/string_pool.h"
@@ -63,50 +64,82 @@ const static std::string TAG_OVERRIDE{"!override"};
 
 enum class LoadRawConfigStatus {
   OK,
+  INVALID_FILENAME,
   FILE_DONT_EXISTS,
   ERROR
 };
 
 struct load_raw_config_result_t {
   LoadRawConfigStatus status;
-  std::string document;
   std::string override_;
+  std::string document;
+  std::string flavor;
   std::shared_ptr<raw_config_t> raw_config{nullptr};
 };
 
-bool is_a_valid_filename(
-  const std::filesystem::path& path
-);
-
-std::shared_ptr<config_namespace_t> index_files(
+std::shared_ptr<config_namespace_t> make_config_namespace(
   const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
 );
 
-template <typename T>
-load_raw_config_result_t load_raw_config(
-  const std::string& document,
+inline void make_override_path(
   const std::string& override_,
-  const std::filesystem::path& path,
-  T lambda
+  const std::string& document,
+  const std::string& flavor,
+  std::string& output
 ) {
-  load_raw_config_result_t result;
-  result.status = LoadRawConfigStatus::ERROR;
-  result.document = document;
-  result.override_ = override_;
+  output.clear();
+  output.reserve(override_.size() + 1 + document.size() + 1 + flavor.size());
+  output += override_;
+  output.push_back('/');
+  output += document;
+  output.push_back('.');
+  output += flavor;
+}
 
+inline void split_override_path(
+  const std::string& override_path,
+  std::string& override_,
+  std::string& document,
+  std::string& flavor
+) {
+  assert(!override_path.empty());
+  size_t end_override_idx = override_path.size()-1;
+  size_t end_document_idx = end_override_idx;
+  for (; override_path[end_override_idx] != '/'; --end_override_idx) {
+    if (override_path[end_override_idx] == '.') {
+      end_document_idx = end_override_idx;
+    }
+  }
+
+  override_.clear();
+  override_.insert(0, override_path, 0, end_override_idx);
+
+  document.clear();
+  document.insert(0, override_path, end_override_idx+1, end_document_idx-end_override_idx);
+
+  flavor.clear();
+  document.insert(0, override_path, end_document_idx+1, override_path.size()-end_document_idx);
+}
+
+template <typename T>
+void load_raw_config(
+  const std::filesystem::path& path,
+  T lambda,
+  load_raw_config_result_t& result
+) {
   try {
     if (!std::filesystem::exists(path)) {
       spdlog::debug("The file '{}' don't exists", path.string());
       result.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-      return result;
+      return;
     }
 
     spdlog::debug("Loading file '{}'", path.string());
     std::ifstream fin(path.string());
     if (!fin.good()) {
       spdlog::error("Some error take place reading the file '{}'", path.string());
-      return result;
+      return;
     }
 
     // TODO Move this to a function
@@ -119,6 +152,7 @@ load_raw_config_result_t load_raw_config(
     // TODO Avoid import zlib only to calculate the crc32
     result.raw_config = std::make_shared<raw_config_t>();
     result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
+    result.raw_config->has_content = true;
     lambda(data, result);
   } catch(const std::exception &e) {
     spdlog::error(
@@ -126,29 +160,21 @@ load_raw_config_result_t load_raw_config(
       path.string(),
       e.what()
     );
-    return result;
+    return;
   } catch(...) {
     spdlog::error(
       "Unknown error making the element (path: '{}')",
       path.string()
     );
-    return result;
+    return;
   }
 
   result.status = LoadRawConfigStatus::OK;
-  return result;
 }
 
-load_raw_config_result_t load_yaml_raw_config(
-  const std::string& document,
-  const std::string& override_,
-  const std::filesystem::path& path,
-  ::string_pool::Pool* pool
-);
-
-load_raw_config_result_t load_template_raw_config(
-  const std::string& document,
-  const std::string& override_,
+load_raw_config_result_t index_file(
+  ::string_pool::Pool* pool,
+  const std::filesystem::path& root_path,
   const std::filesystem::path& path
 );
 
@@ -160,41 +186,35 @@ bool index_files(
 ) {
   spdlog::debug("To index the files in the path '{}'", root_path.string());
 
+  std::string override_path;
+
   std::error_code error_code;
   for (
     std::filesystem::recursive_directory_iterator it(root_path, error_code), end;
     !error_code && (it != end);
     ++it
   ) {
-    auto first_filename_char = it->path().filename().native()[0];
-    if (first_filename_char == '.') {
+    if (it->path().filename().native()[0] == '.') {
       it.disable_recursion_pending();
     } else if (it->is_regular_file()) {
-      auto relative_path = std::filesystem::relative(it->path(), root_path)
-        .parent_path()
-        .string();
+      auto result = index_file(pool, root_path, it->path());
+      if (result.status != LoadRawConfigStatus::INVALID_FILENAME) {
+        make_override_path(
+          result.override_,
+          result.document,
+          result.flavor,
+          override_path
+        );
 
-      if (first_filename_char == '_') {
         bool ok = lambda(
-          load_template_raw_config(
-            it->path().filename().string(),
-            relative_path,
-            it->path()
-          )
+          static_cast<const decltype(override_path)&>(override_path),
+          std::move(result)
         );
         if (!ok) {
-          return false;
-        }
-      } else if (it->path().extension() == ".yaml") {
-        bool ok = lambda(
-          load_yaml_raw_config(
-            it->path().stem().string(),
-            relative_path,
-            it->path(),
-            pool
-          )
-        );
-        if (!ok) {
+          spdlog::error(
+            "Some error take place processing the file '{}'",
+            it->path().string()
+          );
           return false;
         }
       }
@@ -211,6 +231,24 @@ bool index_files(
 
   return !error_code;
 }
+
+enum class AffectedDocumentStatus {
+  TO_REMOVE,
+  TO_ADD,
+  DEPENDENCY
+};
+
+void increment_version_of_the_affected_documents(
+  config_namespace_t& config_namespace,
+  absl::flat_hash_map<std::pair<std::string, std::string>, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_flavor_and_override,
+  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>>& watchers_to_trigger,
+  bool only_nonexistent
+);
+
+void fill_affected_documents(
+  const config_namespace_t& config_namespace,
+  absl::flat_hash_map<std::string, AffectedDocumentStatus>& affected_documents
+);
 
 Element override_with(
   const Element& a,
@@ -259,6 +297,13 @@ Element make_and_check_element(
   absl::flat_hash_set<std::string> &reference_to
 );
 
+bool are_valid_arguments(
+  const std::vector<std::string>& overrides,
+  const std::vector<std::string>& flavors,
+  const std::string& document,
+  const std::string& template_
+);
+
 bool is_a_valid_path(
   const Sequence* path,
   const std::string& tag
@@ -284,22 +329,22 @@ std::shared_ptr<merged_config_t> get_merged_config(
 
 template <typename F>
 inline void with_raw_config(
-  const document_metadata_t& document_metadata,
-  const std::string& override_,
+  config_namespace_t& config_namespace,
+  const std::string& override_path,
   uint32_t version,
   F lambda
 ) {
   spdlog::trace(
-    "Obtaining the raw config of the override '{}' with version '{}'",
-    override_,
+    "Obtaining the raw config of the override path '{}' with version '{}'",
+    override_path,
     version
   );
 
-  auto override_search = document_metadata.override_by_key
-    .find(override_);
+  auto override_search = config_namespace.override_metadata_by_override_path
+    .find(override_path);
 
-  if (override_search == document_metadata.override_by_key.end()) {
-    spdlog::trace("Don't exists the override '{}'", override_);
+  if (override_search == config_namespace.override_metadata_by_override_path.end()) {
+    spdlog::trace("Don't exists the override path '{}'", override_path);
     return;
   }
 
@@ -329,8 +374,72 @@ inline void with_raw_config(
     raw_config_search->first
   );
 
-  lambda(raw_config_search->second);
+  lambda(
+    static_cast<const decltype(override_path)&>(override_path),
+    //static_cast<decltype(override_search->second)&>(override_search->second),
+    static_cast<decltype(raw_config_search->second)&>(raw_config_search->second)
+  );
 }
+
+template <typename F>
+inline void for_each_document_override(
+  config_namespace_t& config_namespace,
+  const std::vector<std::string>& flavors,
+  const std::vector<std::string>& overrides,
+  const std::string& document,
+  uint32_t version,
+  F lambda
+) {
+  for_each_document_override_path(
+    flavors,
+    overrides,
+    document,
+    [&config_namespace, version, lambda](const auto& override_path) {
+      with_raw_config(
+        config_namespace,
+        override_path,
+        version,
+        lambda
+      );
+    }
+  );
+}
+
+template <typename F>
+inline void for_each_document_override_path(
+  const std::vector<std::string>& flavors,
+  const std::vector<std::string>& overrides,
+  const std::string& document,
+  F lambda
+) {
+  std::string override_path;
+  size_t flavors_l = flavors.size();
+  size_t overrides_l = overrides.size();
+
+  for (size_t override_idx = 0; override_idx < overrides_l; ++override_idx) {
+    make_override_path(
+      overrides[override_idx],
+      document,
+      "",
+      override_path
+    );
+    lambda(static_cast<const decltype(override_path)&>(override_path));
+  }
+
+  for (size_t flavor_idx = 0; flavor_idx < flavors_l; ++flavor_idx) {
+    for (size_t override_idx = 0; override_idx < overrides_l; ++override_idx) {
+      make_override_path(
+        overrides[override_idx],
+        document,
+        flavors[flavor_idx],
+        override_path
+      );
+      lambda(static_cast<const decltype(override_path)&>(override_path));
+    }
+  }
+}
+
+bool is_a_valid_document_name(const std::string& document);
 
 bool has_last_version(
   const override_metadata_t& override_metadata

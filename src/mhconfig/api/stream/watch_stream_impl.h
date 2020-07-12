@@ -69,6 +69,7 @@ public:
   bool remove() const override;
   const std::string& root_path() const override;
   const std::vector<std::string>& overrides() const override;
+  const std::vector<std::string>& flavors() const override;
   uint32_t version() const override;
   const std::string& document() const override;
   const std::string& template_() const override;
@@ -82,6 +83,7 @@ private:
   std::weak_ptr<WatchStreamImpl> stream_;
 
   std::vector<std::string> overrides_;
+  std::vector<std::string> flavors_;
 };
 
 class WatchGetRequest : public ::mhconfig::api::request::GetRequest
@@ -96,6 +98,7 @@ public:
   const std::string& root_path() const override;
   uint32_t version() const override;
   const std::vector<std::string>& overrides() const override;
+  const std::vector<std::string>& flavors() const override;
   const std::string& document() const override;
   const std::string& template_() const override;
 

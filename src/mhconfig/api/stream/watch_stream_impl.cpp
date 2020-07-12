@@ -93,9 +93,10 @@ WatchInputMessageImpl::WatchInputMessageImpl(
   std::weak_ptr<WatchStreamImpl>&& stream
 )
   : request_(std::move(request)),
-    stream_(std::move(stream))
+    stream_(std::move(stream)),
+    overrides_(to_vector(request_->overrides())),
+    flavors_(to_vector(request_->flavors()))
 {
-  overrides_ = to_vector(request_->overrides());
 }
 
 WatchInputMessageImpl::~WatchInputMessageImpl() {
@@ -115,6 +116,10 @@ const std::string& WatchInputMessageImpl::root_path() const {
 
 const std::vector<std::string>& WatchInputMessageImpl::overrides() const {
   return overrides_;
+}
+
+const std::vector<std::string>& WatchInputMessageImpl::flavors() const {
+  return flavors_;
 }
 
 uint32_t WatchInputMessageImpl::version() const {
@@ -165,6 +170,10 @@ uint32_t WatchGetRequest::version() const {
 
 const std::vector<std::string>& WatchGetRequest::overrides() const {
   return input_message_->overrides();
+}
+
+const std::vector<std::string>& WatchGetRequest::flavors() const {
+  return input_message_->flavors();
 }
 
 const std::string& WatchGetRequest::document() const {

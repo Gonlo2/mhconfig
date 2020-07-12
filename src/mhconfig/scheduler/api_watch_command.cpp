@@ -32,57 +32,38 @@ SchedulerCommand::CommandResult ApiWatchCommand::execute_on_namespace(
   SchedulerQueue& scheduler_queue,
   WorkerQueue& worker_queue
 ) {
-  // First we check if the asked version is lower that the current one
-  if (config_namespace.current_version < message_->version()) {
-    auto output_message = message_->make_output_message();
-    output_message->set_status(::mhconfig::api::stream::WatchStatus::INVALID_VERSION);
-
-    worker_queue.push(
-      std::make_unique<worker::ApiReplyCommand>(
-        std::move(output_message)
-      )
-    );
-
-    return CommandResult::OK;
-  }
-
-  if (message_->document().empty() || (message_->document()[0] == '_')) {
-    auto output_message = message_->make_output_message();
-    output_message->set_status(::mhconfig::api::stream::WatchStatus::ERROR);
-
-    worker_queue.push(
-      std::make_unique<worker::ApiReplyCommand>(
-        std::move(output_message)
-      )
-    );
-
+  if (!validate_request(config_namespace, worker_queue)) {
     return CommandResult::OK;
   }
 
   bool notify = false;
 
-  {
-    auto& document_metadata = config_namespace
-      .document_metadata_by_document[message_->document()];
-
-    for (const auto& override_: message_->overrides()) {
-      auto& override_metadata = document_metadata.override_by_key[override_];
+  for_each_document_override_path(
+    message_->flavors(),
+    message_->overrides(),
+    message_->document(),
+    [&config_namespace, &notify, this](const auto& override_path) {
+      auto& override_metadata = config_namespace.override_metadata_by_override_path[override_path];
       //TODO Check if the overrides are distinct
       override_metadata.watchers.push_back(message_);
       notify |= !override_metadata.raw_config_by_version.empty()
         && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
     }
-  }
+  );
 
   // TODO This will trigger also a update if any of the overrides templates change
   // although only the last one is used, review if is neccesary deal with multiples
   // templates or this is a silly use case.
   if (!message_->template_().empty()) {
-    auto& document_metadata = config_namespace
-      .document_metadata_by_document[message_->template_()];
-
+    std::string override_path;
     for (const auto& override_: message_->overrides()) {
-      auto& override_metadata = document_metadata.override_by_key[override_];
+      make_override_path(
+        override_,
+        message_->template_(),
+        "",
+        override_path
+      );
+      auto& override_metadata = config_namespace.override_metadata_by_override_path[override_path];
       //TODO Check if the overrides are distinct
       override_metadata.watchers.push_back(message_);
       notify |= !override_metadata.raw_config_by_version.empty()
@@ -108,6 +89,45 @@ SchedulerCommand::CommandResult ApiWatchCommand::execute_on_namespace(
   }
 
   return CommandResult::OK;
+}
+
+bool ApiWatchCommand::validate_request(
+  const config_namespace_t& config_namespace,
+  WorkerQueue& worker_queue
+) {
+  bool ok = builder::are_valid_arguments(
+    message_->overrides(),
+    message_->flavors(),
+    message_->document(),
+    message_->template_()
+  );
+  if (!ok) {
+    auto output_message = message_->make_output_message();
+    output_message->set_status(api::stream::WatchStatus::ERROR);
+
+    worker_queue.push(
+      std::make_unique<worker::ApiReplyCommand>(
+        std::move(output_message)
+      )
+    );
+
+    return false;
+  }
+
+  if (config_namespace.current_version < message_->version()) {
+    auto output_message = message_->make_output_message();
+    output_message->set_status(api::stream::WatchStatus::INVALID_VERSION);
+
+    worker_queue.push(
+      std::make_unique<worker::ApiReplyCommand>(
+        std::move(output_message)
+      )
+    );
+
+    return false;
+  }
+
+  return true;
 }
 
 bool ApiWatchCommand::on_get_namespace_error(

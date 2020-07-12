@@ -233,19 +233,18 @@ void RunGcCommand::remove_versions(
 
   uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
 
-  std::vector<std::string> documents_to_remove;
-  std::vector<std::string> overrides_to_remove;
+  std::vector<std::string> override_paths_to_remove;
 
-  for (auto& it : context.namespace_by_path) {
-    auto config_namespace = it.second;
+  for (auto& namespace_it : context.namespace_by_path) {
+    auto config_namespace = namespace_it.second;
 
     if (
-        (config_namespace->stored_versions_by_deprecation_timestamp.size() > 1)
-        && (config_namespace->stored_versions_by_deprecation_timestamp.front().first + max_live_in_seconds_ <= current_timestamp)
+      (config_namespace->stored_versions_by_deprecation_timestamp.size() > 1)
+      && (config_namespace->stored_versions_by_deprecation_timestamp.front().first + max_live_in_seconds_ <= current_timestamp)
     ) {
       while (
-          (config_namespace->stored_versions_by_deprecation_timestamp.size() > 1)
-          && (config_namespace->stored_versions_by_deprecation_timestamp.front().first + max_live_in_seconds_ <= current_timestamp)
+        (config_namespace->stored_versions_by_deprecation_timestamp.size() > 1)
+        && (config_namespace->stored_versions_by_deprecation_timestamp.front().first + max_live_in_seconds_ <= current_timestamp)
       ) {
         config_namespace->stored_versions_by_deprecation_timestamp.pop_front();
       }
@@ -255,61 +254,47 @@ void RunGcCommand::remove_versions(
         .front()
         .second;
 
-      documents_to_remove.clear();
-      for (auto it_2: config_namespace->document_metadata_by_document) {
-        overrides_to_remove.clear();
-        for (auto it_3: it_2.second.override_by_key) {
-          auto& watchers = it_3.second.watchers;
-          remove_expired_watchers(watchers);
+      override_paths_to_remove.clear();
+      for (auto override_metadata_it: config_namespace->override_metadata_by_override_path) {
+        remove_expired_watchers(override_metadata_it.second.watchers);
 
-          auto& raw_config_by_version = it_3.second.raw_config_by_version;
+        auto& raw_config_by_version = override_metadata_it.second.raw_config_by_version;
 
-          auto it_4 = raw_config_by_version.begin();
-          while (
-            (raw_config_by_version.size() > 1) && (it_4->first < remove_till_version)
-          ) {
-            spdlog::debug(
-              "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
-              it_4->first,
-              it_2.first,
-              it_3.first,
-              it.first
-            );
-            it_4 = raw_config_by_version.erase(it_4);
-          }
-
-          if (!raw_config_by_version.empty() && (it_4->second == nullptr)) {
-            spdlog::debug(
-              "Removed the version {} of the document '{}' with override '{}' in the namespace '{}'",
-              it_4->first,
-              it_2.first,
-              it_3.first,
-              it.first
-            );
-            it_4 = raw_config_by_version.erase(it_4);
-          }
-
-          if (raw_config_by_version.empty() && watchers.empty()) {
-            spdlog::debug(
-              "Removed override '{}' in the namespace '{}'",
-              it_3.first,
-              it.first
-            );
-            overrides_to_remove.push_back(it_3.first);
-          }
+        auto it = raw_config_by_version.begin();
+        while (
+          (raw_config_by_version.size() > 1) && (it->first < remove_till_version)
+        ) {
+          spdlog::debug(
+            "Removed the version {} of the override_path '{}' in the namespace '{}'",
+            it->first,
+            override_metadata_it.first,
+            namespace_it.first
+          );
+          it = raw_config_by_version.erase(it);
         }
 
-        for (const auto& k : overrides_to_remove) {
-          it_2.second.override_by_key.erase(k);
+        if (!raw_config_by_version.empty() && (it->second == nullptr)) {
+          spdlog::debug(
+            "Removed the version {} of the override_path '{}' in the namespace '{}'",
+            it->first,
+            override_metadata_it.first,
+            namespace_it.first
+          );
+          it = raw_config_by_version.erase(it);
         }
 
-        if (it_2.second.override_by_key.empty()) {
-          documents_to_remove.push_back(it_2.first);
+        if (raw_config_by_version.empty() && override_metadata_it.second.watchers.empty()) {
+          spdlog::debug(
+            "Removed override_path '{}' in the namespace '{}'",
+            override_metadata_it.first,
+            namespace_it.first
+          );
+          override_paths_to_remove.push_back(override_metadata_it.first);
         }
       }
 
-      for (const auto& k : documents_to_remove) {
-        config_namespace->document_metadata_by_document.erase(k);
+      for (const auto& k : override_paths_to_remove) {
+        config_namespace->override_metadata_by_override_path.erase(k);
       }
     }
   }

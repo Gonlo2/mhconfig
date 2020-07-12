@@ -7,14 +7,7 @@ namespace builder
 
 // Setup logic
 
-bool is_a_valid_filename(
-  const std::filesystem::path& path
-) {
-  auto start = path.filename().native()[0];
-  return (start != '.') && ((start == '_') || (path.extension() == ".yaml"));
-}
-
-std::shared_ptr<config_namespace_t> index_files(
+std::shared_ptr<config_namespace_t> make_config_namespace(
   const std::filesystem::path& root_path,
   metrics::MetricsService& metrics
 ) {
@@ -29,18 +22,36 @@ std::shared_ptr<config_namespace_t> index_files(
 
   spdlog::debug("To index the files in the path '{}'", root_path.string());
 
+  absl::flat_hash_map<
+    std::pair<std::string, std::string>,
+    absl::flat_hash_map<std::string, AffectedDocumentStatus>
+  > updated_documents_by_flavor_and_override;
+
   bool ok = index_files(
     config_namespace->pool.get(),
     root_path,
-    [&](load_raw_config_result_t&& result) {
+    [&config_namespace, &updated_documents_by_flavor_and_override](const auto& override_path, auto&& result) {
       if (result.status != LoadRawConfigStatus::OK) {
         return false;
       }
 
+      for (const auto& reference_to : result.raw_config->reference_to) {
+        config_namespace->referenced_by_by_document[reference_to][result.document].v += 1;
+      }
+
       result.raw_config->id = config_namespace->next_raw_config_id++;
-      config_namespace->document_metadata_by_document[result.document]
-        .override_by_key[result.override_]
-        .raw_config_by_version[1] = result.raw_config;
+
+      config_namespace->override_metadata_by_override_path[override_path]
+        .raw_config_by_version.emplace(1, std::move(result.raw_config));
+
+      auto flavor_and_override = std::make_pair(
+        std::move(result.flavor),
+        std::move(result.override_)
+      );
+      updated_documents_by_flavor_and_override[flavor_and_override].emplace(
+        std::move(result.document),
+        AffectedDocumentStatus::TO_ADD
+      );
 
       return true;
     }
@@ -50,27 +61,15 @@ std::shared_ptr<config_namespace_t> index_files(
     return config_namespace;
   }
 
-  for (auto document_metadata_it : config_namespace->document_metadata_by_document) {
-    for (auto override_it : document_metadata_it.second.override_by_key) {
-      for (auto& reference_to : override_it.second.raw_config_by_version[1]->reference_to) {
-        auto search = config_namespace->document_metadata_by_document
-          .find(reference_to);
+  spdlog::debug("Setting the ids of the nonexistent affected documents");
 
-        if (search == config_namespace->document_metadata_by_document.end()) {
-          spdlog::error(
-            "The document '{}' in the override '{}' has a '{}' tag to the inexistent document '{}'",
-            document_metadata_it.first,
-            override_it.first,
-            TAG_REF,
-            reference_to
-          );
-          return config_namespace;
-        }
-
-        search->second.referenced_by[document_metadata_it.first].v += 1;
-      }
-    }
-  }
+  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>> watchers_to_trigger;
+  increment_version_of_the_affected_documents(
+    *config_namespace,
+    updated_documents_by_flavor_and_override,
+    watchers_to_trigger,
+    true
+  );
 
   config_namespace->ok = true;
   config_namespace->last_access_timestamp = jmutils::time::monotonic_now_sec();
@@ -82,63 +81,165 @@ std::shared_ptr<config_namespace_t> index_files(
   return config_namespace;
 }
 
-load_raw_config_result_t load_yaml_raw_config(
-  const std::string& document,
-  const std::string& override_,
-  const std::filesystem::path& path,
-  ::string_pool::Pool* pool
-) {
-  return load_raw_config(
-    document,
-    override_,
-    path,
-    [pool](const std::string& data, load_raw_config_result_t& result) {
-      YAML::Node node = YAML::Load(data);
-
-      absl::flat_hash_set<std::string> reference_to;
-      result.raw_config->value = make_and_check_element(
-        pool,
-        node,
-        reference_to
-      );
-      result.raw_config->reference_to.reserve(reference_to.size());
-      for (const auto& x : reference_to) {
-        result.raw_config->reference_to.push_back(x);
-      }
-    }
-  );
-}
-
-load_raw_config_result_t load_template_raw_config(
-  const std::string& document,
-  const std::string& override_,
+load_raw_config_result_t index_file(
+  ::string_pool::Pool* pool,
+  const std::filesystem::path& root_path,
   const std::filesystem::path& path
 ) {
-  return load_raw_config(
-    document,
-    override_,
-    path,
-    [](const std::string& data, load_raw_config_result_t& result) {
-      result.raw_config->template_ = std::make_shared<inja::Template>();
-      result.raw_config->template_->content = data;
+  load_raw_config_result_t result;
+  result.status = LoadRawConfigStatus::ERROR;
 
-      {
-        inja::ParserConfig parser_config;
-        inja::LexerConfig lexer_config;
-        inja::TemplateStorage included_templates;
-        ForbiddenIncludeStrategy include_strategy;
+  auto first_filename_char = path.filename().native()[0];
+  if (first_filename_char == '.') {
+    result.status = LoadRawConfigStatus::INVALID_FILENAME;
+    return result;
+  }
 
-        inja::Parser parser(
-          parser_config,
-          lexer_config,
-          included_templates,
-          include_strategy
+  result.override_ = std::filesystem::relative(path, root_path)
+    .parent_path()
+    .string();
+
+  if (first_filename_char == '_') {
+    result.document = path.filename().string();
+
+    load_raw_config(
+      path,
+      [](const std::string& data, load_raw_config_result_t& result) {
+        result.raw_config->template_ = std::make_shared<inja::Template>();
+        result.raw_config->template_->content = data;
+
+        {
+          inja::ParserConfig parser_config;
+          inja::LexerConfig lexer_config;
+          inja::TemplateStorage included_templates;
+          ForbiddenIncludeStrategy include_strategy;
+
+          inja::Parser parser(
+            parser_config,
+            lexer_config,
+            included_templates,
+            include_strategy
+          );
+
+          parser.parse_into(*result.raw_config->template_, "");
+        }
+      },
+      result
+    );
+  } else if (path.extension() == ".yaml") {
+    auto stem = path.stem().string();
+    auto pos = stem.find_first_of('.');
+    if (pos == std::string::npos) {
+      result.document = std::move(stem);
+    } else {
+      result.document.insert(0, stem, 0, pos);
+      result.flavor.insert(0, stem, pos+1, stem.size()-pos-1);
+    }
+
+    load_raw_config(
+      path,
+      [pool](const std::string& data, load_raw_config_result_t& result) {
+        YAML::Node node = YAML::Load(data);
+
+        absl::flat_hash_set<std::string> reference_to;
+        result.raw_config->value = make_and_check_element(pool, node, reference_to);
+        result.raw_config->reference_to.reserve(reference_to.size());
+        for (const auto& x : reference_to) {
+          result.raw_config->reference_to.push_back(x);
+        }
+      },
+      result
+    );
+  } else {
+    result.status = LoadRawConfigStatus::INVALID_FILENAME;
+  }
+
+  return result;
+}
+
+void increment_version_of_the_affected_documents(
+  config_namespace_t& config_namespace,
+  absl::flat_hash_map<std::pair<std::string, std::string>, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_flavor_and_override,
+  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>>& watchers_to_trigger,
+  bool only_nonexistent
+) {
+  std::string override_path;
+  for (auto& updated_documents_it : updated_documents_by_flavor_and_override) {
+    fill_affected_documents(config_namespace, updated_documents_it.second);
+
+    for (const auto& it : updated_documents_it.second) {
+      if (it.second != AffectedDocumentStatus::TO_ADD) {
+        make_override_path(
+          updated_documents_it.first.second,
+          it.first,
+          updated_documents_it.first.first,
+          override_path
+        );
+        auto& override_metadata = config_namespace.override_metadata_by_override_path[override_path];
+
+        if (!override_metadata.raw_config_by_version.empty() && only_nonexistent) {
+          continue;
+        }
+
+        auto new_raw_config = (it.second == AffectedDocumentStatus::TO_REMOVE || override_metadata.raw_config_by_version.empty())
+          ? std::make_shared<raw_config_t>()
+          : override_metadata.raw_config_by_version.rbegin()->second->clone();
+
+        spdlog::debug(
+          "Updating affected raw config (override_path: '{}', old_id: {}, new_id: {})",
+          override_path,
+          new_raw_config->id,
+          config_namespace.next_raw_config_id
         );
 
-        parser.parse_into(*result.raw_config->template_, "");
+        new_raw_config->id = config_namespace.next_raw_config_id++;
+
+        override_metadata.raw_config_by_version.emplace(
+          config_namespace.current_version,
+          std::move(new_raw_config)
+        );
+
+        for (size_t i = 0; i < override_metadata.watchers.size();) {
+          if (auto watcher = override_metadata.watchers[i].lock()) {
+            watchers_to_trigger.insert(watcher);
+            ++i;
+          } else {
+            jmutils::swap_delete(override_metadata.watchers, i);
+          }
+        }
       }
     }
-  );
+  }
+}
+
+void fill_affected_documents(
+  const config_namespace_t& config_namespace,
+  absl::flat_hash_map<std::string, AffectedDocumentStatus>& affected_documents
+) {
+  std::vector<std::string> to_check;
+  to_check.reserve(affected_documents.size());
+  for (const auto& it : affected_documents) {
+    to_check.push_back(it.first);
+  }
+
+  std::string doc;
+  while (!to_check.empty()) {
+    doc = std::move(to_check.back());
+    to_check.pop_back();
+
+    auto search = config_namespace.referenced_by_by_document.find(doc);
+    if (search != config_namespace.referenced_by_by_document.end()) {
+      for (const auto& it : search->second) {
+        auto inserted = affected_documents.try_emplace(
+          it.first,
+          AffectedDocumentStatus::DEPENDENCY
+        );
+        if (inserted.second) {
+          to_check.push_back(it.first);
+        }
+      }
+    }
+  }
 }
 
 Element override_with(
@@ -428,8 +529,23 @@ Element apply_tag_format(
     return Element();
   }
 
-  std::string value = format_str(template_result.second, template_arguments);
-  return Element(pool->add(value));
+  try {
+    std::string value = format_str(template_result.second, template_arguments);
+    return Element(pool->add(value));
+  } catch (const std::exception &e) {
+    spdlog::error(
+      "Some error take place formating the template '{}': {}",
+      template_result.second,
+      e.what()
+    );
+  } catch (...) {
+    spdlog::error(
+      "Some unknown error take place formating the template '{}'",
+      template_result.second
+    );
+  }
+
+  return Element();
 }
 
 std::string format_str(
@@ -764,6 +880,35 @@ std::shared_ptr<merged_config_t> get_merged_config(
     .erase(search);
 
   return nullptr;
+}
+
+bool are_valid_arguments(
+  const std::vector<std::string>& overrides,
+  const std::vector<std::string>& flavors,
+  const std::string& document,
+  const std::string& template_
+) {
+  // TODO Check for duplicated overrides & flavors
+  if (!is_a_valid_document_name(document)) {
+    spdlog::error("The document '{}' don't have a valid name", document);
+    return false;
+  }
+
+  if (!template_.empty() && (template_[0] != '_')) {
+    spdlog::error("The template '{}' don't have a valid name", template_);
+    return false;
+  }
+
+  return true;
+}
+
+bool is_a_valid_document_name(const std::string& document) {
+  if (document.empty()) return true;
+  if (document[0] == '_') return false;
+  for (auto c: document) {
+    if (c == '.') return false;
+  }
+  return true;
 }
 
 bool has_last_version(

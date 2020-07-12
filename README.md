@@ -100,7 +100,7 @@ PS: fmt don't allow the usage of variable named arguments so it's supported only
 
 The tag `!ref` allow use some configuration provided in another configuration file if don't exists circular
 dependencies, also it's possible override that configuration in a next override. Like in some cases it's necessary reuse
-some value provided in the same configuration the `!sref` allow do that but only if the referenced element is a scalar or null.
+some value provided in the same configuration document the `!sref` allow do that but only if the referenced element is a scalar or null.
 
 #### Delete
 
@@ -110,6 +110,23 @@ If it's necessary remove the content of a previous override it's possible do tha
 
 By default only it's possible merge values of the same kind with the overrides, to force the override it's necessary use
 the tag `!override`.
+
+### Flavors
+
+Sometimes you want to change the configuration according to multiple logical dimensions, for these cases you have to use the flavors.
+
+The way to put the settings together is to repeat the overrides for each flavor, so if we have the overrides `override-1` and `override-2` and the flavors `flavor-1` and `flavor-2` would be the same as if we put the settings together in the following order
+
+```
+<no-flavor> / <override-1>
+<no-flavor> / <override-2>
+<flavor-1> / <override-1>
+<flavor-1> / <override-2>
+<flavor-2> / <override-1>
+<flavor-2> / <override-2>
+```
+
+The way to define a flavor is by the name of the file itself, up to the first point is the document while from this point is the flavor. For example, the file `service-routes.virtual-environment.mr-universe.yaml` is interpreted as the `virtual-environment.mr-universe` flavor of the `service-routes` document.
 
 ### Restrictions
 
@@ -155,6 +172,8 @@ message GetRequest {
   string root_path = 1;
   // the list of overrides to apply from lower to higher priority.
   repeated string overrides = 2;
+  // the list of flavors to apply from lower to higher priority.
+  repeated string flavors = 6;
   // the version of the configuration to retrieve, it retrieve the latest
   // version with a zero value and the proper version otherwise.
   uint32 version = 3;
@@ -225,6 +244,8 @@ message WatchRequest {
   string root_path = 3;
   // the list of overrides to apply from lower to higher priority.
   repeated string overrides = 4;
+  // the list of flavors to apply from lower to higher priority.
+  repeated string flavors = 8;
   // the last know version of the configuration, in the case of zero the server
   // will reply the latest one, in other case the server will reply when exists
   // a newer version that change the configuration. Please note that this means
@@ -301,13 +322,12 @@ message RunGCResponse {
 The server expose some metrics through a prometheus client, some of this metrics are:
 
 * The quantile 0.5, 0.9 and 0.99 of the requests duration (the stats are sampled).
-* The asked configuration and the registered watchers.
 * The quantile 0.5, 0.9 and 0.99 of the internal threads (the stats are sampled).
 * Some internal stats.
 
-## License
+## Credits
 
-This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) file for details
+Created and maintained by [@Gonlo2](https://github.com/Gonlo2/).
 
 ## Third party libraries
 
@@ -319,3 +339,13 @@ This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) f
 * prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
 * spdlog: https://github.com/gabime/spdlog
 * yaml-cpp: https://github.com/jbeder/yaml-cpp
+
+## FAQ
+
+### What differentiates the overrides from the flavors?
+
+What differentiates these two concepts are the owners of them, the owners of the overrides are the infrastructure teams while the owners of the flavors are the developers.
+
+## License
+
+This project is licensed under the AGPL-3.0 - see the [LICENSE.md](LICENSE.md) file for details

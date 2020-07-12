@@ -35,6 +35,7 @@ public:
   const std::string& root_path() const override;
   uint32_t version() const override;
   const std::vector<std::string>& overrides() const override;
+  const std::vector<std::string>& flavors() const override;
   const std::string& document() const override;
   const std::string& template_() const override;
 
@@ -59,6 +60,7 @@ protected:
   std::stringstream elements_data_;
 
   std::vector<std::string> overrides_;
+  std::vector<std::string> flavors_;
 
   Element element_;
 

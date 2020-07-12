@@ -44,6 +44,11 @@ public:
 private:
   std::shared_ptr<::mhconfig::api::request::GetRequest> get_request_;
 
+  bool validate_request(
+    const config_namespace_t& config_namespace,
+    WorkerQueue& worker_queue
+  );
+
   void send_api_response(
     WorkerQueue& worker_queue
   );
@@ -57,90 +62,58 @@ private:
 
   bool check_if_ref_graph_is_a_dag(
     config_namespace_t& config_namespace,
-    const std::string& document,
-    const std::vector<std::string>& overrides,
-    uint32_t version,
-    absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
+    std::vector<std::string>& topological_sort,
+    absl::flat_hash_map<std::string, std::shared_ptr<raw_config_t>>& raw_config_by_override_path,
+    absl::flat_hash_map<std::string, std::string>& overrides_key_by_document
   );
 
+  // TODO Move to the builder
   bool check_if_ref_graph_is_a_dag_rec(
     config_namespace_t& config_namespace,
-    const std::string& document,
+    const std::vector<std::string>& flavors,
     const std::vector<std::string>& overrides,
+    const std::string& document,
     uint32_t version,
-    std::vector<std::string>& dfs_path,
     absl::flat_hash_set<std::string>& dfs_path_set,
-    absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
+    std::vector<std::string>& topological_sort,
+    absl::flat_hash_map<std::string, std::shared_ptr<raw_config_t>>& raw_config_by_override_path,
+    absl::flat_hash_map<std::string, std::string>& overrides_key_by_document
   );
-
-  std::vector<std::string> do_topological_sort_over_ref_graph(
-    const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents
-  );
-
-  void do_topological_sort_over_ref_graph_rec(
-    const std::string& document,
-    const absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>& referenced_documents,
-    absl::flat_hash_set<std::string>& visited_documents,
-    std::vector<std::string>& inverted_topological_sort
-  );
-
-  // Help functions
-  inline void add_config_overrides_key(
-    const document_metadata_t& document_metadata,
-    const std::vector<std::string>& overrides,
-    uint32_t version,
-    std::string& overrides_key
-  ) {
-    for (size_t i = overrides.size(); i--;) {
-      with_raw_config(
-        document_metadata,
-        overrides[i],
-        version,
-        [&overrides_key](auto& raw_config) {
-          jmutils::push_uint32(overrides_key, raw_config->id);
-        }
-      );
-    }
-  }
-
-  inline void add_template_overrides_key(
-    const document_metadata_t& document_metadata,
-    const std::vector<std::string>& overrides,
-    uint32_t version,
-    std::string& overrides_key,
-    std::shared_ptr<inja::Template>& template_
-  ) {
-    template_ = nullptr;
-    for (size_t i = overrides.size(); (template_ == nullptr) && i--;) {
-      with_raw_config(
-        document_metadata,
-        overrides[i],
-        version,
-        [&](auto& raw_config) {
-          template_ = raw_config->template_;
-          jmutils::push_uint32(overrides_key, raw_config->id);
-        }
-      );
-    }
-  }
 
   inline bool add_overrides_key(
     config_namespace_t& config_namespace,
     std::string& overrides_key,
     std::shared_ptr<inja::Template>& template_
   ) {
-    if (!get_request_->template_().empty()) {
-      auto search = config_namespace.document_metadata_by_document
-        .find(get_request_->template_());
+    for_each_document_override(
+      config_namespace,
+      get_request_->flavors(),
+      get_request_->overrides(),
+      get_request_->document(),
+      get_request_->version(),
+      [&overrides_key](const auto&, auto& raw_config) {
+        jmutils::push_uint32(overrides_key, raw_config->id);
+      }
+    );
 
+    if (!get_request_->template_().empty()) {
+      thread_local static std::string override_path;
       template_ = nullptr;
-      if (search != config_namespace.document_metadata_by_document.end()) {
-        add_template_overrides_key(
-          search->second,
-          get_request_->overrides(),
+      for (size_t i = get_request_->overrides().size(); (template_ == nullptr) && i--;) {
+        make_override_path(
+          get_request_->overrides()[i],
+          get_request_->template_(),
+          "",
+          override_path
+        );
+        with_raw_config(
+          config_namespace,
+          override_path,
           get_request_->version(),
-          overrides_key,
-          template_
+          [&template_, &overrides_key](const auto&, auto& raw_config) {
+            template_ = raw_config->template_;
+            jmutils::push_uint32(overrides_key, raw_config->id);
+          }
         );
       }
       if (template_ == nullptr) {
@@ -148,30 +121,10 @@ private:
           "Can't found a template file with the name '{}'",
           get_request_->template_()
         );
-        get_request_->set_status(
-          ::mhconfig::api::request::GetRequest::Status::ERROR
-        );
+        get_request_->set_status(api::request::GetRequest::Status::ERROR);
         return false;
       }
     }
-
-    auto search = config_namespace.document_metadata_by_document
-      .find(get_request_->document());
-
-    if (search == config_namespace.document_metadata_by_document.end()) {
-      spdlog::warn(
-        "Can't found a config file with the name '{}'",
-        get_request_->document()
-      );
-      get_request_->set_element(UNDEFINED_ELEMENT);
-      return false;
-    }
-    add_config_overrides_key(
-      search->second,
-      get_request_->overrides(),
-      get_request_->version(),
-      overrides_key
-    );
 
     return true;
   }

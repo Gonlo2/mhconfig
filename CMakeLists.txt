@@ -7,6 +7,7 @@ endif()
 
 set(CMAKE_C_COMPILER "gcc")
 set(CMAKE_CXX_COMPILER "g++")
+set(CMAKE_CXX_STANDARD 17)
 
 project(mhconfig)
 
@@ -18,14 +19,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
   set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO")
 endif()
 
-add_definitions(-std=c++17)
-
 find_package(prometheus-cpp REQUIRED)
 find_package(Catch2 REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
-add_subdirectory(build/third_party/abseil-cpp)
+add_subdirectory(third_party/abseil-cpp)
 
 # location of header files
 include_directories(${PROJECT_SOURCE_DIR}/src)
@@ -54,7 +53,6 @@ target_link_libraries(mhconfig pthread)
 target_link_libraries(mhconfig ssl.a crypto.a)
 target_link_libraries(mhconfig yaml-cpp)
 target_link_libraries(mhconfig prometheus-cpp::core prometheus-cpp::pull)
-target_link_libraries(mhconfig debug libtcmalloc.so)
 target_link_libraries(mhconfig optimized libtcmalloc_minimal.so)
 target_link_libraries(mhconfig stdc++.a stdc++fs.a)
 target_link_libraries(mhconfig gRPC::grpc++)

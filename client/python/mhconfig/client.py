@@ -155,7 +155,7 @@ class Client(object):
                 if exit:
                     break
 
-                uid, remove, version, document = payload
+                uid, remove, version, document, flavors = payload
                 if remove:
                     yield mhconfig_pb2.WatchRequest(
                         uid=uid,
@@ -168,6 +168,7 @@ class Client(object):
                         overrides=self._overrides,
                         version=version,
                         document=document,
+                        flavors=flavors,
                     )
             except:
                 traceback.print_exc()
@@ -198,7 +199,7 @@ class Client(object):
             time.sleep(1)
 
     def _on_watch_response(self, r, elements):
-        document = self._watch_document_by_uid.get(r.uid)
+        document, flavors = self._watch_document_by_uid.get(r.uid)
         if r.status == mhconfig_pb2.WatchResponse.Status.REMOVED:
             if document is not None:
                 self._watch(r.uid, 0, document)
@@ -240,7 +241,8 @@ class Client(object):
                     k: v for k, v in self._configs.items() if t <= v[0]
                 }
 
-    def get(self, document, namespace_id_and_version=None):
+    def get(self, document, namespace_id_and_version=None, flavors=None):
+        flavors = tuple(flavors or [])
         if namespace_id_and_version is None:
             time_and_result = self._latest_configs.get(document)
             if time_and_result is not None:
@@ -251,22 +253,27 @@ class Client(object):
             with self._lock:
                 self._watchers[document].append(f)
                 uid = self._next_watcher_uid
-                self._watch_document_by_uid[uid] = document
+                self._watch_document_by_uid[uid] = (document, flavors)
                 self._next_watcher_uid += 1
-            self._watch(uid, 0, document)
+            self._watch(uid, 0, document, flavors)
             status, namespace_id, version, elements = f.get()
             return (status, ((namespace_id, version), elements))
         else:
-            key = (namespace_id_and_version, document)
+            key = (namespace_id_and_version, document, flavors)
             time_and_elements = self._configs.get(key)
             if time_and_elements is None:
                 with self._lock:
                     time_and_elements = self._configs.get(key)
                     if self._latest_configs.get(document) is None:
                         uid = self._next_watcher_uid
-                        self._watch_document_by_uid[uid] = document
+                        self._watch_document_by_uid[uid] = (document, flavors)
                         self._next_watcher_uid += 1
-                        self._watch(uid, namespace_id_and_version[1], document)
+                        self._watch(
+                            uid,
+                            namespace_id_and_version[1],
+                            document,
+                            flavors,
+                        )
             if time_and_elements is not None:
                 time_and_elements[0] = time.time()
                 return (
@@ -277,33 +284,40 @@ class Client(object):
             status, namespace_id, version, elements = self._get(
                 document,
                 version=namespace_id_and_version[1],
+                flavors=flavors,
             )
             if (namespace_id, version) != namespace_id_and_version:
                 raise ServerChangedException
             if status == mhconfig_pb2.GetResponse.Status.OK:
-                key = ((namespace_id, version), document)
+                key = ((namespace_id, version), document, flavors)
                 self._configs[key] = [time.time(), elements]
             return (status, ((namespace_id, version), elements))
 
-    def _watch(self, uid, version, document):
-        self._watch_queue.put((False, (uid, False, version, document)))
+    def _watch(self, uid, version, document, flavors):
+        self._watch_queue.put((False, (uid, False, version, document, flavors)))
 
     def _unwatch(self, uid):
-        self._watch_queue.put((False, (uid, True, None, None)))
+        self._watch_queue.put((False, (uid, True, None, None, None)))
 
-    def _get(self, document, version=None, key=None):
+    def _get(self, document, version=None, flavors=None):
         request = mhconfig_pb2.GetRequest(
             root_path=self._root_path,
             overrides=self._overrides,
             document=document,
-            key=key or [],
             version=version or 0,
+            flavors=flavors or [],
         )
         response = self._stub.Get(request)
         elements = _decode(response.elements, 0) \
             if response.elements \
             else UndefinedElement
-        return (response.status, response.namespace_id, response.version, elements)
+
+        return (
+            response.status,
+            response.namespace_id,
+            response.version,
+            elements,
+        )
 
 
 class Session(object):
@@ -313,15 +327,18 @@ class Session(object):
         self._namespace_id_and_version = None
         self._configs = {}
 
-    def get(self, document):
-        config = self._configs.get(document)
+    def get(self, document, flavors=None):
+        flavors = tuple(flavors or [])
+        key = (document, flavors)
+        config = self._configs.get(key)
         if config is not None:
             return (mhconfig_pb2.WatchResponse.Status.OK, config)
 
         status, (self._namespace_id_and_version, config) = self._mhconfig.get(
             document,
             namespace_id_and_version=self._namespace_id_and_version,
+            flavors=flavors,
         )
         if status == mhconfig_pb2.WatchResponse.Status.OK:
-            self._configs[document] = config
+            self._configs[key] = config
         return (status, config)

@@ -30,7 +30,7 @@ public:
   UpdateDocumentsCommand(
     uint64_t namespace_id,
     std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request,
-    std::vector<load_raw_config_result_t>&& items
+    absl::flat_hash_map<std::string, load_raw_config_result_t>&& items
   );
 
   virtual ~UpdateDocumentsCommand();
@@ -53,15 +53,15 @@ public:
 private:
   uint64_t namespace_id_;
   std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request_;
-  std::vector<load_raw_config_result_t> items_;
+  absl::flat_hash_map<std::string, load_raw_config_result_t> items_;
 
   void send_api_response(
     WorkerQueue& worker_queue
   );
 
-  void fill_config_to_remove(
+  void add_items_to_remove(
     config_namespace_t& config_namespace,
-    std::vector<std::pair<std::string, std::string>>& result
+    std::vector<std::pair<std::string, load_raw_config_result_t>>& result
   );
 
   void filter_existing_documents(
@@ -72,19 +72,9 @@ private:
     config_namespace_t& config_namespace
   );
 
-  void increment_version_of_the_affected_documents(
-    config_namespace_t& config_namespace,
-    absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
-  );
-
   void insert_updated_documents(
     config_namespace_t& config_namespace,
     absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
-  );
-
-  void get_affected_documents(
-    const config_namespace_t& config_namespace,
-    absl::flat_hash_set<std::string>& affected_documents
   );
 
 };

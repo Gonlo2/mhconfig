@@ -8,7 +8,7 @@ namespace scheduler
 UpdateDocumentsCommand::UpdateDocumentsCommand(
   uint64_t namespace_id,
   std::shared_ptr<::mhconfig::api::request::UpdateRequest> update_request,
-  std::vector<load_raw_config_result_t>&& items
+  absl::flat_hash_map<std::string, load_raw_config_result_t>&& items
 )
   : SchedulerCommand(),
   namespace_id_(namespace_id),
@@ -41,29 +41,18 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
 
   update_request_->set_namespace_id(config_namespace.id);
 
-  std::vector<std::pair<std::string, std::string>> to_remove;
+  std::vector<std::pair<std::string, load_raw_config_result_t>> extra_items;
   if (update_request_->reload()) {
     spdlog::debug("Obtaining the existing documents to remove");
-    fill_config_to_remove(config_namespace, to_remove);
+    add_items_to_remove(config_namespace, extra_items);
   }
 
   spdlog::debug("Filtering the existing documents");
   filter_existing_documents(config_namespace);
 
-  size_t l1 = items_.size();
-  size_t l2 = to_remove.size();
-  items_.resize(l1 + l2);
-  for (size_t i = 0; i < l2; ++i) {
-    spdlog::debug(
-      "Adding a document to remove (document: '{}', override: '{}')",
-      to_remove[i].first,
-      to_remove[i].second
-    );
-
-    items_[l1+i].status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-    items_[l1+i].document = to_remove[i].first;
-    items_[l1+i].override_ = to_remove[i].second;
-    items_[l1+i].raw_config = nullptr;
+  items_.reserve(items_.size() + extra_items.size());
+  for (size_t i = 0, l = extra_items.size(); i < l; ++i) {
+    items_.emplace(std::move(extra_items[i]));
   }
 
   if (items_.empty()) {
@@ -88,10 +77,35 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
     spdlog::debug("Decreasing the referenced_by counter of the previous raw config");
     decrease_references(config_namespace);
 
-    absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers_to_trigger;
+    absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>> watchers_to_trigger;
 
     spdlog::debug("Updating the ids of the affected documents");
-    increment_version_of_the_affected_documents(config_namespace, watchers_to_trigger);
+
+    absl::flat_hash_map<
+      std::pair<std::string, std::string>,
+      absl::flat_hash_map<std::string, builder::AffectedDocumentStatus>
+    > updated_documents_by_flavor_and_override;
+
+    // If some config will be removed and it use a dependency we need to put
+    // a dummy version to invalidate the cache
+    for (auto& it : items_) {
+      auto key = std::make_pair(it.second.flavor, it.second.override_);
+      auto status = (it.second.status == LoadRawConfigStatus::FILE_DONT_EXISTS)
+        ? builder::AffectedDocumentStatus::TO_REMOVE
+        : builder::AffectedDocumentStatus::TO_ADD;
+
+      updated_documents_by_flavor_and_override[key].emplace(
+        it.second.document,
+        status
+      );
+    }
+
+    builder::increment_version_of_the_affected_documents(
+      config_namespace,
+      updated_documents_by_flavor_and_override,
+      watchers_to_trigger,
+      false
+    );
 
     spdlog::debug("Inserting the elements of the updated documents");
     insert_updated_documents(config_namespace, watchers_to_trigger);
@@ -113,7 +127,7 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
     }
 
     if (
-      (config_namespace.next_raw_config_id >= 0xff000000)
+      (config_namespace.next_raw_config_id >= 0xff000000) // TODO check a better way to do this
       || (config_namespace.current_version >= 0xfffffff0)
     ) {
       spdlog::warn(
@@ -127,7 +141,6 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
   update_request_->set_status(::mhconfig::api::request::UpdateRequest::Status::OK);
   update_request_->set_version(config_namespace.current_version);
   send_api_response(worker_queue);
-
 
   return result;
 }
@@ -151,29 +164,19 @@ void UpdateDocumentsCommand::send_api_response(
   );
 }
 
-void UpdateDocumentsCommand::fill_config_to_remove(
+void UpdateDocumentsCommand::add_items_to_remove(
   config_namespace_t& config_namespace,
-  std::vector<std::pair<std::string, std::string>>& result
+  std::vector<std::pair<std::string, load_raw_config_result_t>>& result
 ) {
-  absl::flat_hash_map<std::string, std::set<std::string>> new_configs;
-  for (size_t i = 0; i < items_.size(); ++i) {
-    new_configs[items_[i].document].insert(items_[i].override_);
-  }
+  for (const auto it: config_namespace.override_metadata_by_override_path) {
+    if (has_last_version(it.second) && (items_.count(it.first) == 0)) {
+      spdlog::debug("Adding the override path '{}' to remove", it.first);
 
-  for (const auto document_metadata_it: config_namespace.document_metadata_by_document) {
-    auto search = new_configs.find(document_metadata_it.first);
-    if (search == new_configs.end()) {
-      for (const auto override_it : document_metadata_it.second.override_by_key) {
-        if (has_last_version(override_it.second)) {
-          result.emplace_back(document_metadata_it.first, override_it.first);
-        }
-      }
-    } else {
-      for (const auto override_it : document_metadata_it.second.override_by_key) {
-        if ((search->second.count(override_it.first) == 0) && has_last_version(override_it.second)) {
-          result.emplace_back(document_metadata_it.first, override_it.first);
-        }
-      }
+      load_raw_config_result_t item;
+      item.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
+      split_override_path(it.first, item.override_, item.document, item.flavor);
+      item.raw_config = nullptr;
+      result.emplace_back(it.first, std::move(item));
     }
   }
 }
@@ -181,136 +184,62 @@ void UpdateDocumentsCommand::fill_config_to_remove(
 void UpdateDocumentsCommand::filter_existing_documents(
   config_namespace_t& config_namespace
 ) {
-  for (size_t i = 0; i < items_.size();) {
-    bool move_to_next = true;
+  std::vector<std::string> override_paths_to_remove;
 
-    if (items_[i].status == LoadRawConfigStatus::OK) {
-      auto document_metadata_search = config_namespace.document_metadata_by_document
-        .find(items_[i].document);
-
-      if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-        with_raw_config(
-          document_metadata_search->second,
-          items_[i].override_,
-          0,
-          [&](const auto& raw_config) {
-            if (raw_config->crc32 == items_[i].raw_config->crc32) {
-              spdlog::debug(
-                "Filtering the existing raw config (document: '{}', override: '{}', crc32: {:X})",
-                items_[i].document,
-                items_[i].override_,
-                raw_config->crc32
-              );
-              jmutils::swap_delete(items_, i);
-              move_to_next = false;
-            }
+  for (const auto& it: items_) {
+    if (it.second.status == LoadRawConfigStatus::OK) {
+      uint32_t new_crc32 = it.second.raw_config->crc32;
+      with_raw_config(
+        config_namespace,
+        it.first,
+        0,
+        [&override_paths_to_remove, new_crc32](const auto& override_path, const auto& raw_config) {
+          if (raw_config->has_content && (raw_config->crc32 == new_crc32)) {
+            spdlog::debug(
+              "Filtering the existing raw config (override_path: '{}', crc32: {:X})",
+              override_path,
+              new_crc32
+            );
+            override_paths_to_remove.push_back(override_path);
           }
-        );
-      }
+        }
+      );
     }
+  }
 
-    if (move_to_next) ++i;
+  for (const auto& override_path : override_paths_to_remove) {
+    items_.erase(override_path);
   }
 }
 
 void UpdateDocumentsCommand::decrease_references(
   config_namespace_t& config_namespace
 ) {
-  for (auto& item : items_) {
-    auto document_metadata_search = config_namespace.document_metadata_by_document
-      .find(item.document);
-
-    if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-      with_raw_config(
-        document_metadata_search->second,
-        item.override_,
-        0,
-        [&](const auto& raw_config) {
+  for (auto& it : items_) {
+    with_raw_config(
+      config_namespace,
+      it.first,
+      0,
+      [&config_namespace, &it](const auto& override_path, const auto& raw_config) {
+        if (raw_config->has_content) {
           for (const auto& reference_to : raw_config->reference_to) {
             auto& referenced_by = config_namespace
-              .document_metadata_by_document[reference_to]
-              .referenced_by;
+              .referenced_by_by_document[reference_to];
 
             spdlog::debug(
-              "Decreasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
-              item.document,
+              "Decreasing referenced_by counter (override_path: '{}', reference_to: '{}', counter: {})",
+              override_path,
               reference_to,
-              referenced_by[item.document].v,
-              item.override_
+              referenced_by[it.second.document].v
             );
 
-            if (referenced_by[item.document].v-- <= 1) {
-              referenced_by.erase(item.document);
+            if (referenced_by[it.second.document].v-- <= 1) {
+              referenced_by.erase(it.second.document);
             }
           }
         }
-      );
-    }
-  }
-}
-
-void UpdateDocumentsCommand::increment_version_of_the_affected_documents(
-  config_namespace_t& config_namespace,
-  absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
-) {
-  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>> updated_documents_by_override;
-  for (auto& item : items_) {
-    updated_documents_by_override[item.override_].insert(item.document);
-  }
-
-  for (auto& updated_documents_it : updated_documents_by_override) {
-    absl::flat_hash_set<std::string> affected_documents(
-      updated_documents_it.second.begin(),
-      updated_documents_it.second.end()
-    );
-
-    get_affected_documents(config_namespace, affected_documents);
-
-    for (const auto& document : updated_documents_it.second) {
-      affected_documents.erase(document);
-    }
-
-    for (const auto& document : affected_documents) {
-      auto& document_metadata = config_namespace
-        .document_metadata_by_document[document];
-
-      with_raw_config(
-        document_metadata,
-        updated_documents_it.first,
-        0,
-        [&](const auto& raw_config) {
-          spdlog::debug(
-            "Updating affected raw config id (document: '{}', override: '{}', old_id: {}, new_id: {})",
-            document,
-            updated_documents_it.first,
-            raw_config->id,
-            config_namespace.next_raw_config_id
-          );
-
-          auto new_raw_config = raw_config->clone(
-            config_namespace.next_raw_config_id++
-          );
-
-          document_metadata.override_by_key[updated_documents_it.first]
-            .raw_config_by_version[config_namespace.current_version] = std::move(new_raw_config);
-        }
-      );
-
-      auto override_search = document_metadata.override_by_key
-        .find(updated_documents_it.first);
-
-      if (override_search != document_metadata.override_by_key.end()) {
-        auto& watchers = override_search->second.watchers;
-        for (size_t i = 0; i < watchers.size();) {
-          if (auto watcher = watchers[i].lock()) {
-            watchers_to_trigger.insert(watcher);
-            ++i;
-          } else {
-            jmutils::swap_delete(watchers, i);
-          }
-        }
       }
-    }
+    );
   }
 }
 
@@ -318,88 +247,51 @@ void UpdateDocumentsCommand::insert_updated_documents(
   config_namespace_t& config_namespace,
   absl::flat_hash_set<std::shared_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers_to_trigger
 ) {
-  for (auto& item : items_) {
-    auto document_metadata_search = config_namespace.document_metadata_by_document
-      .find(item.document);
+  for (auto& it : items_) {
+    auto& override_metadata = config_namespace.override_metadata_by_override_path[it.first];
 
-    if (item.raw_config == nullptr) {
-      spdlog::debug(
-        "Removing a raw config (document: '{}', override: '{}')",
-        item.document,
-        item.override_
+    if (it.second.status == LoadRawConfigStatus::FILE_DONT_EXISTS) {
+      spdlog::debug("Removing raw config if possible (override_path: '{}')", it.first);
+
+      override_metadata.raw_config_by_version.try_emplace(
+        config_namespace.current_version,
+        nullptr
       );
-      if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-        document_metadata_search->second.override_by_key[item.override_]
-          .raw_config_by_version[config_namespace.current_version] = nullptr;
-      }
     } else {
-      for (const auto& reference_to : item.raw_config->reference_to) {
-        auto& referenced_document_metadata = config_namespace.document_metadata_by_document[reference_to];
+      for (const auto& reference_to : it.second.raw_config->reference_to) {
+        auto& counter = config_namespace.referenced_by_by_document[reference_to][it.second.document];
 
         spdlog::debug(
-          "Increasing referenced_by counter (document: '{}', reference_to: '{}', counter: {}, override: '{}')",
-          item.document,
+          "Increasing referenced_by counter (override_path: '{}', reference_to: '{}', counter: {})",
+          it.first,
           reference_to,
-          referenced_document_metadata.referenced_by[item.document].v,
-          item.override_
+          counter.v
         );
 
-        referenced_document_metadata.referenced_by[item.document].v += 1;
+        counter.v += 1;
       }
 
-      auto& document_metadata = config_namespace.document_metadata_by_document[item.document];
       spdlog::debug(
-        "Updating a raw config (document: '{}', override: '{}', new_id: {})",
-        item.document,
-        item.override_,
+        "Updating raw config (override_path: '{}', old_id: {}, new_id: {})",
+        it.first,
+        it.second.raw_config->id,
         config_namespace.next_raw_config_id
       );
 
-      item.raw_config->id = config_namespace.next_raw_config_id++;
-      document_metadata.override_by_key[item.override_]
-        .raw_config_by_version[config_namespace.current_version] = item.raw_config;
+      it.second.raw_config->id = config_namespace.next_raw_config_id++;
+
+      override_metadata.raw_config_by_version.emplace(
+        config_namespace.current_version,
+        std::move(it.second.raw_config)
+      );
     }
 
-    if (document_metadata_search != config_namespace.document_metadata_by_document.end()) {
-      auto override_search = document_metadata_search->second
-        .override_by_key
-        .find(item.override_);
-
-      if (override_search != document_metadata_search->second.override_by_key.end()) {
-        auto& watchers = override_search->second.watchers;
-        for (size_t i = 0; i < watchers.size();) {
-          if (auto watcher = watchers[i].lock()) {
-            watchers_to_trigger.insert(watcher);
-            ++i;
-          } else {
-            jmutils::swap_delete(watchers, i);
-          }
-        }
-      }
-    }
-  }
-}
-
-void UpdateDocumentsCommand::get_affected_documents(
-  const config_namespace_t& config_namespace,
-  absl::flat_hash_set<std::string>& affected_documents
-) {
-  std::vector<std::string> to_check(
-    affected_documents.begin(),
-    affected_documents.end()
-  );
-
-  while (!to_check.empty()) {
-    std::string doc = to_check.back();
-    to_check.pop_back();
-
-    auto search = config_namespace.document_metadata_by_document.find(doc);
-    if (search != config_namespace.document_metadata_by_document.end()) {
-      for (const auto& referenced_document_it : search->second.referenced_by) {
-        auto inserted = affected_documents.insert(referenced_document_it.first);
-        if (inserted.second) {
-          to_check.push_back(referenced_document_it.first);
-        }
+    for (size_t i = 0; i < override_metadata.watchers.size();) {
+      if (auto watcher = override_metadata.watchers[i].lock()) {
+        watchers_to_trigger.insert(watcher);
+        ++i;
+      } else {
+        jmutils::swap_delete(override_metadata.watchers, i);
       }
     }
   }

@@ -34,6 +34,10 @@ const std::vector<std::string>& GetRequestImpl::overrides() const {
   return overrides_;
 }
 
+const std::vector<std::string>& GetRequestImpl::flavors() const {
+  return flavors_;
+}
+
 const std::string& GetRequestImpl::document() const {
   return request_->document();
 }
@@ -110,6 +114,7 @@ void GetRequestImpl::request(
   );
   if (status.ok()) {
     overrides_ = to_vector(request_->overrides());
+    flavors_ = to_vector(request_->flavors());
 
     scheduler_sender->push(
       std::make_unique<scheduler::ApiGetCommand>(

@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <memory>
+#include <deque>
 
 #include <boost/functional/hash.hpp>
 
@@ -30,14 +31,17 @@ const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 struct raw_config_t {
   uint32_t id{0};
   uint32_t crc32{0};
+  // TODO Add in the empty space a u63 with the last modification timestamp
+  bool has_content{false};
   Element value;
   std::shared_ptr<inja::Template> template_{nullptr};
   std::vector<std::string> reference_to;
 
-  std::shared_ptr<raw_config_t> clone(uint32_t new_id) {
+  std::shared_ptr<raw_config_t> clone() {
     auto result = std::make_shared<raw_config_t>();
-    result->id = new_id;
+    result->id = id;
     result->crc32 = crc32;
+    result->has_content = has_content;
     result->value = value;
     result->template_ = template_;
     result->reference_to = reference_to;
@@ -74,26 +78,13 @@ struct override_metadata_t {
   std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
 };
 
-//TODO Check if it's better use a unique_ptr for this to avoid copy
-// the data in the hash table rebuilds
-struct document_metadata_t {
-  absl::flat_hash_map<std::string, override_metadata_t> override_by_key;
-  absl::flat_hash_map<std::string, ::jmutils::zero_value_t<uint32_t>> referenced_by;
-};
-
 // TODO move to the builder file
 namespace build {
   struct build_element_t {
+    bool to_build{true};
     mhconfig::Element config;
-
     std::string name;
     std::string overrides_key;
-    bool to_build{true};
-
-    absl::flat_hash_map<
-      std::string,
-      std::shared_ptr<raw_config_t>
-    > raw_config_by_override;
   };
 
   struct wait_built_t {
@@ -105,6 +96,11 @@ namespace build {
     std::string overrides_key;
     std::string preprocesed_value;
     std::vector<build_element_t> elements_to_build;
+
+    absl::flat_hash_map<
+      std::string,
+      std::shared_ptr<raw_config_t>
+    > raw_config_by_override_path;
   };
 }
 
@@ -118,14 +114,21 @@ struct config_namespace_t {
 
   std::shared_ptr<::string_pool::Pool> pool;
 
-  absl::flat_hash_map<std::string, document_metadata_t> document_metadata_by_document;
+  //TODO Check if it's better use a unique_ptr for this to avoid copy
+  // the data in the hash table rebuilds
+  absl::flat_hash_map<
+    std::string,
+    absl::flat_hash_map<std::string, ::jmutils::zero_value_t<uint32_t>>
+  > referenced_by_by_document;
+
+  absl::flat_hash_map<std::string, override_metadata_t> override_metadata_by_override_path;
 
   absl::flat_hash_map<
     std::string,
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
 
-  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
+  std::vector<std::weak_ptr<api::stream::WatchInputMessage>> watchers;
 
   std::vector<
     std::shared_ptr<merged_config_t>
@@ -136,7 +139,7 @@ struct config_namespace_t {
     std::vector<std::shared_ptr<build::wait_built_t>>
   > wait_builts_by_key;
 
-  std::list<std::pair<uint64_t, uint32_t>> stored_versions_by_deprecation_timestamp;
+  std::deque<std::pair<uint64_t, uint32_t>> stored_versions_by_deprecation_timestamp;
 };
 
 } /* mhconfig */

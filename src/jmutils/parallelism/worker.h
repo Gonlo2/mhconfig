@@ -124,11 +124,9 @@ public:
   }
 
   bool start() {
-    int res;
-
     pthread_attr_t* attr = use_attr_ ? &attr_ : nullptr;
 
-    if (res = pthread_create(&thread_, attr, (void* (*)(void*)) &Worker::run, this)) {
+    if (int res = pthread_create(&thread_, attr, (void* (*)(void*)) &Worker::run, this)) {
       spdlog::error("The pthread_create return a error {}", res);
       return false;
     }
@@ -137,7 +135,7 @@ public:
 
     if (use_attr_) {
       use_attr_ = false;
-      if (res = pthread_attr_destroy(&attr_)) {
+      if (int res = pthread_attr_destroy(&attr_)) {
         spdlog::error("The pthread_attr_destroy return a error {}", res);
         return false;
       }
@@ -167,14 +165,12 @@ private:
 
   bool ensure_attr_is_init() {
     if (!use_attr_) {
-      int res;
-
-      if (res = pthread_attr_init(&attr_)) {
+      if (int res = pthread_attr_init(&attr_)) {
         spdlog::error("The pthread_attr_init return a error {}", res);
         return false;
       }
 
-      if (res = pthread_attr_setinheritsched(&attr_, PTHREAD_EXPLICIT_SCHED)) {
+      if (int res = pthread_attr_setinheritsched(&attr_, PTHREAD_EXPLICIT_SCHED)) {
         spdlog::error("The pthread_attr_setinheritsched return a error {}", res);
         return false;
       }
@@ -184,17 +180,17 @@ private:
   }
 
   void* run(void* _) noexcept {
-    spdlog::debug("Starting the worker {}", (void*)this);
+    spdlog::trace("Starting the worker {}", (void*)this);
     static_cast<Parent*>(this)->on_start();
 
-    Event event;
     std::string name;
     uint_fast32_t sequential_id = 0;
 
     while (true) {
-      spdlog::debug("The worker is waiting for a command");
+      Event event;
+      spdlog::trace("The worker is waiting for a command");
       if (!static_cast<Parent*>(this)->pop(event)) {
-        spdlog::debug("The queue has been closed");
+        spdlog::trace("The queue has been closed");
         break;
       }
 
@@ -219,7 +215,7 @@ private:
       sequential_id = (sequential_id+1) & 0xefffffff;
     }
 
-    spdlog::debug("Stoping the worker {}", (void*)this);
+    spdlog::trace("Stoping the worker {}", (void*)this);
     static_cast<Parent*>(this)->on_stop();
 
     return nullptr;

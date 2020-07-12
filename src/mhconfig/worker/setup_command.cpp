@@ -24,12 +24,9 @@ bool SetupCommand::force_take_metric() const {
 bool SetupCommand::execute(
   context_t& context
 ) {
-  auto config_namespace = mhconfig::builder::index_files(
-    path_,
-    context.metrics_service
-  );
+  auto config_namespace = builder::make_config_namespace(path_, context.metrics_service);
   context.scheduler_queue->push(
-    std::make_unique<scheduler::AddNamespaceCommand>(config_namespace)
+    std::make_unique<scheduler::AddNamespaceCommand>(std::move(config_namespace))
   );
   return true;
 }

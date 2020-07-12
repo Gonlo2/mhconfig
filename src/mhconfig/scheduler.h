@@ -101,20 +101,42 @@ private:
   ) {
     switch (command->type()) {
       case SchedulerCommand::CommandType::ADD_NAMESPACE: {
-        auto inserted_value = context_.namespace_by_id.emplace(
-          command->namespace_id(),
-          command->config_namespace()
-        );
-        assert(inserted_value.second);
-
-        context_.namespace_by_path[command->namespace_path()] = command->config_namespace();
-
         auto search = context_.commands_waiting_for_namespace_by_path
           .find(command->namespace_path());
 
-        for (auto& x: search->second) {
-          scheduler_queue_.push(std::move(x));
+        auto config_namespace = command->config_namespace().get();
+        if ((config_namespace == nullptr) || !config_namespace->ok) {
+          spdlog::trace(
+            "Some error take place building the namespace {} with root_path {}",
+            command->namespace_id(),
+            command->namespace_path()
+          );
+
+          for (auto& command: search->second) {
+            command->on_get_namespace_error(context_.worker_queue);
+          }
+        } else {
+          spdlog::trace(
+            "Adding namespace {} with root_path {}",
+            command->namespace_id(),
+            command->namespace_path()
+          );
+          auto inserted_value = context_.namespace_by_id.try_emplace(
+            command->namespace_id(),
+            command->config_namespace()
+          );
+          assert(inserted_value.second);
+
+          context_.namespace_by_path.emplace(
+            command->namespace_path(),
+            command->config_namespace()
+          );
+
+          for (auto& x: search->second) {
+            scheduler_queue_.push(std::move(x));
+          }
         }
+
         context_.commands_waiting_for_namespace_by_path.erase(search);
 
         return true;

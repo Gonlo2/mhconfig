@@ -17,10 +17,6 @@ namespace string_pool
 {
 
   namespace {
-    inline size_t align(size_t size) {
-      return (size + 7) & ~7;
-    }
-
     const static char* CODED_VALUE_TO_ASCII_CHAR = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
     const static char ASCII_CHAR_TO_CODED_VALUE[] = {127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 63, 127, 127, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 127, 127, 127, 127, 127, 127, 127, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 127, 127, 127, 127, 62, 127, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127};
 
@@ -180,13 +176,18 @@ struct stats_t {
 class StatsObserver
 {
 public:
-  StatsObserver() {
-  }
   virtual ~StatsObserver() {
   }
 
   virtual void on_updated_stats(const stats_t& stats, bool force) {
   }
+};
+
+struct pool_context_t {
+  absl::flat_hash_set<String> set;
+  absl::Mutex mutex;
+  stats_t stats;
+  bool active{true};
 };
 
 class Pool final
@@ -210,17 +211,14 @@ public:
 private:
   friend class Chunk;
 
-  absl::flat_hash_set<String> set_;
-  absl::Mutex mutex_;
-  std::vector<Chunk*> chunks_;
-  stats_t stats_;
   std::unique_ptr<StatsObserver> stats_observer_;
+  std::shared_ptr<pool_context_t> pool_context_;
+  std::vector<Chunk*> chunks_;
 
   const String store_string(const std::string& str);
 
   Chunk* new_chunk();
 };
-
 
 class Chunk final
 {
@@ -234,13 +232,13 @@ private:
   std::atomic<int32_t> fragmented_size_;
   uint32_t next_data_;
   uint32_t next_string_in_use_;
-  Pool* pool_;
+  std::shared_ptr<pool_context_t> pool_context_;
   absl::Mutex mutex_;
   uint16_t strings_in_use_[CHUNK_STRING_SIZE];
   char data_[CHUNK_DATA_SIZE];
   InternalString strings_[CHUNK_STRING_SIZE];
 
-  explicit Chunk(Pool* pool);
+  explicit Chunk(std::shared_ptr<pool_context_t> pool_context);
   ~Chunk();
 
   Chunk(const Chunk& o) = delete;
@@ -249,30 +247,22 @@ private:
   Chunk& operator=(const Chunk& o) = delete;
   Chunk& operator=(Chunk&& o) = delete;
 
-  void remove_pool();
-
   inline void decrement_refcount() {
     if (refcount_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      spdlog::trace("Destroying the chunk {}", (void*) this);
       this->~Chunk();
-      delete this;
+      free(this);
     }
   }
 
   void released_string(uint32_t size);
 
-  String add(const std::string& str, stats_t& stats);
+  String add(const std::string& str);
 
-  inline void compact(absl::flat_hash_set<String>& set, stats_t& stats) {
-    mutex_.Lock();
-    unsafe_compact(set, stats);
-    mutex_.Unlock();
-  }
-
-  void unsafe_compact(absl::flat_hash_set<String>& set, stats_t& stats);
+  void compact();
 
   void reallocate(InternalString* s);
 };
-
 
 
 inline bool operator==(const InternalString& lhs, const InternalString& rhs) {

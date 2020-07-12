@@ -77,8 +77,6 @@ if ! $ONLY_INSTALL ; then
 fi
 
 prepare_protobuf
-#TODO probably this isn't neccesary because it was loaded in the cmakelist, take a look on it
-prepare_third_party abseil-cpp
 prepare_third_party grpc "-DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF"
 prepare_third_party inja
 prepare_third_party json

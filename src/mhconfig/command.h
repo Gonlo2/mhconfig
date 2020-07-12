@@ -60,6 +60,7 @@ public:
     {}
   };
 
+  SchedulerCommand() {}
   virtual ~SchedulerCommand();
 
   virtual std::string name() const = 0;

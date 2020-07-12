@@ -117,8 +117,10 @@ private:
       try {
         auto session = static_cast<Session*>(event.second);
         if (event.first) {
+          spdlog::trace("Obtained the proceed gRPC event {}", (void*) session);
           session->proceed(service_, cq_.get(), sender_.get(), metrics_, request_id_);
         } else {
+          spdlog::trace("Obtained the destroy gRPC event {}", (void*) session);
           session->destroy();
         }
         return true;

@@ -105,29 +105,30 @@ bool BuildCommand::execute(
     spdlog::debug("Building the document '{}'", build_element.name);
 
     if (build_element.to_build) {
-      size_t override_id = 0;
+      bool first_config = true;
       Element config;
-      while ((override_id < wait_build_->request->overrides().size()) && config.is_undefined()) {
-        auto search = build_element.raw_config_by_override
-          .find(wait_build_->request->overrides()[override_id]);
-        if (search != build_element.raw_config_by_override.end()) {
-          config = search->second->value;
-        }
-        ++override_id;
-      }
 
-      while (override_id < wait_build_->request->overrides().size()) {
-        auto search = build_element.raw_config_by_override
-          .find(wait_build_->request->overrides()[override_id]);
-        if (search != build_element.raw_config_by_override.end()) {
-          config = mhconfig::builder::override_with(
-            config,
-            search->second->value,
-            ref_elements_by_document
-          );
+      builder::for_each_document_override_path(
+        wait_build_->request->flavors(),
+        wait_build_->request->overrides(),
+        build_element.name,
+        [this, &first_config, &config, &ref_elements_by_document](const auto& override_path) {
+          auto search = wait_build_->raw_config_by_override_path
+            .find(override_path);
+          if (search != wait_build_->raw_config_by_override_path.end()) {
+            if (first_config) {
+              config = search->second->value;
+              first_config = false;
+            } else {
+              config = builder::override_with(
+                config,
+                search->second->value,
+                ref_elements_by_document
+              );
+            }
+          }
         }
-        ++override_id;
-      }
+      );
 
       if (!config.is_undefined()) {
         mhconfig::builder::apply_tags(
@@ -144,8 +145,8 @@ bool BuildCommand::execute(
   }
 
   if (wait_build_->template_ == nullptr) {
-    ::mhconfig::proto::GetResponse get_response;
-    ::mhconfig::api::config::fill_elements(
+    proto::GetResponse get_response;
+    api::config::fill_elements(
       wait_build_->elements_to_build.back().config,
       &get_response,
       get_response.add_elements()
