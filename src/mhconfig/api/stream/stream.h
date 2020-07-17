@@ -8,6 +8,8 @@
 #include <chrono>
 #include <queue>
 
+#include <absl/synchronization/mutex.h>
+
 #include "mhconfig/api/session.h"
 #include "mhconfig/metrics/metrics_service.h"
 #include "jmutils/time.h"
@@ -21,7 +23,7 @@ namespace api
 namespace stream
 {
 
-template <typename Req, typename Resp, typename OutMsg>
+template <typename GrpcStream, typename OutMsg>
 class Stream : public Session
 {
 public:
@@ -36,130 +38,99 @@ public:
 
   //TODO move this function to the private sections and make the
   //class Service friend of this
-  std::shared_ptr<Session> proceed(
+  void on_proceed(
+    uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
     SchedulerQueue::Sender* scheduler_sender,
     metrics::MetricsService& metrics,
     uint_fast32_t& sequential_id
   ) override {
-    std::lock_guard<std::recursive_mutex> mlock(mutex_);
-    if (is_destroyed()) {
-      spdlog::debug("Isn't possible call to proceed in a destroyed request");
-    } else {
-      spdlog::debug("Received gRPC event {} in {} status", name(), status());
-
-      if (status_ == Status::CREATE) {
-        status_ = Status::PROCESS;
-
+    switch (static_cast<Status>(status)) {
+      case Status::CREATE:
         clone_and_subscribe(service, cq);
-
         //TODO add request metrics
-        prepare_next_request();
-      } else if (status_ == Status::PROCESS) {
-        request(scheduler_sender);
-        prepare_next_request();
+        on_create(scheduler_sender);
+        break;
+      case Status::READ:
+        on_read(scheduler_sender);
+        break;
+      case Status::WRITE:
+        mutex_.Lock();
+        sending_a_message_ = false;
         send_message_if_neccesary();
-      } else if (status_ == Status::WRITING) {
-        status_ = Status::PROCESS;
-        send_message_if_neccesary();
-      } else if (status_ == Status::FINISH) {
-        return destroy();
-      } else {
-        assert(false);
-      }
+        mutex_.Unlock();
+        break;
+      case Status::FINISH:
+        break;
     }
-    return nullptr;
-  }
-
-  std::shared_ptr<Session> destroy() override final {
-    std::lock_guard<std::recursive_mutex> mlock(mutex_);
-    ctx_.TryCancel();  //TODO This is the correct way to handle this?
-    while (!messages_to_send_.empty()) {
-      messages_to_send_.pop();
-    }
-    return Session::destroy();
   }
 
 protected:
-  grpc::ServerAsyncReaderWriter<Resp, Req> stream_;
+  enum class Status {
+    CREATE = 0,
+    READ = 1,
+    WRITE = 2,
+    FINISH = 7
+  };
+
+  GrpcStream stream_;
+
+  inline void* tag(Status status) {
+    return raw_tag(static_cast<uint8_t>(status));
+  }
 
   //TODO Use this with CRTP
-  virtual void prepare_next_request() = 0;
+  virtual void on_create(
+    SchedulerQueue::Sender* scheduler_sender
+  ) = 0;
 
   //TODO Use this with CRTP
-  virtual void request(
+  virtual void on_read(
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
 
   bool send(std::shared_ptr<OutMsg> message, bool finish) {
-    std::lock_guard<std::recursive_mutex> mlock(mutex_);
-    if (going_to_finish_ || is_destroyed()) {
-      return false;
+    mutex_.Lock();
+    bool ok = !going_to_finish_;
+    if (ok) {
+      going_to_finish_ = finish;
+      messages_to_send_.push_back(message);
+      send_message_if_neccesary();
     }
-
-    going_to_finish_ = finish;
-    messages_to_send_.push(message);
-
-    switch (status_) {
-      case Status::CREATE:
-        assert(false); // If we are here we have a problem
-      case Status::PROCESS:
-        send_message_if_neccesary();
-        return true;
-      case Status::WRITING:
-        return true;
-      case Status::FINISH:
-        return false;
-    }
-
-    assert(false); // If we are here we have a problem
+    mutex_.Unlock();
+    return ok;
   }
 
 private:
-  enum class Status {
-    CREATE,
-    PROCESS,
-    WRITING,
-    FINISH
-  };
-
-  Status status_{Status::CREATE};
-
-  std::queue<std::shared_ptr<OutMsg>> messages_to_send_;
+  std::deque<std::shared_ptr<OutMsg>> messages_to_send_;
+  absl::Mutex mutex_;
   bool going_to_finish_{false};
+  bool sending_a_message_{false};
 
   void send_message_if_neccesary() {
-    if (!messages_to_send_.empty()) {
-      auto message = messages_to_send_.front();
-      messages_to_send_.pop();
-      bool finish = going_to_finish_ && messages_to_send_.empty();
-      if (finish) {
-        stream_.WriteAndFinish(
-          message->response_,
-          grpc::WriteOptions(),
-          grpc::Status::OK,
-          tag()
-        );
-      } else {
-        stream_.Write(
-          message->response_,
-          tag()
-        );
+    if (!sending_a_message_ && !messages_to_send_.empty()) {
+      if (auto t = tag(Status::WRITE)) {
+        spdlog::trace("Sending a message in the stream {}", (void*) this);
+        auto message = messages_to_send_.front();
+        messages_to_send_.pop_front();
+        bool finish = going_to_finish_ && messages_to_send_.empty();
+        if (finish) {
+          stream_.WriteAndFinish(
+            message->response(),
+            grpc::WriteOptions(),
+            grpc::Status::OK,
+            t
+          );
+        } else {
+          stream_.Write(
+            message->response(),
+            t
+          );
+        }
+        sending_a_message_ = true;
       }
-      status_ = finish ? Status::FINISH : Status::WRITING;
     }
-  }
-
-  const std::string status() {
-    switch (status_) {
-      case Status::CREATE: return "CREATE";
-      case Status::PROCESS: return "PROCESS";
-      case Status::WRITING: return "WRITING";
-      case Status::FINISH: return "FINISH";
-    }
-
-    return "unknown";
   }
 
 };

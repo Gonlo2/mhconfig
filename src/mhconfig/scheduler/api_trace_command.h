@@ -1,18 +1,14 @@
-#ifndef MHCONFIG__SCHEDULER__API_WATCH_COMMAND_H
-#define MHCONFIG__SCHEDULER__API_WATCH_COMMAND_H
+#ifndef MHCONFIG__SCHEDULER__API_TRACE_COMMAND_H
+#define MHCONFIG__SCHEDULER__API_TRACE_COMMAND_H
 
 #include <memory>
 
 #include "mhconfig/builder.h"
-#include "mhconfig/api/request/get_request.h"
-#include "mhconfig/api/stream/watch_stream_impl.h"
-#include "mhconfig/worker/build_command.h"
+#include "mhconfig/api/stream/trace_stream_impl.h"
+#include "mhconfig/scheduler/common.h"
 #include "mhconfig/worker/api_reply_command.h"
 #include "mhconfig/worker/api_batch_reply_command.h"
 #include "mhconfig/command.h"
-#include "mhconfig/scheduler/api_get_command.h"
-#include "mhconfig/scheduler/common.h"
-#include "mhconfig/config_namespace.h"
 #include "jmutils/time.h"
 
 namespace mhconfig
@@ -20,15 +16,13 @@ namespace mhconfig
 namespace scheduler
 {
 
-using namespace ::mhconfig::builder;
-
-class ApiWatchCommand : public SchedulerCommand
+class ApiTraceCommand : public SchedulerCommand
 {
 public:
-  ApiWatchCommand(
-    std::shared_ptr<::mhconfig::api::stream::WatchInputMessage> message
+  ApiTraceCommand(
+    std::shared_ptr<api::stream::TraceInputMessage>&& trace_stream
   );
-  virtual ~ApiWatchCommand();
+  virtual ~ApiTraceCommand();
 
   std::string name() const override;
 
@@ -46,10 +40,9 @@ public:
   ) override;
 
 private:
-  std::shared_ptr<::mhconfig::api::stream::WatchInputMessage> message_;
+  std::shared_ptr<api::stream::TraceInputMessage> trace_stream_;
 
-  bool validate_request(
-    const config_namespace_t& config_namespace,
+  void send_api_response(
     WorkerQueue& worker_queue
   );
 

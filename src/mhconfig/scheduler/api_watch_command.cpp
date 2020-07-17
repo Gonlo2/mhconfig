@@ -36,6 +36,30 @@ SchedulerCommand::CommandResult ApiWatchCommand::execute_on_namespace(
     return CommandResult::OK;
   }
 
+  std::vector<std::shared_ptr<api::Commitable>> traces;
+  for_each_trace_to_trigger(
+    config_namespace,
+    message_.get(),
+    [&traces](auto namespace_id, const auto* message, auto* trace) {
+      traces.push_back(
+        scheduler::make_trace_output_message(
+          trace,
+          api::stream::TraceOutputMessage::Status::ADDED_WATCHER,
+          namespace_id,
+          message->version(),
+          message
+        )
+      );
+    }
+  );
+  if (!traces.empty()) {
+    worker_queue.push(
+      std::make_unique<worker::ApiBatchReplyCommand>(
+        std::move(traces)
+      )
+    );
+  }
+
   bool notify = false;
 
   for_each_document_override_path(
@@ -95,7 +119,7 @@ bool ApiWatchCommand::validate_request(
   const config_namespace_t& config_namespace,
   WorkerQueue& worker_queue
 ) {
-  bool ok = builder::are_valid_arguments(
+  bool ok = are_valid_arguments(
     message_->overrides(),
     message_->flavors(),
     message_->document(),

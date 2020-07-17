@@ -132,39 +132,18 @@ void RunGcCommand::remove_dead_pointers(
   spdlog::debug("To remove dead pointers");
 
   std::vector<std::string> overrides_key_to_remove;
+  std::vector<std::string> to_remove_tmp;
 
-  size_t number_of_removed_dead_pointers = 0;
-  size_t number_of_processed_pointers = 0;
   for (auto& it : context.namespace_by_path) {
-    number_of_processed_pointers += it.second
-      ->watchers.size();
+    jmutils::remove_expired(it.second->watchers);
 
-    number_of_removed_dead_pointers += remove_expired_watchers(
-      it.second->watchers
-    );
+    jmutils::remove_expired_map_values(it.second->traces_by_override);
+    jmutils::remove_expired_map_values(it.second->traces_by_flavor);
+    jmutils::remove_expired_map_values(it.second->traces_by_document);
+    jmutils::remove_expired(it.second->to_trace_always);
 
-
-    number_of_processed_pointers += it.second
-      ->merged_config_by_overrides_key.size();
-
-    overrides_key_to_remove.clear();
-    for (const auto it_2 : it.second->merged_config_by_overrides_key) {
-      if (it_2.second.expired()) {
-        overrides_key_to_remove.push_back(it_2.first);
-      }
-    }
-
-    number_of_removed_dead_pointers += overrides_key_to_remove.size();
-    for (const auto& k : overrides_key_to_remove) {
-      it.second->merged_config_by_overrides_key.erase(k);
-    }
+    jmutils::remove_expired_map(it.second->merged_config_by_overrides_key);
   }
-
-  spdlog::debug(
-    "Removed dead pointers (removed: {}, processed: {})",
-    number_of_removed_dead_pointers,
-    number_of_processed_pointers
-  );
 }
 
 void RunGcCommand::remove_namespaces(
@@ -180,8 +159,6 @@ void RunGcCommand::remove_namespaces(
 
   size_t number_of_processed_namespaces = context.namespace_by_id.size();
   for (auto it: context.namespace_by_id) {
-    remove_expired_watchers(it.second->watchers);
-
     spdlog::trace(
       "Checking the namespace '{}' with id {} (timestamp: {}, num_watchers: {})",
       it.second->root_path,
@@ -192,7 +169,7 @@ void RunGcCommand::remove_namespaces(
 
     if (
       (it.second->last_access_timestamp + max_live_in_seconds_ <= current_timestamp)
-      && it.second->watchers.empty()
+      && !is_namespace_in_use(*it.second)
     ) {
       spdlog::debug(
         "Removing the namespace '{}' with id {}",
@@ -256,7 +233,7 @@ void RunGcCommand::remove_versions(
 
       override_paths_to_remove.clear();
       for (auto override_metadata_it: config_namespace->override_metadata_by_override_path) {
-        remove_expired_watchers(override_metadata_it.second.watchers);
+        jmutils::remove_expired(override_metadata_it.second.watchers);
 
         auto& raw_config_by_version = override_metadata_it.second.raw_config_by_version;
 

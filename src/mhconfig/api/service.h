@@ -25,6 +25,7 @@
 #include "mhconfig/api/request/update_request_impl.h"
 #include "mhconfig/api/request/run_gc_request_impl.h"
 #include "mhconfig/api/stream/watch_stream_impl.h"
+#include "mhconfig/api/stream/trace_stream_impl.h"
 
 #include <prometheus/summary.h>
 #include <prometheus/exposer.h>
@@ -91,6 +92,9 @@ private:
 
         auto watch_stream = make_session<stream::WatchStreamImpl>();
         watch_stream->subscribe(service_, cq_.get());
+
+        auto trace_stream = make_session<stream::TraceStreamImpl>();
+        trace_stream->subscribe(service_, cq_.get());
       }
     }
 
@@ -115,13 +119,23 @@ private:
 
     inline bool execute(std::pair<bool, void*>&& event) noexcept {
       try {
-        auto session = static_cast<Session*>(event.second);
+        uintptr_t ptr = (uintptr_t) event.second;
+        auto session = (Session*) (ptr & 0xfffffffffffffff8ull);
+        uint8_t status = ptr & 7;
         if (event.first) {
-          spdlog::trace("Obtained the proceed gRPC event {}", (void*) session);
-          session->proceed(service_, cq_.get(), sender_.get(), metrics_, request_id_);
+          spdlog::trace(
+            "Obtained the ok gRPC event {} with the status {}",
+            (void*) session,
+            status
+          );
+          auto _ = session->proceed(status, service_, cq_.get(), sender_.get(), metrics_, request_id_);
         } else {
-          spdlog::trace("Obtained the destroy gRPC event {}", (void*) session);
-          session->destroy();
+          spdlog::trace(
+            "Obtained the error gRPC event {} with the status {}",
+            (void*) session,
+            status
+          );
+          auto _ = session->error(sender_.get(), metrics_);
         }
         return true;
       } catch (const std::exception &e) {
@@ -141,9 +155,11 @@ private:
     }
 
     void on_stop() noexcept {
-      void* ignored_tag;
+      void* tag;
       bool ignored_ok;
-      while (cq_->Next(&ignored_tag, &ignored_ok));
+      while (cq_->Next(&tag, &ignored_ok)) {
+        execute(std::make_pair(false, tag));
+      }
     }
   };
 

@@ -63,20 +63,14 @@ private:
     context_t& context
   );
 
-  inline size_t remove_expired_watchers(
-    std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>>& watchers
+  inline bool is_namespace_in_use(
+    const config_namespace_t& config_namespace
   ) {
-    size_t removed = 0;
-    for (size_t i = 0; i < watchers.size();) {
-      if (watchers[i].expired()) {
-        spdlog::trace("Removing a watcher");
-        jmutils::swap_delete(watchers, i);
-        ++removed;
-      } else {
-        ++i;
-      }
-    }
-    return removed;
+    return !config_namespace.watchers.empty()
+      || !config_namespace.traces_by_override.empty()
+      || !config_namespace.traces_by_flavor.empty()
+      || !config_namespace.traces_by_document.empty()
+      || !config_namespace.to_trace_always.empty();
   }
 
 };

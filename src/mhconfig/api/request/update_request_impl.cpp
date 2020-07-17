@@ -68,7 +68,9 @@ void UpdateRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestUpdate(&ctx_, request_, &responder_, cq, cq, tag());
+  if (auto t = tag(RequestStatus::CREATE)) {
+    service->RequestUpdate(&ctx_, request_, &responder_, cq, cq, t);
+  }
 }
 
 void UpdateRequestImpl::request(
@@ -84,7 +86,9 @@ void UpdateRequestImpl::request(
 }
 
 void UpdateRequestImpl::finish() {
-  responder_.Finish(*response_, grpc::Status::OK, tag());
+  if (auto t = tag(RequestStatus::PROCESS)) {
+    responder_.Finish(*response_, grpc::Status::OK, t);
+  }
 }
 
 

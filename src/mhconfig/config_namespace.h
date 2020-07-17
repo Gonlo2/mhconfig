@@ -15,6 +15,7 @@
 
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/watch_stream.h"
+#include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/element.h"
 #include "jmutils/common.h"
 
@@ -127,6 +128,25 @@ struct config_namespace_t {
     std::string,
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
+
+  // Start trace structures
+  absl::flat_hash_map<
+    std::string,
+    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
+  > traces_by_override;
+
+  absl::flat_hash_map<
+    std::string,
+    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
+  > traces_by_flavor;
+
+  absl::flat_hash_map<
+    std::string,
+    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
+  > traces_by_document;
+
+  std::vector<std::weak_ptr<api::stream::TraceInputMessage>> to_trace_always;
+  // End trace structures
 
   std::vector<std::weak_ptr<api::stream::WatchInputMessage>> watchers;
 

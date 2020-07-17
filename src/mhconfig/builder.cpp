@@ -882,26 +882,6 @@ std::shared_ptr<merged_config_t> get_merged_config(
   return nullptr;
 }
 
-bool are_valid_arguments(
-  const std::vector<std::string>& overrides,
-  const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
-) {
-  // TODO Check for duplicated overrides & flavors
-  if (!is_a_valid_document_name(document)) {
-    spdlog::error("The document '{}' don't have a valid name", document);
-    return false;
-  }
-
-  if (!template_.empty() && (template_[0] != '_')) {
-    spdlog::error("The template '{}' don't have a valid name", template_);
-    return false;
-  }
-
-  return true;
-}
-
 bool is_a_valid_document_name(const std::string& document) {
   if (document.empty()) return true;
   if (document[0] == '_') return false;

@@ -26,7 +26,8 @@ public:
   Request();
   virtual ~Request();
 
-  std::shared_ptr<Session> proceed(
+  void on_proceed(
+    uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
     SchedulerQueue::Sender* scheduler_sender,
@@ -37,20 +38,23 @@ public:
   bool reply();
 
 protected:
+  enum class RequestStatus {
+    CREATE = 0,
+    PROCESS = 1,
+    FINISH = 7
+  };
+
   virtual void request(
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
   virtual void finish() = 0;
 
-private:
-  enum class RequestStatus {
-    CREATE,
-    PROCESS,
-    FINISH
-  };
+  inline void* tag(RequestStatus status) {
+    return raw_tag(static_cast<uint8_t>(status));
+  }
 
+private:
   jmutils::time::MonotonicTimePoint start_time_;
-  RequestStatus status_{RequestStatus::CREATE};
   bool metricate_;
 
   const std::string status();

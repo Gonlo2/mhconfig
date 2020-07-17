@@ -297,13 +297,6 @@ Element make_and_check_element(
   absl::flat_hash_set<std::string> &reference_to
 );
 
-bool are_valid_arguments(
-  const std::vector<std::string>& overrides,
-  const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
-);
-
 bool is_a_valid_path(
   const Sequence* path,
   const std::string& tag

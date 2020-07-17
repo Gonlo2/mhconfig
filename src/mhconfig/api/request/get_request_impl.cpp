@@ -46,6 +46,10 @@ const std::string& GetRequestImpl::template_() const {
   return request_->template_();
 }
 
+std::string GetRequestImpl::peer() const {
+  return session_peer();
+}
+
 void GetRequestImpl::set_status(Status status) {
   switch (status) {
     case Status::OK:
@@ -102,7 +106,9 @@ void GetRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestGet(&ctx_, &raw_request_, &responder_, cq, cq, tag());
+  if (auto t = tag(RequestStatus::CREATE)) {
+    service->RequestGet(&ctx_, &raw_request_, &responder_, cq, cq, t);
+  }
 }
 
 void GetRequestImpl::request(
@@ -128,18 +134,20 @@ void GetRequestImpl::request(
 }
 
 void GetRequestImpl::finish() {
-  bool ok = response_->SerializeToOstream(&elements_data_);
-  if (ok) {
-    grpc::Slice slice(elements_data_.str());
-    grpc::ByteBuffer raw_response(&slice, 1);
+  if (auto t = tag(RequestStatus::PROCESS)) {
+    bool ok = response_->SerializeToOstream(&elements_data_);
+    if (ok) {
+      grpc::Slice slice(elements_data_.str());
+      grpc::ByteBuffer raw_response(&slice, 1);
 
-    responder_.Finish(raw_response, grpc::Status::OK, tag());
-  } else {
-    grpc::Status status(
-      grpc::StatusCode::CANCELLED,
-      "Some problem takes place serializing the message"
-    );
-    responder_.FinishWithError(status, tag());
+      responder_.Finish(raw_response, grpc::Status::OK, t);
+    } else {
+      grpc::Status status(
+        grpc::StatusCode::CANCELLED,
+        "Some problem takes place serializing the message"
+      );
+      responder_.FinishWithError(status, t);
+    }
   }
 }
 

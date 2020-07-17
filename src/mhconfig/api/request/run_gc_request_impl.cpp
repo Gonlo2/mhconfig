@@ -32,7 +32,9 @@ void RunGCRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestRunGC(&ctx_, request_, &responder_, cq, cq, tag());
+  if (auto t = tag(RequestStatus::CREATE)) {
+    service->RequestRunGC(&ctx_, request_, &responder_, cq, cq, t);
+  }
 }
 
 bool RunGCRequestImpl::commit() {
@@ -74,7 +76,9 @@ uint32_t RunGCRequestImpl::max_live_in_seconds() {
 }
 
 void RunGCRequestImpl::finish() {
-  responder_.Finish(*response_, grpc::Status::OK, tag());
+  if (auto t = tag(RequestStatus::PROCESS)) {
+    responder_.Finish(*response_, grpc::Status::OK, t);
+  }
 }
 
 

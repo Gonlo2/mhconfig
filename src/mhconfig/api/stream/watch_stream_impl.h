@@ -4,11 +4,15 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/watch_stream.h"
+#include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/command.h"
 #include "mhconfig/scheduler/api_watch_command.h"
+#include "mhconfig/scheduler/on_watchers_removed_command.h"
+#include "mhconfig/scheduler/common.h"
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/synchronization/mutex.h>
 
 #include <grpcpp/impl/codegen/serialization_traits.h>
 
@@ -43,13 +47,16 @@ public:
   bool send(bool finish = false) override;
 
 protected:
-  friend class Stream<grpc::ByteBuffer, grpc::ByteBuffer, WatchOutputMessageImpl>;
+  friend class Stream<grpc::ServerAsyncReaderWriter<grpc::ByteBuffer, grpc::ByteBuffer>, WatchOutputMessageImpl>;
 
-  grpc::ByteBuffer response_;
+  inline const grpc::ByteBuffer& response() {
+    return response_;
+  }
 
 private:
   google::protobuf::Arena arena_;
   mhconfig::proto::WatchResponse* proto_response_;
+  grpc::ByteBuffer response_;
   std::weak_ptr<WatchStreamImpl> stream_;
   std::stringstream elements_data_;
 
@@ -75,6 +82,8 @@ public:
   const std::string& template_() const override;
 
   bool unregister() override;
+
+  std::string peer() const override;
 
   std::shared_ptr<WatchOutputMessage> make_output_message() override;
 
@@ -111,13 +120,15 @@ public:
 
   bool commit() override;
 
+  std::string peer() const override;
+
 private:
   std::shared_ptr<WatchInputMessage> input_message_;
   std::shared_ptr<WatchOutputMessage> output_message_;
 };
 
 class WatchStreamImpl final
-  : public Stream<grpc::ByteBuffer, grpc::ByteBuffer, WatchOutputMessageImpl>,
+  : public Stream<grpc::ServerAsyncReaderWriter<grpc::ByteBuffer, grpc::ByteBuffer>, WatchOutputMessageImpl>,
     public std::enable_shared_from_this<WatchStreamImpl>
 {
 public:
@@ -140,15 +151,34 @@ public:
 protected:
   friend class WatchOutputMessageImpl;
 
-  void prepare_next_request() override;
-
-  void request(
+  void on_create(
     SchedulerQueue::Sender* scheduler_sender
+  ) override;
+
+  void on_read(
+    SchedulerQueue::Sender* scheduler_sender
+  ) override;
+
+  void on_destroy(
+    SchedulerQueue::Sender* scheduler_sender,
+    metrics::MetricsService& metrics
   ) override;
 
 private:
   grpc::ByteBuffer next_req_;
   absl::flat_hash_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
+  SchedulerQueue::Sender* scheduler_sender_{nullptr};
+  absl::Mutex mutex_;
+
+  bool unregister(SchedulerQueue::Sender* scheduler_sender, uint32_t uid);
+
+  inline void prepare_next_request() {
+    if (auto t = tag(Status::READ)) {
+      next_req_.Clear();
+      stream_.Read(&next_req_, t);
+    }
+  }
+
 };
 
 

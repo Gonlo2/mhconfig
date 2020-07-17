@@ -7,7 +7,10 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/worker/build_command.h"
 #include "mhconfig/worker/api_reply_command.h"
+#include "mhconfig/worker/api_batch_reply_command.h"
 #include "mhconfig/worker/api_get_reply_command.h"
+#include "mhconfig/api/stream/trace_stream_impl.h"
+#include "mhconfig/scheduler/common.h"
 #include "mhconfig/command.h"
 #include "jmutils/time.h"
 
@@ -22,7 +25,7 @@ class ApiGetCommand : public SchedulerCommand
 {
 public:
   ApiGetCommand(
-    std::shared_ptr<::mhconfig::api::request::GetRequest> get_request
+    std::shared_ptr<api::request::GetRequest>&& get_request
   );
   virtual ~ApiGetCommand();
 

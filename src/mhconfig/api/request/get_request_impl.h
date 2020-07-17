@@ -48,6 +48,8 @@ public:
 
   bool commit() override;
 
+  std::string peer() const override;
+
 protected:
   google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;

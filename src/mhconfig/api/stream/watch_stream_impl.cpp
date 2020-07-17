@@ -141,12 +141,18 @@ bool WatchInputMessageImpl::unregister() {
   return false;
 }
 
+std::string WatchInputMessageImpl::peer() const {
+  if (auto stream = stream_.lock()) {
+    return stream->session_peer();
+  }
+  return "";
+}
+
 std::shared_ptr<WatchOutputMessage> WatchInputMessageImpl::make_output_message() {
   auto msg = std::make_shared<WatchOutputMessageImpl>(stream_);
   msg->set_uid(request_->uid());
   return msg;
 }
-
 
 WatchGetRequest::WatchGetRequest(
   std::shared_ptr<WatchInputMessage> input_message,
@@ -225,6 +231,9 @@ bool WatchGetRequest::commit() {
   return output_message_->commit();
 }
 
+std::string WatchGetRequest::peer() const {
+  return input_message_->peer();
+}
 
 WatchStreamImpl::WatchStreamImpl()
   : Stream()
@@ -249,21 +258,25 @@ void WatchStreamImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  service->RequestWatch(&ctx_, &stream_, cq, cq, tag());
+  if (auto t = tag(Status::CREATE)) {
+    service->RequestWatch(&ctx_, &stream_, cq, cq, t);
+  }
 }
 
 bool WatchStreamImpl::unregister(uint32_t uid) {
-  // TODO remove the recursive mutex
-  std::lock_guard<std::recursive_mutex> mlock(mutex_);
-  return watcher_by_id_.erase(uid);
+  return unregister(scheduler_sender_, uid);
 }
 
-void WatchStreamImpl::prepare_next_request() {
-  next_req_.Clear();
-  stream_.Read(&next_req_, tag());
+void WatchStreamImpl::on_create(
+  SchedulerQueue::Sender* scheduler_sender
+) {
+  mutex_.Lock();
+  scheduler_sender_ = scheduler_sender;
+  mutex_.Unlock();
+  prepare_next_request();
 }
 
-void WatchStreamImpl::request(
+void WatchStreamImpl::on_read(
   SchedulerQueue::Sender* scheduler_sender
 ) {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
@@ -274,16 +287,16 @@ void WatchStreamImpl::request(
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
   if (status.ok()) {
     if (msg->remove()) {
-      spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), tag());
-      size_t removed_elements = watcher_by_id_.erase(msg->uid());
+      spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), (void*) this);
+      bool removed = unregister(scheduler_sender, msg->uid());
       auto out_msg = msg->make_output_message();
-      out_msg->set_status(
-        (removed_elements == 0) ? WatchStatus::UNKNOWN_UID : WatchStatus::REMOVED
-      );
+      out_msg->set_status(removed ? WatchStatus::REMOVED : WatchStatus::UNKNOWN_UID);
       out_msg->send();
     } else {
-      spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), tag());
-      auto inserted = watcher_by_id_.emplace(msg->uid(), msg);
+      spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), (void*) this);
+      mutex_.Lock();
+      auto inserted = watcher_by_id_.try_emplace(msg->uid(), msg);
+      mutex_.Unlock();
       if (inserted.second) {
         scheduler_sender->push(
           std::make_unique<scheduler::ApiWatchCommand>(
@@ -301,7 +314,46 @@ void WatchStreamImpl::request(
     out_msg->set_status(WatchStatus::ERROR);
     out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }
+
+  prepare_next_request();
 }
+
+void WatchStreamImpl::on_destroy(
+  SchedulerQueue::Sender* scheduler_sender,
+  metrics::MetricsService& metrics
+) {
+  absl::flat_hash_map<std::string, std::vector<std::shared_ptr<WatchInputMessage>>> watchers_by_root_path;
+
+  mutex_.Lock();
+  for (auto& it : watcher_by_id_) {
+    watchers_by_root_path[it.second->root_path()].push_back(std::move(it.second));
+  }
+  mutex_.Unlock();
+
+  for (auto& it : watchers_by_root_path) {
+    scheduler_sender->push(
+      std::make_unique<scheduler::OnWatchersRemovedCommand>(
+        it.first,
+        std::move(it.second)
+      )
+    );
+  }
+}
+
+bool WatchStreamImpl::unregister(SchedulerQueue::Sender* scheduler_sender, uint32_t uid) {
+  mutex_.Lock();
+  auto node = watcher_by_id_.extract(uid);
+  mutex_.Unlock();
+  if (node && (scheduler_sender != nullptr)) {
+    scheduler_sender->push(
+      std::make_unique<scheduler::OnWatchersRemovedCommand>(
+        std::move(node.mapped())
+      )
+    );
+  }
+  return node.operator bool();
+}
+
 
 } /* stream */
 } /* api */

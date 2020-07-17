@@ -295,6 +295,59 @@ message WatchResponse {
 }
 ```
 
+### Trace
+
+To know if some service is using some document or template it's possible to add traces that will be activated
+when certain conditions are met.
+
+```protobuf
+// The trace request parameters can be seen as a conditional like
+//   (overrides is empty or overrides is a subset of A)
+//   and (flavors is empty or flavors is a subset of B)
+//   and (document is empty or document == C)
+//   and (template is empty or template == D)
+// where
+//   A is a override got/watched
+//   B is a flavor got/watched
+//   C is a document got/watched
+//   D is a template got/watched
+message TraceRequest {
+  // the root path of the namespace where trace the configuration.
+  string root_path = 1;
+  // the list of overrides to trace, if some document/template with one of them
+  // is asked it will be returned
+  repeated string overrides = 2;
+  // the list of flavors to trace, if some document with one of them
+  // is asked it will be returned
+  repeated string flavors = 3;
+  // the document to trace, in case it is not defined it will not be used
+  // in the query
+  string document = 4;
+  // the template to trace, in case it is not defined it will not be used
+  // in the query
+  string template = 5;
+}
+
+message TraceResponse {
+  enum Status {
+    RETURNED_ELEMENTS = 0;
+    ERROR = 1;
+    ADDED_WATCHER = 2;
+    EXISTING_WATCHER = 3;
+    REMOVED_WATCHER = 4;
+  }
+  Status status = 1;
+  uint64 namespace_id = 2;
+  uint32 version = 3;
+  repeated string overrides = 4;
+  repeated string flavors = 5;
+  string document = 6;
+  string template = 7;
+  // The client ip/socket/etc used to connect to the server
+  string peer = 8;
+}
+```
+
 ### Run garbage collector
 
 This is a administration method which allows for finer control of the garbage collector although it is not necessary to use it for normal use.

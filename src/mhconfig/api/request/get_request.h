@@ -40,6 +40,8 @@ public:
   virtual void set_element(const mhconfig::Element& element) = 0;
   virtual void set_element_bytes(const char* data, size_t len) = 0;
   virtual void set_template_rendered(const std::string& data) = 0;
+
+  virtual std::string peer() const = 0;
 };
 
 } /* request */

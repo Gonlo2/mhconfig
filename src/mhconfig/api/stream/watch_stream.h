@@ -1,6 +1,7 @@
 #ifndef MHCONFIG__API__STREAM__WATCH_STREAM_H
 #define MHCONFIG__API__STREAM__WATCH_STREAM_H
 
+#include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/stream/output_message.h"
 #include "mhconfig/element.h"
 
@@ -54,6 +55,8 @@ public:
   virtual uint32_t version() const = 0;
   virtual const std::string& document() const = 0;
   virtual const std::string& template_() const = 0;
+
+  virtual std::string peer() const = 0;
 
   virtual bool unregister() = 0;
 

@@ -6,8 +6,8 @@ namespace scheduler
 {
 
 ApiGetCommand::ApiGetCommand(
-  std::shared_ptr<::mhconfig::api::request::GetRequest> get_request
-) : get_request_(get_request)
+  std::shared_ptr<api::request::GetRequest>&& get_request
+) : get_request_(std::move(get_request))
 {
 }
 
@@ -31,14 +31,37 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   SchedulerQueue& scheduler_queue,
   WorkerQueue& worker_queue
 ) {
-  get_request_->set_version(
-    get_specific_version(config_namespace, get_request_->version())
-  );
+  uint32_t specific_version = get_specific_version(config_namespace, get_request_->version());
+  get_request_->set_version(specific_version);
   get_request_->set_namespace_id(config_namespace.id);
 
   // If the request isn't valid we exit
   if (!validate_request(config_namespace, worker_queue)) {
     return CommandResult::OK;
+  }
+
+  std::vector<std::shared_ptr<api::Commitable>> traces;
+  for_each_trace_to_trigger(
+    config_namespace,
+    get_request_.get(),
+    [&traces, version=specific_version](auto namespace_id, const auto* message, auto* trace) {
+      traces.push_back(
+        scheduler::make_trace_output_message(
+          trace,
+          api::stream::TraceOutputMessage::Status::RETURNED_ELEMENTS,
+          namespace_id,
+          version,
+          message
+        )
+      );
+    }
+  );
+  if (!traces.empty()) {
+    worker_queue.push(
+      std::make_unique<worker::ApiBatchReplyCommand>(
+        std::move(traces)
+      )
+    );
   }
 
   // If we are here it's possible obtain the asked document so first of all we check
@@ -108,7 +131,7 @@ bool ApiGetCommand::validate_request(
   const config_namespace_t& config_namespace,
   WorkerQueue& worker_queue
 ) {
-  bool ok = builder::are_valid_arguments(
+  bool ok = are_valid_arguments(
     get_request_->overrides(),
     get_request_->flavors(),
     get_request_->document(),
@@ -306,12 +329,12 @@ bool ApiGetCommand::check_if_ref_graph_is_a_dag_rec(
       version,
       [&](const auto&, auto& raw_config) {
         if (is_a_dag && raw_config->has_content) {
-          for (const auto& ref_document : raw_config->reference_to) {
+          for (size_t i = 0, l = raw_config->reference_to.size(); i < l; ++i) {
             is_a_dag = check_if_ref_graph_is_a_dag_rec(
               config_namespace,
               flavors,
               overrides,
-              ref_document,
+              raw_config->reference_to[i],
               version,
               dfs_path_set,
               topological_sort,
