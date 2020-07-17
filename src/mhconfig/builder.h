@@ -173,14 +173,14 @@ void load_raw_config(
 }
 
 load_raw_config_result_t index_file(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const std::filesystem::path& root_path,
   const std::filesystem::path& path
 );
 
 template <typename T>
 bool index_files(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const std::filesystem::path& root_path,
   T lambda
 ) {
@@ -261,7 +261,7 @@ NodeType get_virtual_node_type(
 );
 
 bool apply_tags(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const Element& element,
   const Element& root,
   const absl::flat_hash_map<std::string, Element> &elements_by_document,
@@ -269,7 +269,7 @@ bool apply_tags(
 );
 
 Element apply_tag_format(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const Element& element
 );
 
@@ -292,7 +292,7 @@ Element apply_tag_sref(
  * All the structure checks must be done here
  */
 Element make_and_check_element(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   YAML::Node &node,
   absl::flat_hash_set<std::string> &reference_to
 );
@@ -303,7 +303,7 @@ bool is_a_valid_path(
 );
 
 Element make_element(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   YAML::Node &node,
   absl::flat_hash_set<std::string> &reference_to
 );

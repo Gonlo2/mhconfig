@@ -11,12 +11,12 @@
 
 #include <inja/inja.hpp>
 
-#include "string_pool/pool.h"
-
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/element.h"
+
+#include "jmutils/string/pool.h"
 #include "jmutils/common.h"
 
 #include <absl/container/flat_hash_map.h>
@@ -113,7 +113,7 @@ struct config_namespace_t {
   bool ok : 8;
   std::string root_path;
 
-  std::shared_ptr<::string_pool::Pool> pool;
+  std::shared_ptr<jmutils::string::Pool> pool;
 
   //TODO Check if it's better use a unique_ptr for this to avoid copy
   // the data in the hash table rebuilds

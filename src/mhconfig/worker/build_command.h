@@ -29,7 +29,7 @@ public:
 
   BuildCommand(
     uint64_t namespace_id,
-    std::shared_ptr<::string_pool::Pool> pool,
+    std::shared_ptr<jmutils::string::Pool> pool,
     std::shared_ptr<build::wait_built_t>&& wait_build
   );
   virtual ~BuildCommand();
@@ -44,7 +44,7 @@ public:
 
 private:
   uint64_t namespace_id_;
-  std::shared_ptr<::string_pool::Pool> pool_;
+  std::shared_ptr<jmutils::string::Pool> pool_;
   std::shared_ptr<build::wait_built_t> wait_build_;
 };
 

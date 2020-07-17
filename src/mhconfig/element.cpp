@@ -431,7 +431,7 @@ namespace mhconfig {
   namespace conversion
   {
     template <>
-    std::pair<bool, ::string_pool::String> as<::string_pool::String>(const Data& data) {
+    std::pair<bool, jmutils::string::String> as<jmutils::string::String>(const Data& data) {
       switch ((NodeType) data.index()) {
         case NodeType::STR_NODE:
           return std::make_pair(true, node_get<NodeType::STR_NODE>(data));
@@ -440,7 +440,7 @@ namespace mhconfig {
         default:
           break;
       }
-      return std::make_pair(false, ::string_pool::String());
+      return std::make_pair(false, jmutils::string::String());
     }
 
     template <>

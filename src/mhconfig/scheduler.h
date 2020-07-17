@@ -7,7 +7,7 @@
 #include "jmutils/container/queue.h"
 #include "jmutils/time.h"
 #include "jmutils/parallelism/worker.h"
-#include "string_pool/pool.h"
+#include "jmutils/string/pool.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/command.h"

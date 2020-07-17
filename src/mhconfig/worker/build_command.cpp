@@ -77,7 +77,7 @@ bool fill_json(
 
 BuildCommand::BuildCommand(
   uint64_t namespace_id,
-  std::shared_ptr<::string_pool::Pool> pool,
+  std::shared_ptr<jmutils::string::Pool> pool,
   std::shared_ptr<build::wait_built_t>&& wait_build
 )
   : namespace_id_(namespace_id),

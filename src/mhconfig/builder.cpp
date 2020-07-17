@@ -16,7 +16,7 @@ std::shared_ptr<config_namespace_t> make_config_namespace(
   config_namespace->root_path = root_path;
   config_namespace->id = std::uniform_int_distribution<uint64_t>{0, 0xffffffffffffffff}(jmutils::prng_engine());
   config_namespace->last_access_timestamp = 0;
-  config_namespace->pool = std::make_shared<::string_pool::Pool>(
+  config_namespace->pool = std::make_shared<jmutils::string::Pool>(
     std::make_unique<::mhconfig::string_pool::MetricsStatsObserver>(metrics, root_path)
   );
 
@@ -82,7 +82,7 @@ std::shared_ptr<config_namespace_t> make_config_namespace(
 }
 
 load_raw_config_result_t index_file(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const std::filesystem::path& root_path,
   const std::filesystem::path& path
 ) {
@@ -382,7 +382,7 @@ NodeType get_virtual_node_type(
 }
 
 bool apply_tags(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const Element& element,
   const Element& root,
   const absl::flat_hash_map<std::string, Element> &elements_by_document,
@@ -477,7 +477,7 @@ bool apply_tags(
 }
 
 Element apply_tag_format(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   const Element& element
 ) {
   if (!element.is_sequence() || (element.as_sequence()->size() != 2)) {
@@ -652,7 +652,7 @@ Element apply_tag_ref(
   auto referenced_element = search->second;
   for (size_t i = 1, l = path->size(); i < l; ++i) {
     referenced_element = referenced_element.get(
-      (*path)[i].as<::string_pool::String>()
+      (*path)[i].as<jmutils::string::String>()
     );
   }
 
@@ -665,7 +665,7 @@ Element apply_tag_sref(
 ) {
   const auto path = element.as_sequence();
   for (size_t i = 0, l = path->size(); i < l; ++i) {
-    root = root.get((*path)[i].as<::string_pool::String>());
+    root = root.get((*path)[i].as<jmutils::string::String>());
   }
 
   if (!root.is_scalar()) {
@@ -683,7 +683,7 @@ Element apply_tag_sref(
  * All the structure checks must be done here
  */
 Element make_and_check_element(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   YAML::Node &node,
   absl::flat_hash_set<std::string> &reference_to
 ) {
@@ -726,7 +726,7 @@ bool is_a_valid_path(
 }
 
 Element make_element(
-  ::string_pool::Pool* pool,
+  jmutils::string::Pool* pool,
   YAML::Node &node,
   absl::flat_hash_set<std::string> &reference_to
 ) {
@@ -809,7 +809,7 @@ Element make_element(
       map->reserve(node.size());
       for (auto it : node) {
         auto k = make_and_check_element(pool, it.first, reference_to);
-        auto kk = k.try_as<::string_pool::String>();
+        auto kk = k.try_as<jmutils::string::String>();
         if (!kk.first) {
           delete map_box;
           spdlog::error("The key of a map must be a string");

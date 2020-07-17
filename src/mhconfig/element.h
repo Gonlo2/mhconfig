@@ -11,7 +11,7 @@
 
 #include "yaml-cpp/yaml.h"
 #include "spdlog/spdlog.h"
-#include "string_pool/pool.h"
+#include "jmutils/string/pool.h"
 #include "jmutils/box.h"
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
@@ -45,8 +45,8 @@ namespace mhconfig {
 
   class Element;
 
-  typedef ::string_pool::String Literal;
-  typedef absl::flat_hash_map<::string_pool::String, Element> Map;
+  typedef jmutils::string::String Literal;
+  typedef absl::flat_hash_map<jmutils::string::String, Element> Map;
   typedef std::vector<Element> Sequence;
   typedef jmutils::Box<Map, uint32_t> MapBox;
   typedef jmutils::Box<Sequence, uint32_t> SequenceBox;

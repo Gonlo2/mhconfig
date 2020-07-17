@@ -1,7 +1,7 @@
 #ifndef MHCONFIG__STRING_POOL_H
 #define MHCONFIG__STRING_POOL_H
 
-#include "string_pool/pool.h"
+#include "jmutils/string/pool.h"
 #include "mhconfig/metrics/metrics_service.h"
 
 namespace mhconfig
@@ -9,7 +9,7 @@ namespace mhconfig
 namespace string_pool
 {
 
-class MetricsStatsObserver : public ::string_pool::StatsObserver
+class MetricsStatsObserver : public jmutils::string::StatsObserver
 {
 public:
   MetricsStatsObserver(
@@ -24,7 +24,7 @@ public:
   virtual ~MetricsStatsObserver() {
   }
 
-  void on_updated_stats(const ::string_pool::stats_t& stats, bool force) override {
+  void on_updated_stats(const jmutils::string::stats_t& stats, bool force) override {
     sequential_id_ = (sequential_id_+1) & 0xff;
     if (force || (sequential_id_ == 0)) {
       metrics_.add(

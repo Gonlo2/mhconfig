@@ -13,7 +13,9 @@
 #define CHUNK_DATA_SIZE (1<<20)
 #define CHUNK_STRING_SIZE (1<<15)
 
-namespace string_pool
+namespace jmutils
+{
+namespace string
 {
 
   namespace {
@@ -150,20 +152,23 @@ namespace string_pool
 
   static_assert(sizeof(String) == 8, "The size of the String must be 8 bytes");
 
-}
+} /* string */
+} /* jmutils */
 
 
 namespace std {
   template <>
-  struct hash<::string_pool::String> {
-    std::size_t operator()(const ::string_pool::String& v) const {
+  struct hash<jmutils::string::String> {
+    std::size_t operator()(const jmutils::string::String& v) const {
       return v.hash();
     }
   };
 }
 
 
-namespace string_pool
+namespace jmutils
+{
+namespace string
 {
 
 struct stats_t {
@@ -370,6 +375,7 @@ bool make_small_string(const std::string& str, uint64_t& result);
 String make_small_string(const std::string& str);
 String make_string(const std::string& str, InternalString* internal_string);
 
-} /* string_pool */
+} /* string */
+} /* jmutils */
 
 #endif /* ifndef STRING_POOL__POOL_H */

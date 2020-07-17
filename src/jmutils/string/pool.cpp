@@ -1,6 +1,8 @@
-#include "string_pool/pool.h"
+#include "jmutils/string/pool.h"
 
-namespace string_pool
+namespace jmutils
+{
+namespace string
 {
 
 InternalString::InternalString() {
@@ -420,4 +422,5 @@ String make_string(const std::string& str, InternalString* internal_string) {
   return String(data);
 }
 
-} /* string_pool */
+} /* string */
+} /* jmutils */
