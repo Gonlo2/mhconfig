@@ -26,7 +26,7 @@ void Request::on_proceed(
       metricate_ = (sequential_id & 0xff) == 0;
       sequential_id = (sequential_id+1) & 0xefffffff;
       if (metricate_) {
-        start_time_ = jmutils::time::monotonic_now();
+        start_time_ = jmutils::monotonic_now();
       }
 
       clone_and_subscribe(service, cq);
@@ -36,7 +36,7 @@ void Request::on_proceed(
     }
     case RequestStatus::PROCESS:
       if (metricate_) {
-        auto end_time = jmutils::time::monotonic_now();
+        auto end_time = jmutils::monotonic_now();
 
         double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
           end_time - start_time_

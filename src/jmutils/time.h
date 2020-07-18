@@ -5,15 +5,13 @@
 
 namespace jmutils
 {
-namespace time
-{
 
-  typedef std::chrono::time_point<std::chrono::steady_clock> MonotonicTimePoint;
+typedef std::chrono::time_point<std::chrono::steady_clock> MonotonicTimePoint;
 
-  uint64_t monotonic_now_sec();
-  MonotonicTimePoint monotonic_now();
+uint64_t monotonic_now_sec();
+uint64_t monotonic_now_ms();
+MonotonicTimePoint monotonic_now();
 
-} /* time */
 } /* jmutils */
 
 #endif

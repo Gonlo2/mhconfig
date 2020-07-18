@@ -59,7 +59,7 @@ SchedulerCommand::CommandResult SetDocumentsCommand::execute_on_namespace(
       } else {
         merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
       }
-      merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
+      merged_config->last_access_timestamp = jmutils::monotonic_now_sec();
       merged_config->value = build_element.config;
 
       auto wait_builts_search = config_namespace.wait_builts_by_key
@@ -142,7 +142,7 @@ SchedulerCommand::CommandResult SetDocumentsCommand::execute_on_namespace(
         wait_build_->overrides_key
       );
       merged_config->status = MergedConfigStatus::OK_TEMPLATE;
-      merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
+      merged_config->last_access_timestamp = jmutils::monotonic_now_sec();
       merged_config->preprocesed_value = std::move(wait_build_->preprocesed_value);
 
       if (wait_builts_search != config_namespace.wait_builts_by_key.end()) {

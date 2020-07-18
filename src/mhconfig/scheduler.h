@@ -65,40 +65,7 @@ private:
     return command->name();
   }
 
-  inline bool execute(SchedulerCommandRef&& command) noexcept {
-    try {
-      return process_command(std::move(command));
-    } catch (const std::exception &e) {
-      spdlog::error("Some error take place processing a command: {}", e.what());
-    } catch (...) {
-      spdlog::error("Some unknown error take place processing a command");
-    }
-
-    return false;
-  }
-
-  inline void loop_stats(
-    std::string& name,
-    jmutils::time::MonotonicTimePoint start_time,
-    jmutils::time::MonotonicTimePoint end_time
-  ) noexcept {
-    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      end_time - start_time
-    ).count();
-
-    context_.metrics->add(
-      metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
-      {{"type", name}},
-      duration_ns
-    );
-  }
-
-  void on_stop() noexcept {
-  }
-
-  inline bool process_command(
-    SchedulerCommandRef&& command
-  ) {
+  bool execute(SchedulerCommandRef&& command) {
     switch (command->type()) {
       case SchedulerCommand::CommandType::ADD_NAMESPACE: {
         auto search = context_.commands_waiting_for_namespace_by_path
@@ -207,6 +174,25 @@ private:
     return false;
   }
 
+  inline void loop_stats(
+    std::string& name,
+    jmutils::MonotonicTimePoint start_time,
+    jmutils::MonotonicTimePoint end_time
+  ) noexcept {
+    double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      end_time - start_time
+    ).count();
+
+    context_.metrics->add(
+      metrics::MetricsService::MetricId::SCHEDULER_DURATION_NANOSECONDS,
+      {{"type", name}},
+      duration_ns
+    );
+  }
+
+  void on_stop() noexcept {
+  }
+
   inline std::pair<ConfigNamespaceState, std::shared_ptr<config_namespace_t>> get_or_build_namespace(
     SchedulerCommandRef& command
   ) {
@@ -242,7 +228,7 @@ private:
 
     // If we are here then we have the namespace and before return it
     // we update the last access timestamp
-    search->second->last_access_timestamp = jmutils::time::monotonic_now_sec();
+    search->second->last_access_timestamp = jmutils::monotonic_now_sec();
 
     return std::make_pair(ConfigNamespaceState::OK, search->second);
   }

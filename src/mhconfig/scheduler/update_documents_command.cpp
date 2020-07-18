@@ -68,7 +68,7 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
 
     config_namespace.stored_versions_by_deprecation_timestamp
       .back()
-      .first = jmutils::time::monotonic_now_sec();
+      .first = jmutils::monotonic_now_sec();
 
     config_namespace.stored_versions_by_deprecation_timestamp
       .emplace_back(0, config_namespace.current_version);

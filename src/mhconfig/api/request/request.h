@@ -54,7 +54,7 @@ protected:
   }
 
 private:
-  jmutils::time::MonotonicTimePoint start_time_;
+  jmutils::MonotonicTimePoint start_time_;
   bool metricate_;
 
   const std::string status();

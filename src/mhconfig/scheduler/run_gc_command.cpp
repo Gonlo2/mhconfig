@@ -62,7 +62,7 @@ void RunGcCommand::remove_merge_configs(
     max_live_in_seconds_
   );
 
-  uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
+  uint64_t current_timestamp = jmutils::monotonic_now_sec();
 
   size_t number_of_removed_merged_configs = 0;
   size_t number_of_processed_merged_configs = 0;
@@ -154,7 +154,7 @@ void RunGcCommand::remove_namespaces(
     max_live_in_seconds_
   );
 
-  uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
+  uint64_t current_timestamp = jmutils::monotonic_now_sec();
   std::vector<uint64_t> namespaces_to_remove;
 
   size_t number_of_processed_namespaces = context.namespace_by_id.size();
@@ -208,7 +208,7 @@ void RunGcCommand::remove_versions(
     max_live_in_seconds_
   );
 
-  uint64_t current_timestamp = jmutils::time::monotonic_now_sec();
+  uint64_t current_timestamp = jmutils::monotonic_now_sec();
 
   std::vector<std::string> override_paths_to_remove;
 

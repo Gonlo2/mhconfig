@@ -6,7 +6,6 @@
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 
-#include "jmutils/container/queue.h"
 #include "jmutils/time.h"
 #include <errno.h>
 
@@ -197,9 +196,9 @@ private:
       if (static_cast<Parent*>(this)->metricate(event, sequential_id)) {
         name = static_cast<Parent*>(this)->event_name(event);
 
-        auto start_time = jmutils::time::monotonic_now();
-        bool ok = static_cast<Parent*>(this)->execute(std::move(event));
-        auto end_time = jmutils::time::monotonic_now();
+        auto start_time = jmutils::monotonic_now();
+        bool ok = safe_execute(std::move(event));
+        auto end_time = jmutils::monotonic_now();
 
         if (!ok) {
           spdlog::error("Some error take place processing the event '{}'", name);
@@ -207,7 +206,7 @@ private:
 
         static_cast<Parent*>(this)->loop_stats(name, start_time, end_time);
       } else {
-        if (!static_cast<Parent*>(this)->execute(std::move(event))) {
+        if (!safe_execute(std::move(event))) {
           spdlog::error("Some error take place processing a event");
         }
       }
@@ -219,6 +218,18 @@ private:
     static_cast<Parent*>(this)->on_stop();
 
     return nullptr;
+  }
+
+  inline bool safe_execute(Event&& event) noexcept {
+    try {
+      return static_cast<Parent*>(this)->execute(std::move(event));
+    } catch (const std::exception &e) {
+      spdlog::error("Some error take place executing a event: {}", e.what());
+    } catch (...) {
+      spdlog::error("Some unknown error take place executing a event");
+    }
+
+    return false;
   }
 };
 

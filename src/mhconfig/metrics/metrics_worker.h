@@ -126,8 +126,8 @@ private:
 
   inline void loop_stats(
     std::string& name,
-    jmutils::time::MonotonicTimePoint start_time,
-    jmutils::time::MonotonicTimePoint end_time
+    jmutils::MonotonicTimePoint start_time,
+    jmutils::MonotonicTimePoint end_time
   ) noexcept {
     double duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
       end_time - start_time

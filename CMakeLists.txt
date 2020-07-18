@@ -48,7 +48,7 @@ file(
 )
 
 # build executable
-add_executable(mhconfig src/mhconfig.cpp ${SRC_SOURCES})
+add_executable(mhconfig src/main.cpp ${SRC_SOURCES})
 target_link_libraries(mhconfig pthread)
 target_link_libraries(mhconfig ssl.a crypto.a)
 target_link_libraries(mhconfig yaml-cpp)

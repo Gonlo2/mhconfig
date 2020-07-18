@@ -1,6 +1,6 @@
 # Pending taks
-- Add a configuration file
-- Allow only the config folders with a prefix
+- Add a configuration file.
+- Allow only the config folders with a prefix.
 - Stop gracefully the service.
 - Add tests.
 - Allow increase the number of waiting requests.
@@ -10,5 +10,3 @@
   out u64 support like java.
 - Check if the service handle correctly empty overrides.
 - Review the cmake configuration (too slow).
-- Create a time worker for the garbage collector and the usage stats.
-- Check if it's better add a `trace` api method to check usage metrics instead record all the metrics all the time.

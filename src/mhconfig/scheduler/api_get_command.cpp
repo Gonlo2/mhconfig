@@ -100,7 +100,7 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
           get_request_->template_()
         );
 
-        merged_config->last_access_timestamp = jmutils::time::monotonic_now_sec();
+        merged_config->last_access_timestamp = jmutils::monotonic_now_sec();
 
         worker_queue.push(
           std::make_unique<worker::ApiGetReplyCommand>(

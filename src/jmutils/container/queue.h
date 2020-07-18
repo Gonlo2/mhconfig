@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <memory>
-#include <queue>
+#include <deque>
 #include <thread>
 #include <mutex>
 #include <utility>
@@ -34,18 +34,31 @@ public:
     cond_.wait(mlock, [this]{ return !queue_.empty(); });
 
     value = std::move(queue_.front());
-    queue_.pop();
+    queue_.pop_front();
+  }
+
+  bool pop_or_wait_for(T& value, uint64_t ms) {
+    std::unique_lock<std::mutex> mlock(mutex_);
+    bool has_value = cond_.wait_for(
+      mlock,
+      std::chrono::milliseconds(ms),
+      [this]{ return !queue_.empty(); }
+    );
+    if (!has_value) return false;
+
+    value = std::move(queue_.front());
+    queue_.pop_front();
+    return true;
   }
 
   void push(T&& item) {
     std::unique_lock<std::mutex> mlock(mutex_);
-    queue_.push(std::move(item));
-    mlock.unlock();
+    queue_.push_back(std::move(item));
     cond_.notify_one();
   }
 
 protected:
-  std::queue<T> queue_;
+  std::deque<T> queue_;
   std::mutex mutex_;
   std::condition_variable cond_;
 };

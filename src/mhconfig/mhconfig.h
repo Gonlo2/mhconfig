@@ -3,16 +3,18 @@
 
 #include <string>
 
+#include "spdlog/spdlog.h"
+
 #include "mhconfig/api/service.h"
 #include "mhconfig/scheduler.h"
 #include "mhconfig/worker.h"
-
-#include "spdlog/spdlog.h"
-
 #include "mhconfig/scheduler/run_gc_command.h"
 #include "mhconfig/metrics/sync_metrics_service.h"
 #include "mhconfig/metrics/async_metrics_service.h"
 #include "mhconfig/metrics/metrics_worker.h"
+
+#include "jmutils/parallelism/time_worker.h"
+#include "jmutils/time.h"
 
 namespace mhconfig
 {
@@ -24,85 +26,23 @@ namespace mhconfig
       const std::string& prometheus_address,
       size_t num_threads_api,
       size_t num_threads_workers
-    ) :
-      server_address_(server_address),
-      sync_metrics_service_(prometheus_address),
-      num_threads_api_(num_threads_api),
-      num_threads_workers_(num_threads_workers)
-    {};
+    );
 
-    virtual ~MHConfig() {};
+    virtual ~MHConfig();
 
-    bool run() {
-      if (running_) return false;
-
-      sync_metrics_service_.init();
-
-      workers_.reserve(num_threads_workers_);
-      for (size_t i = 0; i < num_threads_workers_; ++i) {
-        auto worker = std::make_unique<mhconfig::Worker>(
-          worker_queue_.new_receiver(),
-          WorkerCommand::context_t(
-            scheduler_queue_.new_sender(),
-            std::make_unique<metrics::AsyncMetricsService>(metrics_queue_.new_sender()),
-            sync_metrics_service_
-          )
-        );
-        if (!worker->start()) return false;
-        workers_.push_back(std::move(worker));
-      }
-
-      std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>> thread_vars;
-      thread_vars.reserve(num_threads_api_);
-      for (size_t i = 0; i < num_threads_api_; ++i) {
-        thread_vars.emplace_back(
-          scheduler_queue_.new_sender(),
-          metrics::AsyncMetricsService(metrics_queue_.new_sender())
-        );
-      }
-      service_ = std::make_unique<api::Service>(
-        server_address_,
-        std::move(thread_vars)
-      );
-      service_->start();
-
-      gc_thread_ = std::make_unique<std::thread>(
-        &MHConfig::run_gc,
-        this,
-        scheduler_queue_.new_sender()
-      );
-
-      scheduler_ = std::make_unique<Scheduler>(
-        scheduler_queue_,
-        worker_queue_,
-        std::make_unique<metrics::AsyncMetricsService>(metrics_queue_.new_sender())
-      );
-      if (!scheduler_->start()) return false;
-
-      metrics_worker_ = std::make_unique<metrics::MetricsWorker>(
-        metrics_queue_,
-        sync_metrics_service_
-      );
-      metrics_worker_->start();
-
-      running_ = true;
-      return true;
-    }
-
-    bool join() {
-      if (!running_) return false;
-
-      gc_thread_->join();
-      service_->join();
-      scheduler_->join();
-      for (auto& worker : workers_) {
-        worker->join();
-      }
-
-      return true;
-    }
+    bool run();
+    bool join();
 
   private:
+    enum class TimeWorkerTag {
+      RUN_GC_CACHE_GENERATION_0,
+      RUN_GC_CACHE_GENERATION_1,
+      RUN_GC_CACHE_GENERATION_2,
+      RUN_GC_DEAD_POINTERS,
+      RUN_GC_NAMESPACES,
+      RUN_GC_VERSIONS,
+    };
+
     std::string server_address_;
     metrics::SyncMetricsService sync_metrics_service_;
     size_t num_threads_api_;
@@ -115,40 +55,13 @@ namespace mhconfig
     std::unique_ptr<Scheduler> scheduler_;
     std::vector<std::unique_ptr<Worker>> workers_;
     std::unique_ptr<api::Service> service_;
-    std::unique_ptr<::mhconfig::metrics::MetricsWorker> metrics_worker_;
-    std::unique_ptr<std::thread> gc_thread_;
+    std::unique_ptr<metrics::MetricsWorker> metrics_worker_;
+    jmutils::TimeWorker time_worker_;
 
-    volatile bool running_{false};
+    bool running_{false};
 
-    void run_gc(SchedulerQueue::SenderRef sender) {
-      uint32_t default_remaining_checks[6] = {1, 5, 17, 7, 11, 3};
-      uint32_t remaining_checks[6] = {1, 5, 17, 7, 11, 3};
+    bool run_time_worker();
 
-      uint32_t seconds_between_checks = 20;
-      uint32_t max_live_in_seconds = 10;
-
-      auto next_check_time = std::chrono::system_clock::now();
-      while (true) {
-        for (int i = 0; i < 6; ++i) {
-          if (remaining_checks[i] == 0) {
-            sender->push(
-              std::make_unique<scheduler::RunGcCommand>(
-                static_cast<scheduler::RunGcCommand::Type>(i),
-                max_live_in_seconds
-              )
-            );
-
-            remaining_checks[i] = default_remaining_checks[i];
-          } else {
-            --remaining_checks[i];
-          }
-        }
-
-        next_check_time += std::chrono::seconds(seconds_between_checks);
-        std::this_thread::sleep_until(next_check_time);
-      }
-
-    }
   };
 } /* mhconfig */
 
