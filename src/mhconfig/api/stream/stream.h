@@ -42,18 +42,19 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics,
+    metrics::MetricsService* metrics,
     uint_fast32_t& sequential_id
   ) override {
     switch (static_cast<Status>(status)) {
       case Status::CREATE:
         clone_and_subscribe(service, cq);
         //TODO add request metrics
-        on_create(scheduler_sender);
+        on_create(acl, scheduler_sender);
         break;
       case Status::READ:
-        on_read(scheduler_sender);
+        on_read(acl, scheduler_sender);
         break;
       case Status::WRITE:
         mutex_.Lock();
@@ -66,12 +67,24 @@ public:
     }
   }
 
+  bool finish(const grpc::Status& status) override {
+    mutex_.Lock();
+    bool ok = !going_to_finish_;
+    if (ok) {
+      going_to_finish_ = true;
+      finish_status_ = status;
+      send_message_if_neccesary();
+    }
+    mutex_.Unlock();
+    return ok;
+  }
+
 protected:
   enum class Status {
     CREATE = 0,
-    READ = 1,
-    WRITE = 2,
-    FINISH = 7
+    FINISH = 1,
+    READ = 2,
+    WRITE = 3,
   };
 
   GrpcStream stream_;
@@ -80,13 +93,19 @@ protected:
     return raw_tag(static_cast<uint8_t>(status));
   }
 
+  inline void* unsafe_tag(Status status) {
+    return unsafe_raw_tag(static_cast<uint8_t>(status));
+  }
+
   //TODO Use this with CRTP
   virtual void on_create(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
 
   //TODO Use this with CRTP
   virtual void on_read(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
 
@@ -104,31 +123,36 @@ protected:
 
 private:
   std::deque<std::shared_ptr<OutMsg>> messages_to_send_;
-  absl::Mutex mutex_;
   bool going_to_finish_{false};
   bool sending_a_message_{false};
+  grpc::Status finish_status_{grpc::Status::OK};
 
   void send_message_if_neccesary() {
-    if (!sending_a_message_ && !messages_to_send_.empty()) {
-      if (auto t = tag(Status::WRITE)) {
-        spdlog::trace("Sending a message in the stream {}", (void*) this);
-        auto message = messages_to_send_.front();
-        messages_to_send_.pop_front();
-        bool finish = going_to_finish_ && messages_to_send_.empty();
-        if (finish) {
-          stream_.WriteAndFinish(
-            message->response(),
-            grpc::WriteOptions(),
-            grpc::Status::OK,
-            t
-          );
-        } else {
-          stream_.Write(
-            message->response(),
-            t
-          );
+    if (!sending_a_message_) {
+      if (!messages_to_send_.empty()) {
+        if (auto t = unsafe_tag(Status::WRITE)) {
+          spdlog::trace("Sending a message in the stream {}", (void*) this);
+          auto message = messages_to_send_.front();
+          messages_to_send_.pop_front();
+          bool finish = going_to_finish_ && messages_to_send_.empty();
+          if (finish) {
+            stream_.WriteAndFinish(
+              message->response(),
+              grpc::WriteOptions(),
+              finish_status_,
+              t
+            );
+            going_to_finish_ = false;
+          } else {
+            stream_.Write(message->response(), t);
+          }
+          sending_a_message_ = true;
         }
-        sending_a_message_ = true;
+      } else if (going_to_finish_) {
+        if (auto t = unsafe_tag(Status::WRITE)) {
+          stream_.Finish(finish_status_, t);
+          going_to_finish_ = false;
+        }
       }
     }
   }

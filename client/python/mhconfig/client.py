@@ -97,8 +97,9 @@ def _decode(elements, idx):
 
 
 class Client(object):
-    def __init__(self, address, root_path, overrides, cleanup_period_sec=60, cleanup_inactivity_sec=60):
+    def __init__(self, auth_token, address, root_path, overrides, cleanup_period_sec=60, cleanup_inactivity_sec=60):
         super(Client, self).__init__()
+        self._auth_token = auth_token
         self._address = address
         self._root_path = root_path
         self._overrides = overrides
@@ -182,7 +183,10 @@ class Client(object):
                 self._next_watcher_uid = 0
                 self._latest_configs.clear()
             try:
-                self._watch_it = self._stub.Watch(self._watch_input_messages())
+                self._watch_it = self._stub.Watch(
+                    self._watch_input_messages(),
+                    metadata=(('mhconfig-auth-token', self._auth_token),),
+                )
                 for r in self._watch_it:
                     elements = _decode(r.elements, 0) \
                         if r.elements \
@@ -307,7 +311,10 @@ class Client(object):
             version=version or 0,
             flavors=flavors or [],
         )
-        response = self._stub.Get(request)
+        response = self._stub.Get(
+            request,
+            metadata=(('mhconfig-auth-token', self._auth_token),),
+        )
         elements = _decode(response.elements, 0) \
             if response.elements \
             else UndefinedElement

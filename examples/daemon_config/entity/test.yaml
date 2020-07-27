@@ -1,0 +1,3 @@
+capabilities: [GET, WATCH, UPDATE, TRACE]
+policies:
+- test

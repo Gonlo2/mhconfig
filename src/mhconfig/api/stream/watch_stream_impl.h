@@ -7,6 +7,7 @@
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/command.h"
+#include "mhconfig/validator.h"
 #include "mhconfig/scheduler/api_watch_command.h"
 #include "mhconfig/scheduler/on_watchers_removed_command.h"
 #include "mhconfig/scheduler/common.h"
@@ -152,16 +153,18 @@ protected:
   friend class WatchOutputMessageImpl;
 
   void on_create(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
 
   void on_read(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
 
   void on_destroy(
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService* metrics
   ) override;
 
 private:

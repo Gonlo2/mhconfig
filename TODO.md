@@ -1,6 +1,5 @@
 # Pending taks
 - Add a configuration file.
-- Allow only the config folders with a prefix.
 - Stop gracefully the service.
 - Add tests.
 - Allow increase the number of waiting requests.

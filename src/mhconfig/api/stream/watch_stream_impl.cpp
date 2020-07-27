@@ -268,15 +268,24 @@ bool WatchStreamImpl::unregister(uint32_t uid) {
 }
 
 void WatchStreamImpl::on_create(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
-  mutex_.Lock();
-  scheduler_sender_ = scheduler_sender;
-  mutex_.Unlock();
-  prepare_next_request();
+  auto token = get_auth_token();
+  auto auth_result = token
+    ? acl->basic_auth(*token, auth::Capability::WATCH)
+    : auth::AuthResult::UNAUTHENTICATED;
+
+  if (check_auth(auth_result)) {
+    mutex_.Lock();
+    scheduler_sender_ = scheduler_sender;
+    mutex_.Unlock();
+    prepare_next_request();
+  }
 }
 
 void WatchStreamImpl::on_read(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
@@ -286,41 +295,62 @@ void WatchStreamImpl::on_read(
   );
   auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
   if (status.ok()) {
-    if (msg->remove()) {
-      spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), (void*) this);
-      bool removed = unregister(scheduler_sender, msg->uid());
-      auto out_msg = msg->make_output_message();
-      out_msg->set_status(removed ? WatchStatus::REMOVED : WatchStatus::UNKNOWN_UID);
-      out_msg->send();
-    } else {
-      spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), (void*) this);
-      mutex_.Lock();
-      auto inserted = watcher_by_id_.try_emplace(msg->uid(), msg);
-      mutex_.Unlock();
-      if (inserted.second) {
-        scheduler_sender->push(
-          std::make_unique<scheduler::ApiWatchCommand>(
-            msg
-          )
-        );
-      } else {
-        auto out_msg = msg->make_output_message();
-        out_msg->set_status(WatchStatus::UID_IN_USE);
-        out_msg->send();
+    auto token = get_auth_token();
+    auto auth_result = token
+      ? acl->document_auth(*token, auth::Capability::WATCH, *msg)
+      : auth::AuthResult::UNAUTHENTICATED;
+
+    if (check_auth(auth_result)) {
+      bool ok = validator::are_valid_arguments(
+        msg->root_path(),
+        msg->overrides(),
+        msg->flavors(),
+        msg->document(),
+        msg->template_()
+      );
+
+      if (ok) {
+        if (msg->remove()) {
+          spdlog::debug("Removing watcher with uid {} of the stream {}", msg->uid(), (void*) this);
+          bool removed = unregister(scheduler_sender, msg->uid());
+          auto out_msg = msg->make_output_message();
+          out_msg->set_status(removed ? WatchStatus::REMOVED : WatchStatus::UNKNOWN_UID);
+          out_msg->send();
+        } else {
+          spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), (void*) this);
+          mutex_.Lock();
+          auto inserted = watcher_by_id_.try_emplace(msg->uid(), msg);
+          mutex_.Unlock();
+          if (inserted.second) {
+            scheduler_sender->push(
+              std::make_unique<scheduler::ApiWatchCommand>(
+                msg
+              )
+            );
+          } else {
+            auto out_msg = msg->make_output_message();
+            out_msg->set_status(WatchStatus::UID_IN_USE);
+            out_msg->send();
+          }
+        }
+      } else{
+        auto output_message = msg->make_output_message();
+        output_message->set_status(WatchStatus::ERROR);
+        output_message->send();
       }
     }
+
+    prepare_next_request();
   } else {
     auto out_msg = msg->make_output_message();
     out_msg->set_status(WatchStatus::ERROR);
     out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }
-
-  prepare_next_request();
 }
 
 void WatchStreamImpl::on_destroy(
   SchedulerQueue::Sender* scheduler_sender,
-  metrics::MetricsService& metrics
+  metrics::MetricsService* metrics
 ) {
   absl::flat_hash_map<std::string, std::vector<std::shared_ptr<WatchInputMessage>>> watchers_by_root_path;
 

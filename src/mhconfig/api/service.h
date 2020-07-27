@@ -41,12 +41,17 @@ class Service final
 public:
   Service(
     const std::string& server_address,
-    std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& senders
+    std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& senders,
+    auth::Acl* acl
   );
 
   ~Service();
 
+  Service(const Service& o) = delete;
   Service(Service&& o) = delete;
+
+  Service& operator=(const Service& o) = delete;
+  Service& operator=(Service&& o) = delete;
 
   bool start();
   void join();
@@ -59,15 +64,21 @@ private:
       CustomService* service,
       std::unique_ptr<grpc::ServerCompletionQueue>&& cq,
       SchedulerQueue::SenderRef&& sender,
-      metrics::AsyncMetricsService&& metrics
+      metrics::AsyncMetricsService&& metrics,
+      auth::Acl* acl
     ) : service_(service),
       cq_(std::move(cq)),
       sender_(std::move(sender)),
-      metrics_(std::move(metrics))
+      metrics_(std::move(metrics)),
+      acl_(acl)
     {}
 
     void stop() {
       cq_->Shutdown();
+    }
+
+    void set_acl(auth::Acl* acl) {
+      acl_ = acl;
     }
 
   private:
@@ -77,6 +88,7 @@ private:
     std::unique_ptr<grpc::ServerCompletionQueue> cq_;
     SchedulerQueue::SenderRef sender_;
     metrics::AsyncMetricsService metrics_;
+    auth::Acl* acl_;
     uint_fast32_t request_id_{0};
 
     void on_start() noexcept {
@@ -128,14 +140,22 @@ private:
             (void*) session,
             status
           );
-          auto _ = session->proceed(status, service_, cq_.get(), sender_.get(), metrics_, request_id_);
+          auto _ = session->proceed(
+            status,
+            service_,
+            cq_.get(),
+            acl_,
+            sender_.get(),
+            &metrics_,
+            request_id_
+          );
         } else {
           spdlog::trace(
             "Obtained the error gRPC event {} with the status {}",
             (void*) session,
             status
           );
-          auto _ = session->error(sender_.get(), metrics_);
+          auto _ = session->error(sender_.get(), &metrics_);
         }
         return true;
       } catch (const std::exception &e) {
@@ -169,6 +189,7 @@ private:
 
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
+  auth::Acl* acl_;
 };
 
 } /* api */

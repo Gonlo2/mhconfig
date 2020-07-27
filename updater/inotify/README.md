@@ -16,6 +16,6 @@ To execute it run for example
 
 ```bash
 . .env/bin/activate
-# ./updater.py <server address> <path to watch> <seconds of grace before trigger the update>
-LOG_LEVEL=debug ./updater.py 127.0.0.1:2222 ../../examples/config/ 1
+# MHCONFIG_AUTH_TOKEN=<auth token> ./updater.py <server address> <path to watch> <seconds of grace before trigger the update>
+LOG_LEVEL=debug MHCONFIG_AUTH_TOKEN=test ./updater.py 127.0.0.1:2222 ../../examples/config/ 0.2
 ```

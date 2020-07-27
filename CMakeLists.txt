@@ -58,7 +58,6 @@ target_link_libraries(mhconfig stdc++.a stdc++fs.a)
 target_link_libraries(mhconfig gRPC::grpc++)
 target_link_libraries(mhconfig absl::synchronization absl::flat_hash_map)
 
-
 # tests
 add_executable(tests tests/tests.cpp ${TESTS_SOURCES})
 target_link_libraries(tests pthread)
@@ -66,4 +65,5 @@ target_link_libraries(tests ssl crypto)
 target_link_libraries(tests stdc++fs)
 target_link_libraries(tests yaml-cpp)
 target_link_libraries(tests prometheus-cpp::core prometheus-cpp::pull)
-target_link_libraries(mhconfig gRPC::grpc++)
+target_link_libraries(tests gRPC::grpc++)
+target_link_libraries(tests absl::synchronization absl::flat_hash_map)

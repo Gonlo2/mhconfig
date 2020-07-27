@@ -1,0 +1,8 @@
+root_path:
+- path: /mnt/data/mhconfig/+
+  capabilities: [GET, WATCH, UPDATE, TRACE]
+overrides:
+- path: '*'
+  capabilities: [GET, WATCH, UPDATE]
+- path: /dev/*
+  capabilities: [GET, WATCH, UPDATE, TRACE]

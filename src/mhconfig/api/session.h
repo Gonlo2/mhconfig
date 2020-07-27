@@ -4,9 +4,12 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <optional>
 
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 #include "mhconfig/command.h"
+#include "mhconfig/auth/acl.h"
+#include "mhconfig/auth/common.h"
 
 namespace mhconfig
 {
@@ -55,11 +58,9 @@ public:
   virtual ~Session() {
   }
 
-  // This allow destroy the class when the service finished and
-  // all the messages are destroyed
   void init(std::shared_ptr<Session> this_shared) {
     this_shared_ = std::move(this_shared);
-    if (auto t = raw_tag(7)) ctx_.AsyncNotifyWhenDone(t);
+    if (auto t = unsafe_raw_tag(1)) ctx_.AsyncNotifyWhenDone(t);
   }
 
   virtual const std::string name() const = 0;
@@ -81,8 +82,9 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics,
+    metrics::MetricsService* metrics,
     uint_fast32_t& sequential_id
   );
 
@@ -90,7 +92,7 @@ public:
   //class Service friend of this
   std::shared_ptr<Session> error(
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService* metrics
   );
 
   std::string session_peer() const {
@@ -103,13 +105,12 @@ protected:
 
 private:
   std::shared_ptr<Session> this_shared_{nullptr};
-  absl::Mutex mutex_;
   uint32_t cq_refcount_{0};
   bool closed_{false};
 
   inline std::shared_ptr<Session> decrement_cq_refcount(
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService* metrics
   ) {
     std::shared_ptr<Session> tmp{nullptr};
     if (--cq_refcount_ == 0) {
@@ -121,34 +122,75 @@ private:
     return tmp;
   }
 
+  virtual bool finish(const grpc::Status& status = grpc::Status::OK) = 0;
+
 protected:
   grpc::ServerContext ctx_;
+  absl::Mutex mutex_;
 
   inline void* raw_tag(uint8_t status) {
-    uintptr_t ptr = 0;
     mutex_.Lock();
-    if (!closed_) {
-      ++cq_refcount_;
-      ptr = ((uintptr_t) this_shared_.get()) | status;
-    }
+    void* t = unsafe_raw_tag(status);
     mutex_.Unlock();
-    return (void*) ptr;
+    return t;
+  }
+
+  inline void* unsafe_raw_tag(uint8_t status) {
+    if (closed_) return nullptr;
+    ++cq_refcount_;
+    return (void*) (((uintptr_t) this_shared_.get()) | status);
+  }
+
+  std::optional<std::string> get_auth_token() {
+    auto search = ctx_.client_metadata().find("mhconfig-auth-token");
+    if (search == ctx_.client_metadata().end()) {
+      return std::optional<std::string>();
+    }
+    return std::optional<std::string>(
+      std::string(search->second.data(), search->second.size())
+    );
   }
 
   virtual void on_proceed(
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics,
+    metrics::MetricsService* metrics,
     uint_fast32_t& sequential_id
   ) = 0;
 
   virtual void on_destroy(
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics
+    metrics::MetricsService* metrics
   ) {
   };
+
+  bool check_auth(auth::AuthResult auth_result) {
+    switch (auth_result) {
+      case auth::AuthResult::AUTHENTICATED:
+        return true;
+      case auth::AuthResult::EXPIRED_TOKEN:  // Fallback
+      case auth::AuthResult::UNAUTHENTICATED:
+        finish(
+          grpc::Status(
+            grpc::StatusCode::UNAUTHENTICATED,
+            "The auth token hasn't been provided or is incorrect"
+          )
+        );
+        break;
+      case auth::AuthResult::PERMISSION_DENIED:
+        finish(
+          grpc::Status(
+            grpc::StatusCode::PERMISSION_DENIED,
+            "The auth token don't have permissions to do this operation"
+          )
+        );
+        break;
+    }
+    return false;
+  }
 
 };
 

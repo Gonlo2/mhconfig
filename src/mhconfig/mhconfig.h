@@ -6,6 +6,7 @@
 #include "spdlog/spdlog.h"
 
 #include "mhconfig/api/service.h"
+#include "mhconfig/auth/acl.h"
 #include "mhconfig/scheduler.h"
 #include "mhconfig/worker.h"
 #include "mhconfig/scheduler/run_gc_command.h"
@@ -22,6 +23,7 @@ namespace mhconfig
   {
   public:
     MHConfig(
+      const std::string& config_path,
       const std::string& server_address,
       const std::string& prometheus_address,
       size_t num_threads_api,
@@ -30,7 +32,14 @@ namespace mhconfig
 
     virtual ~MHConfig();
 
+    MHConfig(const MHConfig& o) = delete;
+    MHConfig(MHConfig&& o) = delete;
+
+    MHConfig& operator=(const MHConfig& o) = delete;
+    MHConfig& operator=(MHConfig&& o) = delete;
+
     bool run();
+    bool reload();
     bool join();
 
   private:
@@ -43,6 +52,7 @@ namespace mhconfig
       RUN_GC_VERSIONS,
     };
 
+    std::string config_path_;
     std::string server_address_;
     metrics::SyncMetricsService sync_metrics_service_;
     size_t num_threads_api_;
@@ -50,13 +60,14 @@ namespace mhconfig
 
     SchedulerQueue scheduler_queue_;
     WorkerQueue worker_queue_;
-    ::mhconfig::metrics::MetricsQueue metrics_queue_;
+    metrics::MetricsQueue metrics_queue_;
 
     std::unique_ptr<Scheduler> scheduler_;
     std::vector<std::unique_ptr<Worker>> workers_;
     std::unique_ptr<api::Service> service_;
     std::unique_ptr<metrics::MetricsWorker> metrics_worker_;
     jmutils::TimeWorker time_worker_;
+    std::unique_ptr<auth::Acl> acl_;
 
     bool running_{false};
 

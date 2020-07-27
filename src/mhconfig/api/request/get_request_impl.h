@@ -4,6 +4,7 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/command.h"
+#include "mhconfig/validator.h"
 #include "mhconfig/scheduler/api_get_command.h"
 
 #include <grpcpp/impl/codegen/serialization_traits.h>
@@ -48,6 +49,8 @@ public:
 
   bool commit() override;
 
+  bool finish(const grpc::Status& status = grpc::Status::OK) override;
+
   std::string peer() const override;
 
 protected:
@@ -67,9 +70,10 @@ protected:
   Element element_;
 
   void request(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
-  void finish() override;
+
 };
 
 } /* request */

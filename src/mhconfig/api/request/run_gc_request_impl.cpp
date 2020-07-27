@@ -38,20 +38,28 @@ void RunGCRequestImpl::subscribe(
 }
 
 bool RunGCRequestImpl::commit() {
-  return reply();
+  return finish();
 }
 
 void RunGCRequestImpl::request(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
-  scheduler_sender->push(
-    std::make_unique<scheduler::RunGcCommand>(
-      type(),
-      max_live_in_seconds()
-    )
-  );
+  auto token = get_auth_token();
+  auto auth_result = token
+    ? acl->basic_auth(*token, auth::Capability::RUN_GC)
+    : auth::AuthResult::UNAUTHENTICATED;
 
-  reply();
+  if (check_auth(auth_result)) {
+    scheduler_sender->push(
+      std::make_unique<scheduler::RunGcCommand>(
+        type(),
+        max_live_in_seconds()
+      )
+    );
+
+    finish();  // The run_gc request use a fire & forget logic
+  };
 }
 
 scheduler::RunGcCommand::Type RunGCRequestImpl::type() {
@@ -75,10 +83,17 @@ uint32_t RunGCRequestImpl::max_live_in_seconds() {
   return request_->max_live_in_seconds();
 }
 
-void RunGCRequestImpl::finish() {
+bool RunGCRequestImpl::finish(const grpc::Status& status) {
   if (auto t = tag(RequestStatus::PROCESS)) {
-    responder_.Finish(*response_, grpc::Status::OK, t);
+    if (status.ok()) {
+      responder_.Finish(*response_, status, t);
+    } else {
+      responder_.FinishWithError(status, t);
+    }
+    return true;
   }
+
+  return false;
 }
 
 

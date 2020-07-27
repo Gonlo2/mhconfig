@@ -54,7 +54,7 @@ void UpdateRequestImpl::set_version(uint32_t version) {
 }
 
 bool UpdateRequestImpl::commit() {
-  return reply();
+  return finish();
 }
 
 void UpdateRequestImpl::clone_and_subscribe(
@@ -74,21 +74,56 @@ void UpdateRequestImpl::subscribe(
 }
 
 void UpdateRequestImpl::request(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
   relative_paths_ = to_vector(request_->relative_paths());
 
-  scheduler_sender->push(
-    std::make_unique<scheduler::ApiUpdateCommand>(
-      shared_from_this()
-    )
-  );
+  auto token = get_auth_token();
+  auto auth_result = token
+    ? acl->root_path_auth(*token, auth::Capability::UPDATE, *this)
+    : auth::AuthResult::UNAUTHENTICATED;
+
+  if (check_auth(auth_result)) {
+    if (validate_request()) {
+      scheduler_sender->push(
+        std::make_unique<scheduler::ApiUpdateCommand>(
+          shared_from_this()
+        )
+      );
+    } else {
+      set_status(Status::ERROR);
+      finish();
+    }
+  }
 }
 
-void UpdateRequestImpl::finish() {
-  if (auto t = tag(RequestStatus::PROCESS)) {
-    responder_.Finish(*response_, grpc::Status::OK, t);
+bool UpdateRequestImpl::validate_request() {
+  if (!validator::is_a_valid_absolute_path(root_path())) {
+    spdlog::error("The root path '{}' isn't valid", root_path());
+    return false;
   }
+
+  for (size_t i = 0, l = relative_paths_.size(); i < l; ++i) {
+    if (!validator::is_a_valid_relative_path(relative_paths_[i])) {
+      spdlog::error("The path '{}' isn't a valid relative path", relative_paths_[i]);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool UpdateRequestImpl::finish(const grpc::Status& status) {
+  if (auto t = tag(RequestStatus::PROCESS)) {
+    if (status.ok()) {
+      responder_.Finish(*response_, status, t);
+    } else {
+      responder_.FinishWithError(status, t);
+    }
+    return true;
+  }
+  return false;
 }
 
 

@@ -130,19 +130,42 @@ void TraceStreamImpl::subscribe(
 }
 
 void TraceStreamImpl::on_create(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
   overrides_ = to_vector(request_->overrides());
   flavors_ = to_vector(request_->flavors());
 
-  scheduler_sender->push(
-    std::make_unique<scheduler::ApiTraceCommand>(
-      shared_from_this()
-    )
-  );
+  auto token = get_auth_token();
+  auto auth_result = token
+    ? acl->document_auth(*token, auth::Capability::TRACE, *this)
+    : auth::AuthResult::UNAUTHENTICATED;
+
+  if (check_auth(auth_result)) {
+    bool ok = validator::are_valid_arguments(
+      root_path(),
+      overrides(),
+      flavors(),
+      document(),
+      template_()
+    );
+
+    if (ok) {
+      scheduler_sender->push(
+        std::make_unique<scheduler::ApiTraceCommand>(
+          shared_from_this()
+        )
+      );
+    } else {
+      auto output_message = make_output_message();
+      output_message->set_status(TraceOutputMessage::Status::ERROR);
+      output_message->send(true);
+    }
+  }
 }
 
 void TraceStreamImpl::on_read(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
 }

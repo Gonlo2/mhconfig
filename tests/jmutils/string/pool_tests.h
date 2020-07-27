@@ -1,11 +1,12 @@
-#ifndef STRING_POOL__TEST_POOL_H
-#define STRING_POOL__TEST_POOL_H
+#ifndef JMUTILS__STRING__POOL_TESTS_H
+#define JMUTILS__STRING__POOL_TESTS_H
 
 #include <catch2/catch.hpp>
 
-#include "string_pool/pool.h"
+#include "jmutils/string/pool.h"
 
-namespace string_pool {
+namespace jmutils {
+namespace string {
 
 TEST_CASE("String", "[string]") {
   SECTION("Small string from std::string") {
@@ -154,6 +155,7 @@ TEST_CASE("String pool", "[string-pool]") {
 
 }
 
+}
 }
 
 #endif

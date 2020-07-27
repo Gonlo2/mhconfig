@@ -92,7 +92,7 @@ void GetRequestImpl::set_template_rendered(const std::string& data) {
 }
 
 bool GetRequestImpl::commit() {
-  return reply();
+  return finish();
 }
 
 void GetRequestImpl::clone_and_subscribe(
@@ -112,6 +112,7 @@ void GetRequestImpl::subscribe(
 }
 
 void GetRequestImpl::request(
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender
 ) {
   auto status = grpc::SerializationTraits<mhconfig::proto::GetRequest>::Deserialize(
@@ -122,35 +123,62 @@ void GetRequestImpl::request(
     overrides_ = to_vector(request_->overrides());
     flavors_ = to_vector(request_->flavors());
 
-    scheduler_sender->push(
-      std::make_unique<scheduler::ApiGetCommand>(
-        shared_from_this()
-      )
-    );
+    auto token = get_auth_token();
+    auto auth_result = token
+      ? acl->document_auth(*token, auth::Capability::GET, *this)
+      : auth::AuthResult::UNAUTHENTICATED;
+
+    if (check_auth(auth_result)) {
+      bool ok = validator::are_valid_arguments(
+        root_path(),
+        overrides(),
+        flavors(),
+        document(),
+        template_()
+      );
+
+      if (ok) {
+        scheduler_sender->push(
+          std::make_unique<scheduler::ApiGetCommand>(
+            shared_from_this()
+          )
+        );
+      } else {
+        set_status(Status::ERROR);
+        finish();
+      }
+    }
   } else {
-    set_element(UNDEFINED_ELEMENT);
-    reply();
+    set_status(Status::ERROR);
+    finish();
   }
 }
 
-void GetRequestImpl::finish() {
+bool GetRequestImpl::finish(const grpc::Status& status) {
   if (auto t = tag(RequestStatus::PROCESS)) {
-    bool ok = response_->SerializeToOstream(&elements_data_);
-    if (ok) {
-      grpc::Slice slice(elements_data_.str());
-      grpc::ByteBuffer raw_response(&slice, 1);
+    if (status.ok()) {
+      bool ok = response_->SerializeToOstream(&elements_data_);
+      if (ok) {
+        grpc::Slice slice(elements_data_.str());
+        grpc::ByteBuffer raw_response(&slice, 1);
 
-      responder_.Finish(raw_response, grpc::Status::OK, t);
+        responder_.Finish(raw_response, status, t);
+      } else {
+        grpc::Status serialization_error_status(
+          grpc::StatusCode::CANCELLED,
+          "Some problem takes place serializing the message"
+        );
+        responder_.FinishWithError(serialization_error_status, t);
+      }
     } else {
-      grpc::Status status(
-        grpc::StatusCode::CANCELLED,
-        "Some problem takes place serializing the message"
-      );
       responder_.FinishWithError(status, t);
     }
-  }
-}
 
+    return true;
+  }
+
+  return false;
+}
 
 } /* request */
 } /* api */

@@ -30,24 +30,23 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService& metrics,
+    metrics::MetricsService* metrics,
     uint_fast32_t& sequential_id
   ) override;
-
-  bool reply();
 
 protected:
   enum class RequestStatus {
     CREATE = 0,
-    PROCESS = 1,
-    FINISH = 7
+    FINISH = 1,
+    PROCESS = 2
   };
 
   virtual void request(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) = 0;
-  virtual void finish() = 0;
 
   inline void* tag(RequestStatus status) {
     return raw_tag(static_cast<uint8_t>(status));

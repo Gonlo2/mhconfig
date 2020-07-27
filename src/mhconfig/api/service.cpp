@@ -8,10 +8,12 @@ namespace api
 
 Service::Service(
   const std::string& server_address,
-  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& thread_vars
+  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& thread_vars,
+  auth::Acl* acl
 ) :
   server_address_(server_address),
-  thread_vars_(std::move(thread_vars))
+  thread_vars_(std::move(thread_vars)),
+  acl_(acl)
 {
 }
 
@@ -43,7 +45,8 @@ bool Service::start() {
       &service_,
       std::move(cqs[i]),
       std::move(thread_vars_[i].first),
-      std::move(thread_vars_[i].second)
+      std::move(thread_vars_[i].second),
+      acl_
     );
     if (!thread->start()) return false;
     threads_.push_back(std::move(thread));

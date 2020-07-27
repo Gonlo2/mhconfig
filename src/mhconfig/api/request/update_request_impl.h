@@ -5,6 +5,7 @@
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/update_request.h"
 #include "mhconfig/command.h"
+#include "mhconfig/validator.h"
 #include "mhconfig/scheduler/api_update_command.h"
 
 namespace mhconfig
@@ -41,6 +42,8 @@ public:
 
   bool commit() override;
 
+  bool finish(const grpc::Status& status = grpc::Status::OK) override;
+
 protected:
   google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<mhconfig::proto::UpdateResponse> responder_;
@@ -51,9 +54,12 @@ protected:
   std::vector<std::string> relative_paths_;
 
   void request(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
-  void finish() override;
+
+private:
+  bool validate_request();
 };
 
 } /* request */

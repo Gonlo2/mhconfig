@@ -34,6 +34,8 @@ public:
 
   bool commit() override;
 
+  bool finish(const grpc::Status& status = grpc::Status::OK) override;
+
 protected:
   google::protobuf::Arena arena_;
   grpc::ServerAsyncResponseWriter<mhconfig::proto::RunGCResponse> responder_;
@@ -42,9 +44,9 @@ protected:
   mhconfig::proto::RunGCResponse* response_;
 
   void request(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
-  void finish() override;
 
   scheduler::RunGcCommand::Type type();
   uint32_t max_live_in_seconds();

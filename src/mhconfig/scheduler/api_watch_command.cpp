@@ -119,25 +119,6 @@ bool ApiWatchCommand::validate_request(
   const config_namespace_t& config_namespace,
   WorkerQueue& worker_queue
 ) {
-  bool ok = are_valid_arguments(
-    message_->overrides(),
-    message_->flavors(),
-    message_->document(),
-    message_->template_()
-  );
-  if (!ok) {
-    auto output_message = message_->make_output_message();
-    output_message->set_status(api::stream::WatchStatus::ERROR);
-
-    worker_queue.push(
-      std::make_unique<worker::ApiReplyCommand>(
-        std::move(output_message)
-      )
-    );
-
-    return false;
-  }
-
   if (config_namespace.current_version < message_->version()) {
     auto output_message = message_->make_output_message();
     output_message->set_status(api::stream::WatchStatus::INVALID_VERSION);

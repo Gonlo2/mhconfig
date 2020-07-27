@@ -131,18 +131,6 @@ bool ApiGetCommand::validate_request(
   const config_namespace_t& config_namespace,
   WorkerQueue& worker_queue
 ) {
-  bool ok = are_valid_arguments(
-    get_request_->overrides(),
-    get_request_->flavors(),
-    get_request_->document(),
-    get_request_->template_()
-  );
-  if (!ok) {
-    get_request_->set_status(api::request::GetRequest::Status::ERROR);
-    send_api_response(worker_queue);
-    return false;
-  }
-
   // If the document exists and the user asked for a version
   // we check if the version is available
   if (

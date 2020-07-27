@@ -31,25 +31,6 @@ SchedulerCommand::CommandResult ApiTraceCommand::execute_on_namespace(
   SchedulerQueue& scheduler_queue,
   WorkerQueue& worker_queue
 ) {
-  bool ok = are_valid_arguments(
-    trace_stream_->overrides(),
-    trace_stream_->flavors(),
-    trace_stream_->document(),
-    trace_stream_->template_()
-  );
-  if (!ok) {
-    auto output_message = trace_stream_->make_output_message();
-    output_message->set_status(api::stream::TraceOutputMessage::Status::ERROR);
-
-    worker_queue.push(
-      std::make_unique<worker::ApiReplyCommand>(
-        std::move(output_message)
-      )
-    );
-
-    return CommandResult::OK;
-  }
-
   bool trace_overrides = !trace_stream_->overrides().empty();
   bool trace_flavors = !trace_stream_->flavors().empty();
   bool trace_document = !trace_stream_->document().empty();

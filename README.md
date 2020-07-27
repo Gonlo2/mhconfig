@@ -41,19 +41,20 @@ You could find the executable in `./build/mhconfig`
 To run the program execute
 
 ```bash
-./mhconfig <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers>
+./mhconfig <daemon config path> <gRPC listen address> <prometheus listen address> <num grpc threads> <num workers>
 ```
 
 For example
 
 ```bash
-SPDLOG_LEVEL=debug ./mhconfig 0.0.0.0:2222 0.0.0.0:1111 13 13
+SPDLOG_LEVEL=debug ./mhconfig daemon_config 0.0.0.0:2222 0.0.0.0:1111 13 13
 ```
 
 To test it you could implement a client using the protobuf file `./src/mhconfig/proto/mhconfig.proto` or using some tool
 like [grpcurl](https://github.com/fullstorydev/grpcurl) or [ghz](https://ghz.sh/).
 
 PS: the logger configuration format could be obtained from https://github.com/gabime/spdlog/releases/tag/v1.6.0
+PS2: for the moment it isn't possible to reload the configuration of the daemon.
 
 
 ## Config
@@ -152,6 +153,61 @@ mysql_variables=
 ## endfor
 }
 ```
+
+## Access Control Lists
+
+It is possible to configure the server to control access to sensitive resources or procedures, that said, the permission logic can be divided into the following parts: policies, entities and tokens.
+
+### Policies
+
+A policy allows you to restrict access to resources based on root path and overrides. Each policy is
+defined in the `policy` subfolder of the configuration folder as a YAML file, whose name is the policy name, this file
+has the following structure:
+
+```yaml
+root_path:
+- path: /mnt/data/mhconfig/+
+  capabilities: [GET, WATCH, TRACE]
+overrides:
+- path: '*'
+  capabilities: [GET, WATCH]
+- path: /dev/*
+  capabilities: [GET, WATCH, TRACE]
+```
+
+Where a path could have two special characters:
+- The character `+` to denote any value within a single path segment.
+- The character `*` to denote any number of path segments, this can only be used at the end of the path.
+
+And the possible capabilities are: `GET`, `WATCH`, `TRACE`, `UPDATE` (it only check the `root_path`) and `RUN_GC` (it only check the entity capability).
+
+### Entities
+
+A entity encapsulates the capabilities and policies that an being can have. Each entity is
+defined in the `entity` subfolder of the configuration folder as a YAML file, whose name is the entity name, this file
+has the following structure:
+
+```yaml
+capabilities: [GET]
+policies:
+- test
+```
+
+Policies are ordered from lowest to highest priority, so if two or more policies have the same path, the one with the highest priority will be used.
+
+It's also necessary to take into account that the capabilities of the entity have priority over those of the paths and, therefore, even if an operation is allowed on a path if it is not also defined in the entity, the permission will be denied.
+
+### Tokens
+
+A token allows to authenticate an entity and configure some authentication parameters, although at the moment it only allows you to define the expiration date of the token through a unix timestamp. Each token is
+defined in the `token` subfolder of the configuration folder as a YAML file, whose name is the token itself, this file has the following structure:
+
+```yaml
+expires_on: 1595800000  # A zero value indicate that the token don't expire
+entity: test
+```
+
+This token is specified in the gRPC call through the metadata `mhconfig-auth-token`.
 
 ## API
 

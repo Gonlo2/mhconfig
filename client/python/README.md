@@ -10,3 +10,11 @@ virtualenv .env
 . .env/bin/activate
 ./prepare.sh
 ```
+
+## Example usage
+To execute the example run run
+
+```bash
+. .env/bin/activate
+MHCONFIG_AUTH_TOKEN=test python example.py 127.0.0.1:2222 10000000000 my_document /mnt/data/mhconfig low-priority:high-priority ''
+```

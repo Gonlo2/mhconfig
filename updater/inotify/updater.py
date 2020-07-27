@@ -46,8 +46,9 @@ class WatchMetadata(object):
 
 
 class InotifyUpdater(object):
-    def __init__(self, address, root_path, batch_time_sec=1):
+    def __init__(self, auth_token, address, root_path, batch_time_sec=1):
         super(InotifyUpdater, self).__init__()
+        self._auth_token = auth_token
         self._address = address
         self._root_path = os.path.normpath(os.path.abspath(root_path))
         self._batch_time_sec = batch_time_sec
@@ -65,7 +66,10 @@ class InotifyUpdater(object):
                     root_path=self._root_path,
                     relative_paths=relative_paths,
                 )
-                response = stub.Update(request)  #TODO check response
+                response = stub.Update(
+                    request,
+                    metadata=(('mhconfig-auth-token', self._auth_token),),
+                )  #TODO check response
                 pprint(response)
 
     def _relative_paths_batch_gen(self):
@@ -193,17 +197,18 @@ def main(address, root_path, batch_time_sec):
     log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
     logging.basicConfig(level=log_level)
 
+    auth_token = os.environ.get('MHCONFIG_AUTH_TOKEN', '')
     batch_time_sec = float(batch_time_sec)
 
-    updater = InotifyUpdater(address, root_path, batch_time_sec)
+    updater = InotifyUpdater(auth_token, address, root_path, batch_time_sec)
     updater.start()
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args:
-        print("Usage: {} <server address> <path to watch> <seconds of grace before trigger the update>".format(sys.argv[0]))
-        print("Example: LOG_LEVEL=debug {} 127.0.0.1:2222 ../../examples/config/ 1".format(sys.argv[0]))
+        print("Usage: MHCONFIG_AUTH_TOKEN=<auth token> {} <server address> <path to watch> <seconds of grace before trigger the update>".format(sys.argv[0]))
+        print("Example: LOG_LEVEL=debug MHCONFIG_AUTH_TOKEN=test {} 127.0.0.1:2222 ../../examples/config/ 1".format(sys.argv[0]))
         sys.exit(1)
 
     main(*args)

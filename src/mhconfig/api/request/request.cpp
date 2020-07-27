@@ -17,8 +17,9 @@ void Request::on_proceed(
   uint8_t status,
   CustomService* service,
   grpc::ServerCompletionQueue* cq,
+  auth::Acl* acl,
   SchedulerQueue::Sender* scheduler_sender,
-  metrics::MetricsService& metrics,
+  metrics::MetricsService* metrics,
   uint_fast32_t& sequential_id
 ) {
   switch (static_cast<RequestStatus>(status)) {
@@ -31,7 +32,7 @@ void Request::on_proceed(
 
       clone_and_subscribe(service, cq);
 
-      request(scheduler_sender);
+      request(acl, scheduler_sender);
       break;
     }
     case RequestStatus::PROCESS:
@@ -42,7 +43,7 @@ void Request::on_proceed(
           end_time - start_time_
         ).count();
 
-        metrics.add(
+        metrics->add(
           metrics::MetricsService::MetricId::API_DURATION_NANOSECONDS,
           {{"type", name()}},
           duration_ns
@@ -52,11 +53,6 @@ void Request::on_proceed(
     case RequestStatus::FINISH:
       break;
   }
-}
-
-bool Request::reply() {
-  finish();
-  return true;
 }
 
 } /* request */

@@ -3,12 +3,14 @@
 namespace mhconfig
 {
 
-  MHConfig::MHConfig(
+MHConfig::MHConfig(
+  const std::string& config_path,
   const std::string& server_address,
   const std::string& prometheus_address,
   size_t num_threads_api,
   size_t num_threads_workers
-) : server_address_(server_address),
+) : config_path_(config_path),
+  server_address_(server_address),
   sync_metrics_service_(prometheus_address),
   num_threads_api_(num_threads_api),
   num_threads_workers_(num_threads_workers)
@@ -20,6 +22,10 @@ MHConfig::~MHConfig() {
 
 bool MHConfig::run() {
   if (running_) return false;
+
+
+  acl_ = std::make_unique<auth::Acl>();
+  if (!acl_->load(config_path_)) return false;
 
 
   sync_metrics_service_.init();
@@ -50,7 +56,8 @@ bool MHConfig::run() {
   }
   service_ = std::make_unique<api::Service>(
     server_address_,
-    std::move(thread_vars)
+    std::move(thread_vars),
+    acl_.get()
   );
   service_->start();
 
@@ -74,6 +81,16 @@ bool MHConfig::run() {
 
 
   running_ = true;
+  return true;
+}
+
+bool MHConfig::reload() {
+  if (!running_) return false;
+
+  if (!acl_->load(config_path_)) {
+    return false;
+  }
+
   return true;
 }
 

@@ -5,6 +5,7 @@
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/command.h"
+#include "mhconfig/validator.h"
 #include "mhconfig/scheduler/api_trace_command.h"
 
 #include "spdlog/spdlog.h"
@@ -82,10 +83,12 @@ protected:
   friend class TraceOutputMessageImpl;
 
   void on_create(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
 
   void on_read(
+    auth::Acl* acl,
     SchedulerQueue::Sender* scheduler_sender
   ) override;
 

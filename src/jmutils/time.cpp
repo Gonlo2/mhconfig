@@ -3,6 +3,12 @@
 namespace jmutils
 {
 
+uint64_t now_sec() {
+  return std::chrono::duration_cast<std::chrono::seconds>(
+    std::chrono::system_clock::now().time_since_epoch()
+  ).count();
+}
+
 uint64_t monotonic_now_sec() {
   return std::chrono::duration_cast<std::chrono::seconds>(
     std::chrono::steady_clock::now().time_since_epoch()
