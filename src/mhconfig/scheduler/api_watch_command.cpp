@@ -75,26 +75,6 @@ SchedulerCommand::CommandResult ApiWatchCommand::execute_on_namespace(
     }
   );
 
-  // TODO This will trigger also a update if any of the overrides templates change
-  // although only the last one is used, review if is neccesary deal with multiples
-  // templates or this is a silly use case.
-  if (!message_->template_().empty()) {
-    std::string override_path;
-    for (const auto& override_: message_->overrides()) {
-      make_override_path(
-        override_,
-        message_->template_(),
-        "",
-        override_path
-      );
-      auto& override_metadata = config_namespace.override_metadata_by_override_path[override_path];
-      //TODO Check if the overrides are distinct
-      override_metadata.watchers.push_back(message_);
-      notify |= !override_metadata.raw_config_by_version.empty()
-        && (override_metadata.raw_config_by_version.crbegin()->first > message_->version());
-    }
-  }
-
   config_namespace.watchers.push_back(message_);
 
   // If the asked merged config is already deprecated we notify the watcher

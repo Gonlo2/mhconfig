@@ -79,7 +79,6 @@ void RunGcCommand::remove_merge_configs(
           ((from[i]->status == MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED)
             || (from[i]->status == MergedConfigStatus::OK_CONFIG_OPTIMIZING)
             || (from[i]->status == MergedConfigStatus::OK_CONFIG_OPTIMIZED)
-            || (from[i]->status == MergedConfigStatus::OK_TEMPLATE)
           ) && (from[i]->creation_timestamp + max_live_in_seconds_ <= current_timestamp)
         ) {
           if (from[i]->last_access_timestamp + max_live_in_seconds_ <= current_timestamp) {

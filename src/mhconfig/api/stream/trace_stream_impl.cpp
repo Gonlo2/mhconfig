@@ -64,10 +64,6 @@ void TraceOutputMessageImpl::set_document(const std::string& document) {
   response_->set_document(document);
 }
 
-void TraceOutputMessageImpl::set_template(const std::string& template_) {
-  response_->set_template_(template_);
-}
-
 void TraceOutputMessageImpl::set_peer(const std::string& peer) {
   response_->set_peer(peer);
 }
@@ -103,10 +99,6 @@ const std::vector<std::string>& TraceStreamImpl::flavors() const {
 
 const std::string& TraceStreamImpl::document() const {
   return request_->document();
-}
-
-const std::string& TraceStreamImpl::template_() const {
-  return request_->template_();
 }
 
 const std::string TraceStreamImpl::name() const {
@@ -146,8 +138,7 @@ void TraceStreamImpl::on_create(
       root_path(),
       overrides(),
       flavors(),
-      document(),
-      template_()
+      document()
     );
 
     if (ok) {

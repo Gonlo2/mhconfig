@@ -42,10 +42,6 @@ const std::string& GetRequestImpl::document() const {
   return request_->document();
 }
 
-const std::string& GetRequestImpl::template_() const {
-  return request_->template_();
-}
-
 std::string GetRequestImpl::peer() const {
   return session_peer();
 }
@@ -85,10 +81,6 @@ void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
   elements_data_.clear();
   elements_data_.write(data, len);
   response_->clear_elements();
-}
-
-void GetRequestImpl::set_template_rendered(const std::string& data) {
-  response_->set_template_rendered(data);
 }
 
 bool GetRequestImpl::commit() {
@@ -133,8 +125,7 @@ void GetRequestImpl::request(
         root_path(),
         overrides(),
         flavors(),
-        document(),
-        template_()
+        document()
       );
 
       if (ok) {

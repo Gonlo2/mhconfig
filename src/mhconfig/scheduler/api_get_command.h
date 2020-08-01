@@ -59,8 +59,7 @@ private:
   CommandResult prepare_build_request(
     config_namespace_t& config_namespace,
     WorkerQueue& worker_queue,
-    const std::string& overrides_key,
-    std::shared_ptr<inja::Template>&& template_
+    const std::string& overrides_key
   );
 
   bool check_if_ref_graph_is_a_dag(
@@ -82,55 +81,6 @@ private:
     absl::flat_hash_map<std::string, std::shared_ptr<raw_config_t>>& raw_config_by_override_path,
     absl::flat_hash_map<std::string, std::string>& overrides_key_by_document
   );
-
-  inline bool add_overrides_key(
-    config_namespace_t& config_namespace,
-    std::string& overrides_key,
-    std::shared_ptr<inja::Template>& template_
-  ) {
-    for_each_document_override(
-      config_namespace,
-      get_request_->flavors(),
-      get_request_->overrides(),
-      get_request_->document(),
-      get_request_->version(),
-      [&overrides_key](const auto&, auto& raw_config) {
-        jmutils::push_uint32(overrides_key, raw_config->id);
-      }
-    );
-
-    if (!get_request_->template_().empty()) {
-      thread_local static std::string override_path;
-      template_ = nullptr;
-      for (size_t i = get_request_->overrides().size(); (template_ == nullptr) && i--;) {
-        make_override_path(
-          get_request_->overrides()[i],
-          get_request_->template_(),
-          "",
-          override_path
-        );
-        with_raw_config(
-          config_namespace,
-          override_path,
-          get_request_->version(),
-          [&template_, &overrides_key](const auto&, auto& raw_config) {
-            template_ = raw_config->template_;
-            jmutils::push_uint32(overrides_key, raw_config->id);
-          }
-        );
-      }
-      if (template_ == nullptr) {
-        spdlog::warn(
-          "Can't found a template file with the name '{}'",
-          get_request_->template_()
-        );
-        get_request_->set_status(api::request::GetRequest::Status::ERROR);
-        return false;
-      }
-    }
-
-    return true;
-  }
 
   inline uint32_t get_specific_version(
     const config_namespace_t& config_namespace,

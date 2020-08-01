@@ -99,34 +99,7 @@ load_raw_config_result_t index_file(
     .parent_path()
     .string();
 
-  if (first_filename_char == '_') {
-    result.document = path.filename().string();
-
-    load_raw_config(
-      path,
-      [](const std::string& data, load_raw_config_result_t& result) {
-        result.raw_config->template_ = std::make_shared<inja::Template>();
-        result.raw_config->template_->content = data;
-
-        {
-          inja::ParserConfig parser_config;
-          inja::LexerConfig lexer_config;
-          inja::TemplateStorage included_templates;
-          ForbiddenIncludeStrategy include_strategy;
-
-          inja::Parser parser(
-            parser_config,
-            lexer_config,
-            included_templates,
-            include_strategy
-          );
-
-          parser.parse_into(*result.raw_config->template_, "");
-        }
-      },
-      result
-    );
-  } else if (path.extension() == ".yaml") {
+  if (path.extension() == ".yaml") {
     auto stem = path.stem().string();
     auto pos = stem.find_first_of('.');
     if (pos == std::string::npos) {
@@ -884,7 +857,6 @@ std::shared_ptr<merged_config_t> get_merged_config(
 
 bool is_a_valid_document_name(const std::string& document) {
   if (document.empty()) return true;
-  if (document[0] == '_') return false;
   for (auto c: document) {
     if (c == '.') return false;
   }

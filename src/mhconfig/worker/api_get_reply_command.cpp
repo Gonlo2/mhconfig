@@ -80,9 +80,6 @@ bool ApiGetReplyCommand::execute(
         merged_config_->preprocesed_value.size()
       );
       break;
-    case MergedConfigStatus::OK_TEMPLATE:
-      request_->set_template_rendered(merged_config_->preprocesed_value);
-      break;
   }
   request_->commit();
   return true;

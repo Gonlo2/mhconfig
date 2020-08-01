@@ -37,7 +37,6 @@ public:
   virtual void set_overrides(const std::vector<std::string>& overrides) = 0;
   virtual void set_flavors(const std::vector<std::string>& flavors) = 0;
   virtual void set_document(const std::string& document) = 0;
-  virtual void set_template(const std::string& template_) = 0;
   virtual void set_peer(const std::string& peer) = 0;
 };
 
@@ -53,7 +52,6 @@ public:
   virtual const std::vector<std::string>& overrides() const = 0;
   virtual const std::vector<std::string>& flavors() const = 0;
   virtual const std::string& document() const = 0;
-  virtual const std::string& template_() const = 0;
 
   virtual std::shared_ptr<TraceOutputMessage> make_output_message() = 0;
 };

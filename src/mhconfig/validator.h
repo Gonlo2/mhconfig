@@ -28,8 +28,7 @@ bool are_valid_arguments(
   const std::string& root_path,
   const std::vector<std::string>& overrides,
   const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
+  const std::string& document
 );
 
 } /* validator */

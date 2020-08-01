@@ -72,10 +72,6 @@ void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
   proto_response_->clear_elements();
 }
 
-void WatchOutputMessageImpl::set_template_rendered(const std::string& data) {
-  proto_response_->set_template_rendered(data);
-}
-
 bool WatchOutputMessageImpl::send(bool finish) {
   if (auto stream = stream_.lock()) {
     if (proto_response_->SerializeToOstream(&elements_data_)) {
@@ -130,10 +126,6 @@ const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
 }
 
-const std::string& WatchInputMessageImpl::template_() const {
-  return request_->template_();
-}
-
 bool WatchInputMessageImpl::unregister() {
   if (auto stream = stream_.lock()) {
     return stream->unregister(uid());
@@ -186,10 +178,6 @@ const std::string& WatchGetRequest::document() const {
   return input_message_->document();
 }
 
-const std::string& WatchGetRequest::template_() const {
-  return input_message_->template_();
-}
-
 void WatchGetRequest::set_status(::mhconfig::api::request::GetRequest::Status status) {
   switch (status) {
     case ::mhconfig::api::request::GetRequest::Status::OK:
@@ -221,10 +209,6 @@ void WatchGetRequest::set_element(const mhconfig::Element& element) {
 
 void WatchGetRequest::set_element_bytes(const char* data, size_t len) {
   output_message_->set_element_bytes(data, len);
-}
-
-void WatchGetRequest::set_template_rendered(const std::string& data) {
-  output_message_->set_template_rendered(data);
 }
 
 bool WatchGetRequest::commit() {
@@ -305,8 +289,7 @@ void WatchStreamImpl::on_read(
         msg->root_path(),
         msg->overrides(),
         msg->flavors(),
-        msg->document(),
-        msg->template_()
+        msg->document()
       );
 
       if (ok) {

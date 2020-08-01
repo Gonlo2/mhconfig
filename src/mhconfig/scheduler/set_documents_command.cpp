@@ -40,8 +40,7 @@ SchedulerCommand::CommandResult SetDocumentsCommand::execute_on_namespace(
     (void*) wait_build_->request.get()
   );
 
-  bool store_optimized_config = (wait_build_->template_ == nullptr)
-    && wait_build_->is_preprocesed_value_ok;
+  bool store_optimized_config = wait_build_->is_preprocesed_value_ok;
 
   for (size_t i = 0, l = wait_build_->elements_to_build.size(); i < l; ++i) {
     auto& build_element = wait_build_->elements_to_build[i];
@@ -84,7 +83,7 @@ SchedulerCommand::CommandResult SetDocumentsCommand::execute_on_namespace(
           if (wait_built->num_pending_elements == 0) {
             // If the requested config don't have any ref and it don't have a template
             // we could send it directly to the API
-            if ((wait_built->elements_to_build.size() == 1) && (wait_built->template_ == nullptr)) {
+            if (wait_built->elements_to_build.size() == 1) {
               spdlog::debug(
                 "Responding the get request with id {}",
                 (void*) wait_built->request.get()
@@ -129,95 +128,19 @@ SchedulerCommand::CommandResult SetDocumentsCommand::execute_on_namespace(
     }
   }
 
-  if (wait_build_->template_ != nullptr) {
-    spdlog::debug("Setting the template '{}'", wait_build_->request->template_());
-
-    auto wait_builts_search = config_namespace.wait_builts_by_key
-      .find(wait_build_->overrides_key);
-
-    // TODO Cache also if the template isn't ok to avoid try render this again
-    if (wait_build_->is_preprocesed_value_ok) {
-      auto merged_config = ::mhconfig::builder::get_or_build_merged_config(
-        config_namespace,
-        wait_build_->overrides_key
-      );
-      merged_config->status = MergedConfigStatus::OK_TEMPLATE;
-      merged_config->last_access_timestamp = jmutils::monotonic_now_sec();
-      merged_config->preprocesed_value = std::move(wait_build_->preprocesed_value);
-
-      if (wait_builts_search != config_namespace.wait_builts_by_key.end()) {
-        for (size_t i = wait_builts_search->second.size(); i--; ) {
-          auto wait_built = wait_builts_search->second[i].get();
-
-          spdlog::debug(
-            "Responding the get request with id {}",
-            (void*) wait_built->request.get()
-          );
-
-
-          auto status = merged_config->status;
-          worker_queue.push(
-            std::make_unique<worker::ApiGetReplyCommand>(
-              std::move(wait_built->request),
-              merged_config,
-              status
-            )
-          );
-        }
-
-        config_namespace.wait_builts_by_key.erase(wait_builts_search);
-      }
-    } else {
-      if (wait_builts_search != config_namespace.wait_builts_by_key.end()) {
-        for (size_t i = wait_builts_search->second.size(); i--; ) {
-          auto wait_built = wait_builts_search->second[i].get();
-
-          spdlog::debug(
-            "Responding the get request with id {}",
-            (void*) wait_built->request.get()
-          );
-
-          wait_build_->request->set_status(
-            ::mhconfig::api::request::GetRequest::Status::ERROR
-          );
-
-          worker_queue.push(
-            std::make_unique<worker::ApiReplyCommand>(
-              std::move(wait_build_->request)
-            )
-          );
-        }
-
-        config_namespace.wait_builts_by_key.erase(wait_builts_search);
-      }
-    }
-  }
-
   auto merged_config = ::mhconfig::builder::get_merged_config(
     config_namespace,
     wait_build_->overrides_key
   );
 
-  if ((wait_build_->template_ == nullptr) || wait_build_->is_preprocesed_value_ok) {
-    auto status = merged_config->status;
-    worker_queue.push(
-      std::make_unique<worker::ApiGetReplyCommand>(
-        std::move(wait_build_->request),
-        std::move(merged_config),
-        status
-      )
-    );
-  } else {
-    wait_build_->request->set_status(
-      ::mhconfig::api::request::GetRequest::Status::ERROR
-    );
-
-    worker_queue.push(
-      std::make_unique<worker::ApiReplyCommand>(
-        std::move(wait_build_->request)
-      )
-    );
-  }
+  auto status = merged_config->status;
+  worker_queue.push(
+    std::make_unique<worker::ApiGetReplyCommand>(
+      std::move(wait_build_->request),
+      std::move(merged_config),
+      status
+    )
+  );
 
   return CommandResult::OK;
 }

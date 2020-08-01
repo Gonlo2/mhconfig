@@ -28,8 +28,6 @@ message GetRequest {
   uint32 version = 3;
   // the document to retrieve
   string document = 4;
-  // the template to render with the requested config, none if it isn't defined
-  string template = 5;
 }
 
 message GetResponse {
@@ -46,7 +44,6 @@ message GetResponse {
   // the returned version, it's the last version if the asked version was the zero.
   uint32 version = 3;
   repeated Element elements = 4;
-  string template_rendered = 5;
 }
 
 
@@ -109,8 +106,6 @@ message WatchRequest {
   uint32 version = 5;
   // document to watch.
   string document = 6;
-  // the template to render with the requested config, none if it isn't defined
-  string template = 7;
 }
 
 message WatchResponse {
@@ -143,7 +138,6 @@ message WatchResponse {
   // The uid of the elements need be the same of the request
   // to allow reuse the serialization cache
   repeated Element elements = 4;
-  string template_rendered = 5;
 
   // the id assigned to the watcher.
   uint32 uid = 10;
@@ -154,16 +148,14 @@ message WatchResponse {
 //   (overrides is empty or overrides is a subset of A)
 //   and (flavors is empty or flavors is a subset of B)
 //   and (document is empty or document == C)
-//   and (template is empty or template == D)
 // where
 //   A is a override got/watched
 //   B is a flavor got/watched
 //   C is a document got/watched
-//   D is a template got/watched
 message TraceRequest {
   // the root path of the namespace where trace the configuration.
   string root_path = 1;
-  // the list of overrides to trace, if some document/template with one of them
+  // the list of overrides to trace, if some document with one of them
   // is asked it will be returned
   repeated string overrides = 2;
   // the list of flavors to trace, if some document with one of them
@@ -172,9 +164,6 @@ message TraceRequest {
   // the document to trace, in case it is not defined it will not be used
   // in the query
   string document = 4;
-  // the template to trace, in case it is not defined it will not be used
-  // in the query
-  string template = 5;
 }
 
 message TraceResponse {
@@ -191,7 +180,6 @@ message TraceResponse {
   repeated string overrides = 4;
   repeated string flavors = 5;
   string document = 6;
-  string template = 7;
   // The client ip/socket/etc used to connect to the server
   string peer = 8;
 }

@@ -138,22 +138,6 @@ The overrides have some restrictions:
 * The `!ref` tag can only be used if the resulting configuration does not have cycles, that is, you cannot refer to a configuration directly or indirectly uses the self configuration.
 * You can only use the sref tag for scalars in the document.
 
-## Templates
-
-To facilitate the integration of the service with third party tools there is the possibility to apply templates to the configuration. For example, it's possible watch a configuration to which a template is applied, write the result to a file and start the service. This way, if the configuration or the template changes, the client receives a notification with the new value, dumps it again to the file and notifies the third party tool that the configuration has changed.
-
-The templates are rendered with [inja](https://github.com/pantor/inja) so the syntax is the same with the exception that
-the includes are not supported.
-
-```jinja2
-mysql_variables=
-{
-## for k, v in mysql_variables
-    {{ k }}={{ v }}
-## endfor
-}
-```
-
 ## Access Control Lists
 
 It is possible to configure the server to control access to sensitive resources or procedures, that said, the permission logic can be divided into the following parts: policies, entities and tokens.
@@ -235,8 +219,6 @@ message GetRequest {
   uint32 version = 3;
   // the document to retrieve
   string document = 4;
-  // the template to render with the requested config, none if it isn't defined
-  string template = 5;
 }
 
 message GetResponse {
@@ -253,7 +235,6 @@ message GetResponse {
   // the returned version, it's the last version if the asked version was the zero.
   uint32 version = 3;
   repeated Element elements = 4;
-  string template_rendered = 5;
 }
 ```
 
@@ -310,8 +291,6 @@ message WatchRequest {
   uint32 version = 5;
   // document to watch.
   string document = 6;
-  // the template to render with the requested config, none if it isn't defined
-  string template = 7;
 }
 
 message WatchResponse {
@@ -344,7 +323,6 @@ message WatchResponse {
   // The uid of the elements need be the same of the request
   // to allow reuse the serialization cache
   repeated Element elements = 4;
-  string template_rendered = 5;
 
   // the id assigned to the watcher.
   uint32 uid = 10;
@@ -353,7 +331,7 @@ message WatchResponse {
 
 ### Trace
 
-To know if some service is using some document or template it's possible to add traces that will be activated
+To know if some service is using some document it's possible to add traces that will be activated
 when certain conditions are met.
 
 ```protobuf
@@ -361,16 +339,14 @@ when certain conditions are met.
 //   (overrides is empty or overrides is a subset of A)
 //   and (flavors is empty or flavors is a subset of B)
 //   and (document is empty or document == C)
-//   and (template is empty or template == D)
 // where
 //   A is a override got/watched
 //   B is a flavor got/watched
 //   C is a document got/watched
-//   D is a template got/watched
 message TraceRequest {
   // the root path of the namespace where trace the configuration.
   string root_path = 1;
-  // the list of overrides to trace, if some document/template with one of them
+  // the list of overrides to trace, if some document with one of them
   // is asked it will be returned
   repeated string overrides = 2;
   // the list of flavors to trace, if some document with one of them
@@ -379,9 +355,6 @@ message TraceRequest {
   // the document to trace, in case it is not defined it will not be used
   // in the query
   string document = 4;
-  // the template to trace, in case it is not defined it will not be used
-  // in the query
-  string template = 5;
 }
 
 message TraceResponse {
@@ -398,7 +371,6 @@ message TraceResponse {
   repeated string overrides = 4;
   repeated string flavors = 5;
   string document = 6;
-  string template = 7;
   // The client ip/socket/etc used to connect to the server
   string peer = 8;
 }

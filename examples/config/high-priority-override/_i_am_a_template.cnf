@@ -1,6 +1,0 @@
-mysql_variables=
-{
-## for k, v in mysql_variables
-    {{ k }}={{ v }}
-## endfor
-}

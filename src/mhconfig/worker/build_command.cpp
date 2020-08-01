@@ -5,76 +5,6 @@ namespace mhconfig
 namespace worker
 {
 
-bool fill_json(
-  const mhconfig::Element& root,
-  nlohmann::json& output
-) {
-  switch (root.type()) {
-    case NodeType::UNDEFINED_NODE:
-      return false;
-
-    case NodeType::NULL_NODE:
-    case NodeType::OVERRIDE_NULL_NODE:
-      return true;
-
-    case NodeType::STR_NODE: // Fallback
-    case NodeType::OVERRIDE_STR_NODE: {
-      auto r = root.try_as<std::string>();
-      output = r.second;
-      return r.first;
-    }
-
-    case NodeType::INT_NODE: // Fallback
-    case NodeType::OVERRIDE_INT_NODE: {
-      auto r = root.try_as<int64_t>();
-      output = r.second;
-      return r.first;
-    }
-
-    case NodeType::FLOAT_NODE: // Fallback
-    case NodeType::OVERRIDE_FLOAT_NODE: {
-      auto r = root.try_as<double>();
-      output = r.second;
-      return r.first;
-    }
-
-    case NodeType::BOOL_NODE: // Fallback
-    case NodeType::OVERRIDE_BOOL_NODE: {
-      auto r = root.try_as<bool>();
-      output = r.second;
-      return r.first;
-    }
-
-    case NodeType::MAP_NODE: // Fallback
-    case NodeType::OVERRIDE_MAP_NODE: {
-      for (const auto& it : *root.as_map()) {
-        if (!fill_json(it.second, output[it.first.str()])) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    case NodeType::SEQUENCE_NODE: // Fallback
-    case NodeType::FORMAT_NODE: // Fallback
-    case NodeType::SREF_NODE: // Fallback
-    case NodeType::REF_NODE: // Fallback
-    case NodeType::OVERRIDE_SEQUENCE_NODE: {
-      auto seq = root.as_sequence();
-      std::vector<nlohmann::json> values(seq->size());
-      for (size_t i = seq->size(); i--;) {
-        if (!fill_json((*seq)[i], values[i])) {
-          return false;
-        }
-      }
-      output = std::move(values);
-      return true;
-    }
-  }
-
-  return false;
-}
-
 BuildCommand::BuildCommand(
   uint64_t namespace_id,
   std::shared_ptr<jmutils::string::Pool> pool,
@@ -144,49 +74,24 @@ bool BuildCommand::execute(
     ref_elements_by_document[build_element.name] = build_element.config;
   }
 
-  if (wait_build_->template_ == nullptr) {
-    proto::GetResponse get_response;
-    api::config::fill_elements(
-      wait_build_->elements_to_build.back().config,
-      &get_response,
-      get_response.add_elements()
-    );
+  proto::GetResponse get_response;
+  api::config::fill_elements(
+    wait_build_->elements_to_build.back().config,
+    &get_response,
+    get_response.add_elements()
+  );
 
-    wait_build_->is_preprocesed_value_ok = get_response.SerializeToString(
-      &wait_build_->preprocesed_value
+  wait_build_->is_preprocesed_value_ok = get_response.SerializeToString(
+    &wait_build_->preprocesed_value
+  );
+  if (wait_build_->is_preprocesed_value_ok) {
+    context.async_metrics_service->add(
+      metrics::MetricsService::MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
+      {},
+      wait_build_->preprocesed_value.size()
     );
-    if (wait_build_->is_preprocesed_value_ok) {
-      context.async_metrics_service->add(
-        metrics::MetricsService::MetricId::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
-        {},
-        wait_build_->preprocesed_value.size()
-      );
-    } else {
-      spdlog::warn("Can't optimize the config of the document");
-    }
   } else {
-    wait_build_->is_preprocesed_value_ok = false;
-    try {
-      nlohmann::json data;
-      if (fill_json(wait_build_->elements_to_build.back().config, data)) {
-        inja::TemplateStorage included_templates;
-        inja::FunctionStorage callbacks;
-
-        std::stringstream os;
-        inja::Renderer renderer(included_templates, callbacks);
-        renderer.render_to(os, *wait_build_->template_, data);
-
-        wait_build_->preprocesed_value = std::move(os.str());
-        wait_build_->is_preprocesed_value_ok = true;
-      }
-    } catch(const std::exception &e) {
-      spdlog::error(
-        "Error rendering the template: {}",
-        e.what()
-      );
-    } catch(...) {
-      spdlog::error("Unknown error rendering the template");
-    }
+    spdlog::warn("Can't optimize the config of the document");
   }
 
   context.scheduler_queue->push(

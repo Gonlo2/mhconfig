@@ -18,35 +18,10 @@
 
 #include "spdlog/spdlog.h"
 
-#include <inja/inja.hpp>
-
 namespace mhconfig
 {
 namespace builder
 {
-
-namespace {
-  class ForbiddenIncludeException : public std::exception
-  {
-    const char * what() const noexcept override {
-      return "Include a template is forbidden";
-    }
-  };
-
-  class ForbiddenIncludeStrategy final : public inja::IncludeStrategy
-  {
-  public:
-    inja::Template parse_template(
-      const inja::ParserConfig& parser_config,
-      const inja::LexerConfig& lexer_config,
-      inja::TemplateStorage& included_templates,
-      inja::IncludeStrategy& include_strategy,
-      nonstd::string_view filename
-    ) override {
-      throw ForbiddenIncludeException();
-    }
-  };
-}
 
 const static std::string TAG_NO_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};

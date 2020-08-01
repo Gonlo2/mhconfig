@@ -69,12 +69,18 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   // To search it we create the overrides key
   thread_local static std::string overrides_key;
   overrides_key.clear();
-  overrides_key.reserve(((get_request_->flavors().size()+1)*get_request_->overrides().size()+1)*4);
-  std::shared_ptr<inja::Template> template_;
-  if (!add_overrides_key(config_namespace, overrides_key, template_)) {
-    send_api_response(worker_queue);
-    return CommandResult::OK;
-  }
+  overrides_key.reserve((get_request_->flavors().size()+1) * get_request_->overrides().size() * 4);
+
+  for_each_document_override(
+    config_namespace,
+    get_request_->flavors(),
+    get_request_->overrides(),
+    get_request_->document(),
+    get_request_->version(),
+    [](const auto&, auto& raw_config) {
+      jmutils::push_uint32(overrides_key, raw_config->id);
+    }
+  );
 
   spdlog::debug(
     "Searching the merged config of a overrides_key with size {}",
@@ -92,12 +98,10 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
         merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
         // fallthrough
       case MergedConfigStatus::OK_CONFIG_OPTIMIZING:  // Fallback
-      case MergedConfigStatus::OK_CONFIG_OPTIMIZED:  // Fallback
-      case MergedConfigStatus::OK_TEMPLATE: {
+      case MergedConfigStatus::OK_CONFIG_OPTIMIZED: {  // Fallback
         spdlog::debug(
-          "The built document '{}' and template '{}' has been found",
-          get_request_->document(),
-          get_request_->template_()
+          "The built document '{}' has been found",
+          get_request_->document()
         );
 
         merged_config->last_access_timestamp = jmutils::monotonic_now_sec();
@@ -115,15 +119,13 @@ SchedulerCommand::CommandResult ApiGetCommand::execute_on_namespace(
   }
 
   spdlog::debug(
-    "Preparing built for document '{}' and template '{}'",
-    get_request_->document(),
-    get_request_->template_()
+    "Preparing built for document '{}'",
+    get_request_->document()
   );
   return prepare_build_request(
     config_namespace,
     worker_queue,
-    overrides_key,
-    std::move(template_)
+    overrides_key
   );
 }
 
@@ -150,8 +152,7 @@ bool ApiGetCommand::validate_request(
 SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
   config_namespace_t& config_namespace,
   WorkerQueue& worker_queue,
-  const std::string& overrides_key,
-  std::shared_ptr<inja::Template>&& template_
+  const std::string& overrides_key
 ) {
   auto wait_built = std::make_shared<build::wait_built_t>();
 
@@ -176,7 +177,6 @@ SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
     get_request_->version()
   );
   wait_built->request = get_request_;
-  wait_built->template_ = std::move(template_);
   wait_built->overrides_key = overrides_key;
   wait_built->num_pending_elements = 0;
   wait_built->elements_to_build.resize(topological_sort.size());
@@ -221,8 +221,6 @@ SchedulerCommand::CommandResult ApiGetCommand::prepare_build_request(
         build_element.to_build = false;
         break;
       }
-      case MergedConfigStatus::OK_TEMPLATE:
-        assert(false);
     }
   }
 

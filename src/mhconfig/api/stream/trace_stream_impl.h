@@ -33,7 +33,6 @@ public:
   void set_overrides(const std::vector<std::string>& overrides) override;
   void set_flavors(const std::vector<std::string>& flavors) override;
   void set_document(const std::string& document) override;
-  void set_template(const std::string& template_) override;
   void set_peer(const std::string& peer) override;
 
   bool send(bool finish = false) override;
@@ -64,7 +63,6 @@ public:
   const std::vector<std::string>& overrides() const override;
   const std::vector<std::string>& flavors() const override;
   const std::string& document() const override;
-  const std::string& template_() const override;
 
   std::shared_ptr<TraceOutputMessage> make_output_message() override;
 

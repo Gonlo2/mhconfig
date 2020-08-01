@@ -78,8 +78,6 @@ fi
 
 prepare_protobuf
 prepare_third_party grpc "-DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF"
-prepare_third_party inja
-prepare_third_party json
 prepare_third_party catch2
 prepare_third_party fmt
 prepare_third_party spdlog

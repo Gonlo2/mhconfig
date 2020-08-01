@@ -1,7 +1,0 @@
-{
-  "root_path": "XXX",
-  "overrides": ["low-priority-override", "high-priority-override"],
-  "document": "database",
-  "template": "_i_am_a_template.cnf",
-  "version": 0
-}

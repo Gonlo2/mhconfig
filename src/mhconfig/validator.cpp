@@ -47,8 +47,7 @@ bool are_valid_arguments(
   const std::string& root_path,
   const std::vector<std::string>& overrides,
   const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
+  const std::string& document
 ) {
   if (!is_a_valid_absolute_path(root_path)) {
     spdlog::error("The root path '{}' isn't valid", root_path);
@@ -57,11 +56,6 @@ bool are_valid_arguments(
 
   if (!builder::is_a_valid_document_name(document)) {
     spdlog::error("The document '{}' don't have a valid name", document);
-    return false;
-  }
-
-  if (!template_.empty() && (template_[0] != '_')) {
-    spdlog::error("The template '{}' don't have a valid name", template_);
     return false;
   }
 

@@ -20,15 +20,13 @@ namespace scheduler
 namespace {
   struct trace_variables_counter_t {
     bool document : 1;
-    uint16_t overrides : 15;
-    bool template_ : 1;
     uint16_t flavors : 15;
+    uint16_t overrides;
 
     trace_variables_counter_t()
       : document(false),
-      overrides(0),
-      template_(false),
-      flavors(0)
+      flavors(0),
+      overrides(0)
     {
     }
   };
@@ -37,8 +35,7 @@ namespace {
 bool are_valid_arguments(
   const std::vector<std::string>& overrides,
   const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
+  const std::string& document
 );
 
 template <typename T>
@@ -57,7 +54,6 @@ std::shared_ptr<api::stream::TraceOutputMessage> make_trace_output_message(
   output_message->set_overrides(message->overrides());
   output_message->set_flavors(message->flavors());
   output_message->set_document(message->document());
-  output_message->set_template(message->template_());
   output_message->set_peer(message->peer());
 
   return output_message;
@@ -138,26 +134,6 @@ void for_each_trace_to_trigger(
     }
   }
 
-  if (!message->template_().empty()){
-    auto search = config_namespace.traces_by_document
-      .find(message->template_());
-
-    if (search != config_namespace.traces_by_document.end()) {
-      for (size_t i = 0; i < search->second.size(); ++i) {
-        if (auto trace = search->second[i].lock()) {
-          match_by_trace[trace].template_ = true;
-          ++i;
-        } else {
-          jmutils::swap_delete(search->second, i);
-        }
-      }
-
-      if (search->second.empty()) {
-        config_namespace.traces_by_document.erase(search);
-      }
-    }
-  }
-
   for (size_t i = 0; i < config_namespace.to_trace_always.size(); ++i) {
     if (auto trace = config_namespace.to_trace_always[i].lock()) {
       lambda(config_namespace.id, message, trace.get());
@@ -178,9 +154,6 @@ void for_each_trace_to_trigger(
     }
     if (trigger_trace && !it.first->document().empty()) {
       trigger_trace = it.second.document;
-    }
-    if (trigger_trace && !it.first->template_().empty()) {
-      trigger_trace = it.second.template_;
     }
 
     if (trigger_trace) {

@@ -8,17 +8,10 @@ namespace scheduler
 bool are_valid_arguments(
   const std::vector<std::string>& overrides,
   const std::vector<std::string>& flavors,
-  const std::string& document,
-  const std::string& template_
+  const std::string& document
 ) {
-  // TODO Check for duplicated overrides & flavors
   if (!builder::is_a_valid_document_name(document)) {
     spdlog::error("The document '{}' don't have a valid name", document);
-    return false;
-  }
-
-  if (!template_.empty() && (template_[0] != '_')) {
-    spdlog::error("The template '{}' don't have a valid name", template_);
     return false;
   }
 

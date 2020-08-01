@@ -9,8 +9,6 @@
 
 #include <boost/functional/hash.hpp>
 
-#include <inja/inja.hpp>
-
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/stream/trace_stream.h"
@@ -35,7 +33,6 @@ struct raw_config_t {
   // TODO Add in the empty space a u63 with the last modification timestamp
   bool has_content{false};
   Element value;
-  std::shared_ptr<inja::Template> template_{nullptr};
   std::vector<std::string> reference_to;
 
   std::shared_ptr<raw_config_t> clone() {
@@ -44,7 +41,6 @@ struct raw_config_t {
     result->crc32 = crc32;
     result->has_content = has_content;
     result->value = value;
-    result->template_ = template_;
     result->reference_to = reference_to;
     return result;
   }
@@ -55,8 +51,7 @@ enum class MergedConfigStatus {
   BUILDING,
   OK_CONFIG_NO_OPTIMIZED,
   OK_CONFIG_OPTIMIZING,
-  OK_CONFIG_OPTIMIZED,
-  OK_TEMPLATE
+  OK_CONFIG_OPTIMIZED
 };
 
 struct merged_config_t {
@@ -93,7 +88,6 @@ namespace build {
     uint16_t num_pending_elements;
     bool is_preprocesed_value_ok;
     std::shared_ptr<::mhconfig::api::request::GetRequest> request;
-    std::shared_ptr<inja::Template> template_;
     std::string overrides_key;
     std::string preprocesed_value;
     std::vector<build_element_t> elements_to_build;

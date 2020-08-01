@@ -11,22 +11,14 @@
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/builder.h"
 
-#include <nlohmann/json.hpp>
-
 namespace mhconfig
 {
 namespace worker
 {
 
-bool fill_json(
-  const mhconfig::Element& root,
-  nlohmann::json& output
-);
-
 class BuildCommand : public WorkerCommand
 {
 public:
-
   BuildCommand(
     uint64_t namespace_id,
     std::shared_ptr<jmutils::string::Pool> pool,

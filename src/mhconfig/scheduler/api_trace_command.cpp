@@ -34,9 +34,8 @@ SchedulerCommand::CommandResult ApiTraceCommand::execute_on_namespace(
   bool trace_overrides = !trace_stream_->overrides().empty();
   bool trace_flavors = !trace_stream_->flavors().empty();
   bool trace_document = !trace_stream_->document().empty();
-  bool trace_template = !trace_stream_->template_().empty();
 
-  if (!trace_overrides && !trace_flavors && !trace_document && !trace_template) {
+  if (!trace_overrides && !trace_flavors && !trace_document) {
     // In this case we want to trace all the requests
     config_namespace.to_trace_always.push_back(trace_stream_);
   } else {
@@ -50,10 +49,6 @@ SchedulerCommand::CommandResult ApiTraceCommand::execute_on_namespace(
 
     if (trace_document) {
       config_namespace.traces_by_document[trace_stream_->document()].push_back(trace_stream_);
-    }
-
-    if (trace_template) {
-      config_namespace.traces_by_document[trace_stream_->template_()].push_back(trace_stream_);
     }
   }
 
@@ -74,7 +69,6 @@ SchedulerCommand::CommandResult ApiTraceCommand::execute_on_namespace(
   if (trace_overrides) trace_flags |= 1;
   if (trace_flavors) trace_flags |= 2;
   if (trace_document) trace_flags |= 4;
-  if (trace_template) trace_flags |= 8;
 
   for (size_t i = 0; i < config_namespace.watchers.size();) {
     if (auto watcher = config_namespace.watchers[i].lock()) {
@@ -98,10 +92,6 @@ SchedulerCommand::CommandResult ApiTraceCommand::execute_on_namespace(
 
       if (trigger_trace && trace_document) {
         trigger_trace = trace_stream_->document() == watcher->document();
-      }
-
-      if (trigger_trace && trace_template) {
-        trigger_trace = trace_stream_->template_() == watcher->template_();
       }
 
       if (trigger_trace) {
