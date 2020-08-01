@@ -197,6 +197,7 @@ message TraceResponse {
 //   - Null: 5
 //   - Map: 6
 //   - Sequence: 7
+//   - Binary: 8
 //   Key group:
 //   - String: 0
 // PS: The idea of use 7 bits is to use only one byte to
@@ -212,24 +213,9 @@ message Element {
     sint64 value_int = 5;
     bool value_bool = 6;
     double value_float = 7;
+    bytes value_bin = 9;
   }
   oneof key {
     string key_str = 8;
   }
 }
-
-// SCALAR
-//   Element{type: SCALAR_NODE, value: XXX, sibling_offset: 0}
-// MAP
-//   Element{type: MAP_NODE, size: 2, sibling_offset: 0}
-//     Element{type: SEQUENCE_NODE, key: XXX, size: 1, sibling_offset: 2}
-//       Element{type: SEQUENCE_NODE, size: 0, sibling_offset: 0}
-//     Element{type: NULL_NODE, key: YYY, sibling_offset: 0}
-// SEQUENCE
-//   Element{type: SEQUENCE_NODE, size: 1, sibling_offset: 0}
-//     Element{type: SEQUENCE_NODE, size: 1, sibling_offset: 0}
-//       Element{type: MAP_NODE, size: 0, sibling_offset: 0}
-// NULL
-//   Element{type: NULL_NODE, sibling_offset: 0}
-// UNDEFINED
-//   Element{type: UNDEFINED_NODE, sibling_offset: 0}

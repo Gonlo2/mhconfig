@@ -239,9 +239,9 @@ Element override_with(
   }
 
   switch (get_virtual_node_type(b)) {
-    case NodeType::STR_NODE: {
-      NodeType type = get_virtual_node_type(a);
-      if (type != NodeType::STR_NODE) {
+    case VirtualNode::LITERAL_NODE: {
+      VirtualNode type = get_virtual_node_type(a);
+      if (type != VirtualNode::LITERAL_NODE) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
           a.repr(),
@@ -254,7 +254,7 @@ Element override_with(
       return b;
     }
 
-    case NodeType::MAP_NODE: {
+    case VirtualNode::MAP_NODE: {
       if (!a.is_map()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
@@ -297,7 +297,7 @@ Element override_with(
       return Element(map_box);
     }
 
-    case NodeType::SEQUENCE_NODE: {
+    case VirtualNode::SEQUENCE_NODE: {
       if (!a.is_sequence()) {
         spdlog::warn(
           "Can't override {} with {} without the '{}' tag",
@@ -334,24 +334,30 @@ Element override_with(
   return a;
 }
 
-NodeType get_virtual_node_type(
+VirtualNode get_virtual_node_type(
   const Element& element
 ) {
   auto type = element.type();
   switch (type) {
+    case NodeType::UNDEFINED_NODE:
+      return VirtualNode::UNDEFINED_NODE;
+    case NodeType::MAP_NODE:
+      return VirtualNode::MAP_NODE;
+    case NodeType::SEQUENCE_NODE:
+      return VirtualNode::SEQUENCE_NODE;
+    case NodeType::REF_NODE:
+      return VirtualNode::REF_NODE;
     case NodeType::FORMAT_NODE: // Fallback
     case NodeType::SREF_NODE: // Fallback
     case NodeType::NULL_NODE: // Fallback
     case NodeType::STR_NODE: // Fallback
+    case NodeType::BIN_NODE: // Fallback
     case NodeType::INT_NODE: // Fallback
     case NodeType::FLOAT_NODE: // Fallback
     case NodeType::BOOL_NODE: // Fallback
-      return NodeType::STR_NODE;
-    default:
-      break;
+      return VirtualNode::LITERAL_NODE;
   }
-
-  return type;
+  assert(false);
 }
 
 bool apply_tags(
@@ -718,6 +724,17 @@ Element make_element(
         return Element(pool->add(node.as<std::string>()));
       } else if (node.Tag() == TAG_STR) {
         return Element(pool->add(node.as<std::string>()));
+      } else if (node.Tag() == TAG_BIN) {
+        std::string encoded_value = node.as<std::string>();
+
+        if (!jmutils::base64_sanitize(encoded_value)) {
+          spdlog::warn("The base64 '{}' don't have a valid structure", encoded_value);
+          return Element();
+        }
+
+        std::string binary_value;
+        jmutils::base64_decode(encoded_value, binary_value);
+        return Element(pool->add(binary_value), false, true);
       } else if (node.Tag() == TAG_INT) {
         auto str{node.as<std::string>()};
         errno = 0;

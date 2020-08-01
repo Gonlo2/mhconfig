@@ -22,7 +22,8 @@ enum class ValueElement {
   BOOL_VALUE_ELEMENT = 4,
   NULL_VALUE_ELEMENT = 5,
   MAP_VALUE_ELEMENT = 6,
-  SEQUENCE_VALUE_ELEMENT = 7
+  SEQUENCE_VALUE_ELEMENT = 7,
+  BIN_VALUE_ELEMENT = 8
 };
 
 enum class KeyElement {
@@ -73,8 +74,18 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::INT_NODE: // Fallback
-    case NodeType::OVERRIDE_INT_NODE: {
+    case NodeType::BIN_NODE: {
+      auto r = root.try_as<std::string>();
+      if (r.first) {
+        add_value_type(output, ValueElement::BIN_VALUE_ELEMENT);
+        output->set_value_bin(r.second);
+      } else {
+        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+      }
+      return 1;
+    }
+
+    case NodeType::INT_NODE: {
       auto r = root.try_as<int64_t>();
       if (r.first) {
         add_value_type(output, ValueElement::INT_VALUE_ELEMENT);
@@ -85,8 +96,7 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::FLOAT_NODE: // Fallback
-    case NodeType::OVERRIDE_FLOAT_NODE: {
+    case NodeType::FLOAT_NODE: {
       auto r = root.try_as<double>();
       if (r.first) {
         add_value_type(output, ValueElement::FLOAT_VALUE_ELEMENT);
@@ -97,8 +107,7 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::BOOL_NODE: // Fallback
-    case NodeType::OVERRIDE_BOOL_NODE: {
+    case NodeType::BOOL_NODE: {
       auto r = root.try_as<bool>();
       if (r.first) {
         add_value_type(output, ValueElement::BOOL_VALUE_ELEMENT);
@@ -133,9 +142,6 @@ uint32_t fill_elements(
     }
 
     case NodeType::SEQUENCE_NODE: // Fallback
-    case NodeType::FORMAT_NODE: // Fallback
-    case NodeType::SREF_NODE: // Fallback
-    case NodeType::REF_NODE: // Fallback
     case NodeType::OVERRIDE_SEQUENCE_NODE: {
       add_value_type(output, ValueElement::SEQUENCE_VALUE_ELEMENT);
       auto seq = root.as_sequence();
@@ -155,6 +161,11 @@ uint32_t fill_elements(
 
       return parent_sibling_offset;
     }
+
+    case NodeType::FORMAT_NODE: // Fallback
+    case NodeType::SREF_NODE: // Fallback
+    case NodeType::REF_NODE:
+      assert(false);
   }
 
   add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);

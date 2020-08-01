@@ -13,6 +13,8 @@ namespace mhconfig {
         return "NULL";
       case NodeType::STR_NODE:
         return "STRING";
+      case NodeType::BIN_NODE:
+        return "STRING";
       case NodeType::INT_NODE:
         return "INTEGER";
       case NodeType::FLOAT_NODE:
@@ -36,12 +38,6 @@ namespace mhconfig {
         return "OVERRIDE_NULL_NODE";
       case NodeType::OVERRIDE_STR_NODE:
         return "OVERRIDE_STR_NODE";
-      case NodeType::OVERRIDE_INT_NODE:
-        return "OVERRIDE_INT_NODE";
-      case NodeType::OVERRIDE_FLOAT_NODE:
-        return "OVERRIDE_FLOAT_NODE";
-      case NodeType::OVERRIDE_BOOL_NODE:
-        return "OVERRIDE_BOOL_NODE";
     }
 
     return "unknown";
@@ -66,6 +62,9 @@ namespace mhconfig {
         break;
       case NodeType::STR_NODE:
         node_set<NodeType::STR_NODE>(data_);
+        break;
+      case NodeType::BIN_NODE:
+        node_set<NodeType::BIN_NODE>(data_);
         break;
       case NodeType::INT_NODE:
         node_set<NodeType::INT_NODE>(data_);
@@ -100,48 +99,31 @@ namespace mhconfig {
       case NodeType::OVERRIDE_STR_NODE:
         node_set<NodeType::OVERRIDE_STR_NODE>(data_);
         break;
-      case NodeType::OVERRIDE_INT_NODE:
-        node_set<NodeType::OVERRIDE_INT_NODE>(data_);
-        break;
-      case NodeType::OVERRIDE_FLOAT_NODE:
-        node_set<NodeType::OVERRIDE_FLOAT_NODE>(data_);
-        break;
-      case NodeType::OVERRIDE_BOOL_NODE:
-        node_set<NodeType::OVERRIDE_BOOL_NODE>(data_);
-        break;
     }
   }
 
-  Element::Element(const Literal& value, bool override_) noexcept {
-    if (override_) {
-      node_set<NodeType::OVERRIDE_STR_NODE>(data_, value);
+  Element::Element(const Literal& value, bool override_, bool is_binary) noexcept {
+    if (is_binary) {
+      node_set<NodeType::BIN_NODE>(data_, value);
     } else {
-      node_set<NodeType::STR_NODE>(data_, value);
+      if (override_) {
+        node_set<NodeType::OVERRIDE_STR_NODE>(data_, value);
+      } else {
+        node_set<NodeType::STR_NODE>(data_, value);
+      }
     }
   }
 
-  Element::Element(int64_t value, bool override_) noexcept {
-    if (override_) {
-      node_set<NodeType::OVERRIDE_INT_NODE>(data_, value);
-    } else {
-      node_set<NodeType::INT_NODE>(data_, value);
-    }
+  Element::Element(int64_t value) noexcept {
+    node_set<NodeType::INT_NODE>(data_, value);
   }
 
-  Element::Element(double value, bool override_) noexcept {
-    if (override_) {
-      node_set<NodeType::OVERRIDE_FLOAT_NODE>(data_, value);
-    } else {
-      node_set<NodeType::FLOAT_NODE>(data_, value);
-    }
+  Element::Element(double value) noexcept {
+    node_set<NodeType::FLOAT_NODE>(data_, value);
   }
 
-  Element::Element(bool value, bool override_) noexcept {
-    if (override_) {
-      node_set<NodeType::OVERRIDE_BOOL_NODE>(data_, value);
-    } else {
-      node_set<NodeType::BOOL_NODE>(data_, value);
-    }
+  Element::Element(bool value) noexcept {
+    node_set<NodeType::BOOL_NODE>(data_, value);
   }
 
   Element::Element(MapBox* map, NodeType type) noexcept {
@@ -265,13 +247,11 @@ namespace mhconfig {
   bool Element::is_scalar() const {
     switch (type()) {
       case NodeType::STR_NODE: // Fallback
+      case NodeType::BIN_NODE: // Fallback
       case NodeType::INT_NODE: // Fallback
       case NodeType::FLOAT_NODE: // Fallback
       case NodeType::BOOL_NODE: // Fallback
-      case NodeType::OVERRIDE_STR_NODE: // Fallback
-      case NodeType::OVERRIDE_INT_NODE: // Fallback
-      case NodeType::OVERRIDE_FLOAT_NODE: // Fallback
-      case NodeType::OVERRIDE_BOOL_NODE:
+      case NodeType::OVERRIDE_STR_NODE:
         return true;
       default:
         break;
@@ -282,7 +262,7 @@ namespace mhconfig {
   bool Element::is_string() const {
     switch (type()) {
       case NodeType::STR_NODE: // Fallback
-      case NodeType::OVERRIDE_STR_NODE: // Fallback
+      case NodeType::OVERRIDE_STR_NODE:
         return true;
       default:
         break;
@@ -318,10 +298,7 @@ namespace mhconfig {
       case NodeType::OVERRIDE_MAP_NODE: // Fallback
       case NodeType::OVERRIDE_SEQUENCE_NODE: // Fallback
       case NodeType::OVERRIDE_NULL_NODE: // Fallback
-      case NodeType::OVERRIDE_STR_NODE: // Fallback
-      case NodeType::OVERRIDE_INT_NODE: // Fallback
-      case NodeType::OVERRIDE_FLOAT_NODE: // Fallback
-      case NodeType::OVERRIDE_BOOL_NODE:
+      case NodeType::OVERRIDE_STR_NODE:
         return true;
       default:
         break;
@@ -341,6 +318,8 @@ namespace mhconfig {
         return Element(NodeType::NULL_NODE);
       case NodeType::STR_NODE:
         return Element(node_get<NodeType::STR_NODE>(data_));
+      case NodeType::BIN_NODE:
+        return Element(node_get<NodeType::BIN_NODE>(data_));
       case NodeType::INT_NODE:
         return Element(node_get<NodeType::INT_NODE>(data_));
       case NodeType::FLOAT_NODE:
@@ -363,12 +342,6 @@ namespace mhconfig {
         return Element(NodeType::OVERRIDE_NULL_NODE);
       case NodeType::OVERRIDE_STR_NODE:
         return Element(node_get<NodeType::OVERRIDE_STR_NODE>(data_));
-      case NodeType::OVERRIDE_INT_NODE:
-        return Element(node_get<NodeType::OVERRIDE_INT_NODE>(data_));
-      case NodeType::OVERRIDE_FLOAT_NODE:
-        return Element(node_get<NodeType::OVERRIDE_FLOAT_NODE>(data_));
-      case NodeType::OVERRIDE_BOOL_NODE:
-        return Element(node_get<NodeType::OVERRIDE_BOOL_NODE>(data_));
     }
     assert(false);
   }
@@ -399,6 +372,9 @@ namespace mhconfig {
       case NodeType::STR_NODE:
         ss << ", str: '" << node_get<NodeType::STR_NODE>(data_).str();
         break;
+      case NodeType::BIN_NODE:
+        ss << ", bin: '" << node_get<NodeType::BIN_NODE>(data_).str();
+        break;
       case NodeType::INT_NODE:
         ss << ", int: '" << node_get<NodeType::INT_NODE>(data_);
         break;
@@ -411,15 +387,6 @@ namespace mhconfig {
 
       case NodeType::OVERRIDE_STR_NODE:
         ss << ", str: '" << node_get<NodeType::OVERRIDE_STR_NODE>(data_).str();
-        break;
-      case NodeType::OVERRIDE_INT_NODE:
-        ss << ", int: '" << node_get<NodeType::OVERRIDE_INT_NODE>(data_);
-        break;
-      case NodeType::OVERRIDE_FLOAT_NODE:
-        ss << ", float: '" << node_get<NodeType::OVERRIDE_FLOAT_NODE>(data_);
-        break;
-      case NodeType::OVERRIDE_BOOL_NODE:
-        ss << ", bool: '" << node_get<NodeType::OVERRIDE_BOOL_NODE>(data_);
         break;
     }
 
@@ -435,6 +402,8 @@ namespace mhconfig {
       switch ((NodeType) data.index()) {
         case NodeType::STR_NODE:
           return std::make_pair(true, node_get<NodeType::STR_NODE>(data));
+        case NodeType::BIN_NODE:
+          return std::make_pair(true, node_get<NodeType::BIN_NODE>(data));
         case NodeType::OVERRIDE_STR_NODE:
           return std::make_pair(true, node_get<NodeType::OVERRIDE_STR_NODE>(data));
         default:
@@ -448,20 +417,17 @@ namespace mhconfig {
       switch ((NodeType) data.index()) {
         case NodeType::STR_NODE:
           return std::make_pair(true, node_get<NodeType::STR_NODE>(data).str());
+        case NodeType::BIN_NODE:
+          return std::make_pair(true, node_get<NodeType::BIN_NODE>(data).str());
         case NodeType::OVERRIDE_STR_NODE:
           return std::make_pair(true, node_get<NodeType::OVERRIDE_STR_NODE>(data).str());
+
         case NodeType::BOOL_NODE:
           return std::make_pair(true, node_get<NodeType::BOOL_NODE>(data) ? "true" : "false");
-        case NodeType::OVERRIDE_BOOL_NODE:
-          return std::make_pair(true, node_get<NodeType::OVERRIDE_BOOL_NODE>(data) ? "true" : "false");
         case NodeType::INT_NODE:
           return std::make_pair(true, std::to_string(node_get<NodeType::INT_NODE>(data)));
-        case NodeType::OVERRIDE_INT_NODE:
-          return std::make_pair(true, std::to_string(node_get<NodeType::OVERRIDE_INT_NODE>(data)));
         case NodeType::FLOAT_NODE:
           return std::make_pair(true, std::to_string(node_get<NodeType::FLOAT_NODE>(data)));
-        case NodeType::OVERRIDE_FLOAT_NODE:
-          return std::make_pair(true, std::to_string(node_get<NodeType::OVERRIDE_FLOAT_NODE>(data)));
         default:
           break;
       }
@@ -473,8 +439,6 @@ namespace mhconfig {
       switch ((NodeType) data.index()) {
         case NodeType::BOOL_NODE:
           return std::make_pair(true, node_get<NodeType::BOOL_NODE>(data));
-        case NodeType::OVERRIDE_BOOL_NODE:
-          return std::make_pair(true, node_get<NodeType::OVERRIDE_BOOL_NODE>(data));
         default:
           break;
       }
@@ -486,8 +450,6 @@ namespace mhconfig {
       switch ((NodeType) data.index()) {
         case NodeType::INT_NODE:
           return std::make_pair(true, node_get<NodeType::INT_NODE>(data));
-        case NodeType::OVERRIDE_INT_NODE:
-          return std::make_pair(true, node_get<NodeType::OVERRIDE_INT_NODE>(data));
         default:
           break;
       }
@@ -499,8 +461,6 @@ namespace mhconfig {
       switch ((NodeType) data.index()) {
         case NodeType::FLOAT_NODE:
           return std::make_pair(true, node_get<NodeType::FLOAT_NODE>(data));
-        case NodeType::OVERRIDE_FLOAT_NODE:
-          return std::make_pair(true, node_get<NodeType::OVERRIDE_FLOAT_NODE>(data));
         default:
           break;
       }

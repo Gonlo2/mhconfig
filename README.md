@@ -71,7 +71,7 @@ Some custom tags are allowed to facilitate the configuration administration.
 * `!sref` insert a scalar or a null value from the same configuration file.
 * `!delete` remove the previous element with that path.
 * `!override` force override one value instead merge it.
-* `!!str`, `!!int`, `!!float` and `!!bool` defines the type of a scalar, being a string by default.
+* `!!str`, `!!binary`, `!!int`, `!!float` and `!!bool` defines the type of a scalar, being a string type by default.
 
 #### Format
 

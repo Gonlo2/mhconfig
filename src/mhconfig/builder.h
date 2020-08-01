@@ -15,6 +15,7 @@
 #include "jmutils/common.h"
 #include "jmutils/box.h"
 #include "jmutils/time.h"
+#include "jmutils/base64.h"
 
 #include "spdlog/spdlog.h"
 
@@ -27,6 +28,7 @@ const static std::string TAG_NO_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};
 const static std::string TAG_NULL{"tag:yaml.org,2002:null"};
 const static std::string TAG_STR{"tag:yaml.org,2002:str"};
+const static std::string TAG_BIN{"tag:yaml.org,2002:binary"};
 const static std::string TAG_INT{"tag:yaml.org,2002:int"};
 const static std::string TAG_FLOAT{"tag:yaml.org,2002:float"};
 const static std::string TAG_BOOL{"tag:yaml.org,2002:bool"};
@@ -50,6 +52,14 @@ struct load_raw_config_result_t {
   std::string document;
   std::string flavor;
   std::shared_ptr<raw_config_t> raw_config{nullptr};
+};
+
+enum class VirtualNode {
+  UNDEFINED_NODE,
+  MAP_NODE,
+  SEQUENCE_NODE,
+  LITERAL_NODE,
+  REF_NODE
 };
 
 std::shared_ptr<config_namespace_t> make_config_namespace(
@@ -231,7 +241,7 @@ Element override_with(
   const absl::flat_hash_map<std::string, Element> &elements_by_document
 );
 
-NodeType get_virtual_node_type(
+VirtualNode get_virtual_node_type(
   const Element& element
 );
 

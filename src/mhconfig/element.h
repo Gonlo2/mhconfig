@@ -25,22 +25,20 @@ namespace mhconfig {
     SEQUENCE_NODE = 2,
     NULL_NODE = 3,
     STR_NODE = 4,
-    INT_NODE = 5,
-    FLOAT_NODE = 6,
-    BOOL_NODE = 7,
+    BIN_NODE = 5,
+    INT_NODE = 6,
+    FLOAT_NODE = 7,
+    BOOL_NODE = 8,
 
-    // Virtual nodes
-    FORMAT_NODE = 8,  // Sequence
-    SREF_NODE = 9,  // Sequence
-    REF_NODE = 10,  // Sequence
-    DELETE_NODE = 11, // None
-    OVERRIDE_MAP_NODE = 12, // Map
-    OVERRIDE_SEQUENCE_NODE = 13, // Sequence
-    OVERRIDE_NULL_NODE = 14, // None
-    OVERRIDE_STR_NODE = 15, // Str
-    OVERRIDE_INT_NODE = 16, // Int
-    OVERRIDE_FLOAT_NODE = 17, // Float
-    OVERRIDE_BOOL_NODE = 18 // Bool
+    // Special nodes
+    FORMAT_NODE = 9,  // Sequence
+    SREF_NODE = 10,  // Sequence
+    REF_NODE = 11,  // Sequence
+    DELETE_NODE = 12, // None
+    OVERRIDE_MAP_NODE = 13, // Map
+    OVERRIDE_SEQUENCE_NODE = 14, // Sequence
+    OVERRIDE_NULL_NODE = 15, // None
+    OVERRIDE_STR_NODE = 16 // Str
   };
 
   class Element;
@@ -59,22 +57,20 @@ namespace mhconfig {
     SequenceBox*, // SEQUENCE_NODE = 2,
     dummy_t, // NULL_NODE = 3,
     Literal, // STR_NODE = 4,
-    int64_t, // INT_NODE = 5,
-    double, // FLOAT_NODE = 6,
-    bool, // BOOL_NODE = 7,
+    Literal, // BIN_NODE = 5,
+    int64_t, // INT_NODE = 6,
+    double, // FLOAT_NODE = 7,
+    bool, // BOOL_NODE = 8,
 
-    // Virtual nodes
-    SequenceBox*, // FORMAT_NODE = 8,  // Sequence
-    SequenceBox*, // SREF_NODE = 9,  // Sequence
-    SequenceBox*, // REF_NODE = 10,  // Sequence
-    dummy_t, // DELETE_NODE = 11, // Whatever
-    MapBox*, // OVERRIDE_MAP_NODE = 12, // Map
-    SequenceBox*, // OVERRIDE_SEQUENCE_NODE = 13 // Sequence
-    dummy_t, // OVERRIDE_NULL_NODE = 14,
-    Literal, // OVERRIDE_STR_NODE = 15,
-    int64_t, // OVERRIDE_INT_NODE = 16,
-    double, // OVERRIDE_FLOAT_NODE = 17,
-    bool // OVERRIDE_BOOL_NODE = 18,
+    // Special nodes
+    SequenceBox*, // FORMAT_NODE = 9,  // Sequence
+    SequenceBox*, // SREF_NODE = 10,  // Sequence
+    SequenceBox*, // REF_NODE = 11,  // Sequence
+    dummy_t, // DELETE_NODE = 12, // Whatever
+    MapBox*, // OVERRIDE_MAP_NODE = 13, // Map
+    SequenceBox*, // OVERRIDE_SEQUENCE_NODE = 14 // Sequence
+    dummy_t, // OVERRIDE_NULL_NODE = 15,
+    Literal // OVERRIDE_STR_NODE = 16
   > Data;
 
   namespace {
@@ -104,10 +100,10 @@ namespace mhconfig {
   public:
     Element() noexcept;
     explicit Element(NodeType type) noexcept;
-    explicit Element(const Literal& value, bool override_ = false) noexcept;
-    explicit Element(const int64_t value, bool override_ = false) noexcept;
-    explicit Element(const double value, bool override_ = false) noexcept;
-    explicit Element(const bool value, bool override_ = false) noexcept;
+    explicit Element(const Literal& value, bool override_ = false, bool is_binary = false) noexcept;
+    explicit Element(const int64_t value) noexcept;
+    explicit Element(const double value) noexcept;
+    explicit Element(const bool value) noexcept;
     explicit Element(MapBox* map, NodeType type = NodeType::MAP_NODE) noexcept;
     explicit Element(SequenceBox* sequence, NodeType type = NodeType::SEQUENCE_NODE) noexcept;
 

@@ -53,6 +53,7 @@ class ValueElement(IntEnum):
     NULL = 5
     MAP = 6
     SEQUENCE = 7
+    BIN = 8
 
 
 class KeyElement(IntEnum):
@@ -64,6 +65,8 @@ def _decode(elements, idx):
     value_element = ValueElement(element.type & 15)
     if value_element == ValueElement.STR:
         return element.value_str
+    elif value_element == ValueElement.BIN:
+        return element.value_bin
     elif value_element == ValueElement.INT:
         return element.value_int
     elif value_element == ValueElement.FLOAT:
