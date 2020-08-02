@@ -127,7 +127,7 @@ class InotifyUpdater(object):
             if not name.startswith('.'):
                 if os.path.isdir(p):
                     relative_paths.extend(self._add_recursive_watch(name, p, wd))
-                elif name.endswith(_WATCH_FILE_EXTENSION):
+                elif name.startswith('_') or name.endswith(_WATCH_FILE_EXTENSION):
                     self._add_watch(name, p, wd)
                     relative_paths.append(os.path.relpath(p, self._root_path))
                 else:
@@ -166,7 +166,7 @@ class InotifyUpdater(object):
             if event.mask & flags.ISDIR:
                 if event.mask & (flags.CREATE | flags.MOVED_TO):
                     result = self._add_recursive_watch(event.name, path, event.wd)
-            elif event.name.endswith(_WATCH_FILE_EXTENSION):
+            elif event.name.startswith('_') or event.name.endswith(_WATCH_FILE_EXTENSION):
                 if event.mask & flags.MOVED_TO:
                     self._add_watch(event.name, path, event.wd)
                 result = [os.path.relpath(path, self._root_path)]

@@ -99,15 +99,41 @@ load_raw_config_result_t index_file(
     .parent_path()
     .string();
 
-  if (path.extension() == ".yaml") {
-    auto stem = path.stem().string();
-    auto pos = stem.find_first_of('.');
-    if (pos == std::string::npos) {
-      result.document = std::move(stem);
+  auto stem = path.stem().string();
+  auto split_result = split_filename(stem);
+  if (!split_result.ok) {
+    return result;
+  }
+
+  result.flavor = split_result.flavor;
+
+  if (first_filename_char == '_') {
+    result.document = split_result.kind;
+    result.document += '.';
+    result.document += split_result.name;
+    result.document += path.extension().string();
+
+    if (split_result.kind == "_bin") {
+      load_raw_config(
+        path,
+        [pool](const std::string& data, load_raw_config_result_t& result) {
+          result.raw_config->value = Element(pool->add(data), false, true);
+        },
+        result
+      );
+    } else if (split_result.kind == "_text") {
+      load_raw_config(
+        path,
+        [pool](const std::string& data, load_raw_config_result_t& result) {
+          result.raw_config->value = Element(pool->add(data));
+        },
+        result
+      );
     } else {
-      result.document.insert(0, stem, 0, pos);
-      result.flavor.insert(0, stem, pos+1, stem.size()-pos-1);
+      result.status = LoadRawConfigStatus::INVALID_FILENAME;
     }
+  } else if (path.extension() == ".yaml") {
+    result.document = split_result.name;
 
     load_raw_config(
       path,
@@ -141,7 +167,8 @@ void increment_version_of_the_affected_documents(
     fill_affected_documents(config_namespace, updated_documents_it.second);
 
     for (const auto& it : updated_documents_it.second) {
-      if (it.second != AffectedDocumentStatus::TO_ADD) {
+      bool is_to_remove_but_dependency = it.second == AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY;
+      if (is_to_remove_but_dependency || (it.second == AffectedDocumentStatus::DEPENDENCY)) {
         make_override_path(
           updated_documents_it.first.second,
           it.first,
@@ -154,9 +181,9 @@ void increment_version_of_the_affected_documents(
           continue;
         }
 
-        auto new_raw_config = (it.second == AffectedDocumentStatus::TO_REMOVE || override_metadata.raw_config_by_version.empty())
-          ? std::make_shared<raw_config_t>()
-          : override_metadata.raw_config_by_version.rbegin()->second->clone();
+        auto new_raw_config = !is_to_remove_but_dependency && has_last_version(override_metadata)
+          ? override_metadata.raw_config_by_version.crbegin()->second->clone()
+          : std::make_shared<raw_config_t>();
 
         spdlog::debug(
           "Updating affected raw config (override_path: '{}', old_id: {}, new_id: {})",
@@ -185,6 +212,18 @@ void increment_version_of_the_affected_documents(
   }
 }
 
+bool has_last_version(
+  const override_metadata_t& override_metadata
+) {
+  if (override_metadata.raw_config_by_version.empty()) {
+    return false;
+  }
+
+  auto ptr = override_metadata.raw_config_by_version.crbegin()->second.get();
+  return (ptr != nullptr) && ptr->has_content;
+}
+
+
 void fill_affected_documents(
   const config_namespace_t& config_namespace,
   absl::flat_hash_map<std::string, AffectedDocumentStatus>& affected_documents
@@ -209,6 +248,8 @@ void fill_affected_documents(
         );
         if (inserted.second) {
           to_check.push_back(it.first);
+        } else if (inserted.first->second == AffectedDocumentStatus::TO_REMOVE) {
+          inserted.first->second = AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY;
         }
       }
     }
@@ -872,23 +913,39 @@ std::shared_ptr<merged_config_t> get_merged_config(
   return nullptr;
 }
 
-bool is_a_valid_document_name(const std::string& document) {
-  if (document.empty()) return true;
-  for (auto c: document) {
-    if (c == '.') return false;
-  }
-  return true;
-}
-
-bool has_last_version(
-  const override_metadata_t& override_metadata
+split_filename_result_t split_filename(
+  std::string_view stem
 ) {
-  if (override_metadata.raw_config_by_version.empty()) {
-    return false;
+  split_filename_result_t result;
+  result.ok = false;
+
+  if (stem.empty()) {
+    result.ok = true;
+    return result;
   }
 
-  return override_metadata.raw_config_by_version.crbegin()->second != nullptr;
+  if (stem[0] == '_') {
+    auto pos = stem.find('.');
+    if (pos == std::string::npos) {
+      return result;
+    }
+    result.kind = std::string_view(stem.data(), pos);
+    stem.remove_prefix(pos+1);
+  }
+
+  auto pos = stem.find('.');
+  if (pos == std::string::npos) {
+    result.name = stem;
+  } else {
+    result.name = std::string_view(stem.data(), pos);
+    stem.remove_prefix(pos+1);
+    result.flavor = stem;
+  }
+
+  result.ok = true;
+  return result;
 }
+
 
 } /* builder */
 } /* mhconfig */

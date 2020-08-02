@@ -9,6 +9,7 @@
 #include <absl/container/flat_hash_set.h>
 
 #include "mhconfig/string_pool.h"
+#include "mhconfig/validator.h"
 #include "mhconfig/command.h"
 #include "mhconfig/config_namespace.h"
 #include "yaml-cpp/exceptions.h"
@@ -78,33 +79,37 @@ inline void make_override_path(
   output += override_;
   output.push_back('/');
   output += document;
-  output.push_back('.');
+  output.push_back('@');
   output += flavor;
 }
 
-inline void split_override_path(
-  const std::string& override_path,
-  std::string& override_,
-  std::string& document,
-  std::string& flavor
+struct split_override_path_result_t {
+  std::string_view override_;
+  std::string_view document;
+  std::string_view flavor;
+};
+
+inline split_override_path_result_t split_override_path(
+  const std::string_view override_path
 ) {
-  assert(!override_path.empty());
-  size_t end_override_idx = override_path.size()-1;
-  size_t end_document_idx = end_override_idx;
-  for (; override_path[end_override_idx] != '/'; --end_override_idx) {
-    if (override_path[end_override_idx] == '.') {
-      end_document_idx = end_override_idx;
-    }
+  split_override_path_result_t result;
+  auto document_end_pos = override_path.rfind('@');
+  auto override_end_pos = override_path.rfind('/', document_end_pos);
+  result.override_ = std::string_view(
+    override_path.data(),
+    override_end_pos
+  );
+  result.document = std::string_view(
+    &override_path[override_end_pos+1],
+    document_end_pos-override_end_pos-1
+  );
+  if (override_path.size() != document_end_pos+1) {
+    result.flavor = std::string_view(
+      &override_path[document_end_pos+1],
+      override_path.size()-document_end_pos-1
+    );
   }
-
-  override_.clear();
-  override_.insert(0, override_path, 0, end_override_idx);
-
-  document.clear();
-  document.insert(0, override_path, end_override_idx+1, end_document_idx-end_override_idx);
-
-  flavor.clear();
-  document.insert(0, override_path, end_document_idx+1, override_path.size()-end_document_idx);
+  return result;
 }
 
 template <typename T>
@@ -220,7 +225,8 @@ bool index_files(
 enum class AffectedDocumentStatus {
   TO_REMOVE,
   TO_ADD,
-  DEPENDENCY
+  DEPENDENCY,
+  TO_REMOVE_BUT_DEPENDENCY
 };
 
 void increment_version_of_the_affected_documents(
@@ -417,10 +423,19 @@ inline void for_each_document_override_path(
   }
 }
 
-bool is_a_valid_document_name(const std::string& document);
-
 bool has_last_version(
   const override_metadata_t& override_metadata
+);
+
+struct split_filename_result_t {
+  bool ok;
+  std::string_view kind;
+  std::string_view name;
+  std::string_view flavor;
+};
+
+split_filename_result_t split_filename(
+  std::string_view stem
 );
 
 } /* builder */

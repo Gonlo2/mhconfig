@@ -11,3 +11,4 @@ hola:
     YWNjdXNhbSBldCBqdXN0byBkdW8gZG9sb3JlcyBldCBlYSByZWJ1bS4gU3RldCBjbGl0YSBrYXNk
     IGd1YmVyZ3Jlbiwgbm8gc2VhIHRha2ltYXRhIHNhbmN0dXMgZXN0IExvcmVtIGlwc3VtIGRvbG9y
     IHNpdCBhbWV0Lgo=
+  some_external_file: !ref [_text.name.ext]

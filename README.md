@@ -129,6 +129,12 @@ The way to put the settings together is to repeat the overrides for each flavor,
 
 The way to define a flavor is by the name of the file itself, up to the first point is the document while from this point is the flavor. For example, the file `service-routes.virtual-environment.mr-universe.yaml` is interpreted as the `virtual-environment.mr-universe` flavor of the `service-routes` document.
 
+### Special files
+
+By default only configuration files with the `.yaml` extension are read, but it is possible to specify that a file is special if it starts with a underscore. These files follow the same logic as configuration files but have a prefix (the special file type) and a suffix (the file extension), and at the moment there are two: binary files and text files.
+
+For example, file `_bin.secret.p12` would be a binary file, with the document name `_bin.secret.p12` and no flavor, and file `_text.nginx-template.virtual-environment.load-test.conf` would be a text file with the document name `_text.nginx-template.conf` and the flavor `virtual-environment.load-test`.
+
 ### Restrictions
 
 The overrides have some restrictions:
@@ -415,8 +421,6 @@ Created and maintained by [@Gonlo2](https://github.com/Gonlo2/).
 * abseil: https://abseil.io/
 * fmt: https://github.com/fmtlib/fmt
 * grpc: https://grpc.io/
-* inja: https://github.com/pantor/inja
-* json: https://github.com/nlohmann/json
 * prometheus-cpp: https://github.com/jupp0r/prometheus-cpp
 * spdlog: https://github.com/gabime/spdlog
 * yaml-cpp: https://github.com/jbeder/yaml-cpp

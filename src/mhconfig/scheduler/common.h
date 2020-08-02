@@ -32,12 +32,6 @@ namespace {
   };
 }
 
-bool are_valid_arguments(
-  const std::vector<std::string>& overrides,
-  const std::vector<std::string>& flavors,
-  const std::string& document
-);
-
 template <typename T>
 std::shared_ptr<api::stream::TraceOutputMessage> make_trace_output_message(
   api::stream::TraceInputMessage* input_message,

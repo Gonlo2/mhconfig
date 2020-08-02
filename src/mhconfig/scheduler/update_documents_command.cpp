@@ -86,8 +86,8 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
       absl::flat_hash_map<std::string, builder::AffectedDocumentStatus>
     > updated_documents_by_flavor_and_override;
 
-    // If some config will be removed and it use a dependency we need to put
-    // a dummy version to invalidate the cache
+    // If some config will be removed and that document use a reference to another
+    // modified document, we need to create a empty version to invalidate the cache
     for (auto& it : items_) {
       auto key = std::make_pair(it.second.flavor, it.second.override_);
       auto status = (it.second.status == LoadRawConfigStatus::FILE_DONT_EXISTS)
@@ -172,10 +172,15 @@ void UpdateDocumentsCommand::add_items_to_remove(
     if (has_last_version(it.second) && (items_.count(it.first) == 0)) {
       spdlog::debug("Adding the override path '{}' to remove", it.first);
 
+      auto split_result = split_override_path(it.first);
+
       load_raw_config_result_t item;
       item.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-      split_override_path(it.first, item.override_, item.document, item.flavor);
+      item.override_ = split_result.override_;
+      item.document = split_result.document;
+      item.flavor = split_result.flavor;
       item.raw_config = nullptr;
+
       result.emplace_back(it.first, std::move(item));
     }
   }
