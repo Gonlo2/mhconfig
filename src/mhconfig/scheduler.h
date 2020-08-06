@@ -88,16 +88,13 @@ private:
             command->namespace_id(),
             command->namespace_path()
           );
-          auto inserted_value = context_.namespace_by_id.try_emplace(
+          auto inserted_value = context_.namespace_by_id.emplace(
             command->namespace_id(),
             command->config_namespace()
           );
           assert(inserted_value.second);
 
-          context_.namespace_by_path.emplace(
-            command->namespace_path(),
-            command->config_namespace()
-          );
+          context_.namespace_by_path[command->namespace_path()] = command->config_namespace();
 
           for (auto& x: search->second) {
             scheduler_queue_.push(std::move(x));

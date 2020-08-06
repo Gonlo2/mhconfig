@@ -12,83 +12,100 @@
 #include "yaml-cpp/yaml.h"
 #include "spdlog/spdlog.h"
 #include "jmutils/string/pool.h"
-#include "jmutils/box.h"
+#include "jmutils/cow.h"
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 
 #include <absl/container/flat_hash_map.h>
 
 namespace mhconfig {
-  enum class NodeType {
-    UNDEFINED_NODE = 0,
-    MAP_NODE = 1,
-    SEQUENCE_NODE = 2,
-    NULL_NODE = 3,
-    STR_NODE = 4,
-    BIN_NODE = 5,
-    INT_NODE = 6,
-    FLOAT_NODE = 7,
-    BOOL_NODE = 8,
+  enum class NodeType : uint8_t {
+    UNDEFINED,
+    MAP,
+    SEQUENCE,
+    NONE,
+    STR,
+    BIN,
+    INT,
+    DOUBLE,
+    BOOL,
 
-    // Special nodes
-    FORMAT_NODE = 9,  // Sequence
-    SREF_NODE = 10,  // Sequence
-    REF_NODE = 11,  // Sequence
-    DELETE_NODE = 12, // None
-    OVERRIDE_MAP_NODE = 13, // Map
-    OVERRIDE_SEQUENCE_NODE = 14, // Sequence
-    OVERRIDE_NULL_NODE = 15, // None
-    OVERRIDE_STR_NODE = 16 // Str
+    // Virtual nodes
+    FORMAT,  // Sequence
+    SREF,  // Sequence
+    REF,  // Sequence
+    DELETE, // None
+    OVERRIDE_MAP, // Map
+    OVERRIDE_SEQUENCE, // Sequence
+    OVERRIDE_NONE, // None
+    OVERRIDE_STR // Str
   };
+
+  enum class InternalDataType {
+    EMPTY,
+    MAP,
+    SEQUENCE,
+    LITERAL,
+    INT64,
+    DOUBLE,
+    BOOL
+  };
+
+  constexpr InternalDataType get_internal_data_type(NodeType type) {
+    switch (type) {
+      case NodeType::MAP: // Fallback
+      case NodeType::OVERRIDE_MAP:
+        return InternalDataType::MAP;
+      case NodeType::SEQUENCE: // Fallback
+      case NodeType::OVERRIDE_SEQUENCE: // Fallback
+      case NodeType::FORMAT: // Fallback
+      case NodeType::SREF: // Fallback
+      case NodeType::REF:
+        return InternalDataType::SEQUENCE;
+      case NodeType::STR: // Fallback
+      case NodeType::OVERRIDE_STR: // Fallback
+      case NodeType::BIN:
+        return InternalDataType::LITERAL;
+      case NodeType::UNDEFINED: // Fallback
+      case NodeType::NONE: // Fallback
+      case NodeType::OVERRIDE_NONE: // Fallback
+      case NodeType::DELETE:
+        return InternalDataType::EMPTY;
+      case NodeType::INT:
+        return InternalDataType::INT64;
+      case NodeType::DOUBLE:
+        return InternalDataType::DOUBLE;
+      case NodeType::BOOL:
+        return InternalDataType::BOOL;
+    }
+
+    assert(false);
+  }
 
   class Element;
 
   typedef jmutils::string::String Literal;
   typedef absl::flat_hash_map<jmutils::string::String, Element> Map;
   typedef std::vector<Element> Sequence;
-  typedef jmutils::Box<Map, uint32_t> MapBox;
-  typedef jmutils::Box<Sequence, uint32_t> SequenceBox;
+  typedef jmutils::Cow<Map> MapCow;
+  typedef jmutils::Cow<Sequence> SequenceCow;
 
-  struct dummy_t {};
+  union data_t {
+    MapCow map;
+    SequenceCow seq;
+    Literal literal;
+    int64_t int64_value;
+    double double_value;
+    bool bool_value;
 
-  typedef std::variant<
-    dummy_t, // UNDEFINED_NODE = 0,
-    MapBox*, // MAP_NODE = 1,
-    SequenceBox*, // SEQUENCE_NODE = 2,
-    dummy_t, // NULL_NODE = 3,
-    Literal, // STR_NODE = 4,
-    Literal, // BIN_NODE = 5,
-    int64_t, // INT_NODE = 6,
-    double, // FLOAT_NODE = 7,
-    bool, // BOOL_NODE = 8,
-
-    // Special nodes
-    SequenceBox*, // FORMAT_NODE = 9,  // Sequence
-    SequenceBox*, // SREF_NODE = 10,  // Sequence
-    SequenceBox*, // REF_NODE = 11,  // Sequence
-    dummy_t, // DELETE_NODE = 12, // Whatever
-    MapBox*, // OVERRIDE_MAP_NODE = 13, // Map
-    SequenceBox*, // OVERRIDE_SEQUENCE_NODE = 14 // Sequence
-    dummy_t, // OVERRIDE_NULL_NODE = 15,
-    Literal // OVERRIDE_STR_NODE = 16
-  > Data;
-
-  namespace {
-    template <NodeType I, typename T>
-    constexpr auto& node_get(T&& v) {
-      return std::get<static_cast<size_t>(I)>(v);
-    }
-
-    template <NodeType I, class T, typename... Args>
-    constexpr auto& node_set(T&& v, Args&&... args) {
-      return v.template emplace<static_cast<size_t>(I)>(std::forward<Args>(args)...);
-    }
-  }
+    data_t() noexcept {}
+    ~data_t() noexcept {}
+  };
 
   namespace conversion
   {
     template <typename T>
-    std::pair<bool, T> as(const Data& data);
+    std::pair<bool, T> as(NodeType type, const data_t& data);
   } /* conversion */
 
   std::string to_string(NodeType type);
@@ -100,12 +117,51 @@ namespace mhconfig {
   public:
     Element() noexcept;
     explicit Element(NodeType type) noexcept;
-    explicit Element(const Literal& value, bool override_ = false, bool is_binary = false) noexcept;
     explicit Element(const int64_t value) noexcept;
     explicit Element(const double value) noexcept;
     explicit Element(const bool value) noexcept;
-    explicit Element(MapBox* map, NodeType type = NodeType::MAP_NODE) noexcept;
-    explicit Element(SequenceBox* sequence, NodeType type = NodeType::SEQUENCE_NODE) noexcept;
+
+    explicit Element(const Literal& value, NodeType type = NodeType::STR) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::LITERAL);
+      type_ = type;
+      new (&data_.literal) Literal();
+      data_.literal = value;
+    }
+
+    explicit Element(Literal&& value, NodeType type = NodeType::STR) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::LITERAL);
+      type_ = type;
+      new (&data_.literal) Literal();
+      data_.literal = value;
+    }
+
+    explicit Element(const MapCow& map, NodeType type = NodeType::MAP) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::MAP);
+      type_ = type;
+      new (&data_.map) MapCow();
+      data_.map = map;
+    }
+
+    explicit Element(MapCow&& map, NodeType type = NodeType::MAP) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::MAP);
+      type_ = type;
+      new (&data_.map) MapCow();
+      data_.map = map;
+    }
+
+    explicit Element(const SequenceCow& sequence, NodeType type = NodeType::SEQUENCE) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
+      type_ = type;
+      new (&data_.seq) SequenceCow();
+      data_.seq = sequence;
+    }
+
+    explicit Element(SequenceCow&& sequence, NodeType type = NodeType::SEQUENCE) noexcept {
+      assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
+      type_ = type;
+      new (&data_.seq) SequenceCow();
+      data_.seq = sequence;
+    }
 
     Element(const Element& rhs) noexcept;
     Element(Element&& rhs) noexcept;
@@ -116,7 +172,7 @@ namespace mhconfig {
     ~Element() noexcept;
 
     inline NodeType type() const {
-      return (NodeType) data_.index();
+      return type_;
     }
 
     bool has(const Literal& key) const;
@@ -124,7 +180,7 @@ namespace mhconfig {
     template <typename T>
     const T as() const {
       assert(is_scalar());
-      std::pair<bool, T> r = mhconfig::conversion::as<T>(data_);
+      std::pair<bool, T> r = conversion::as<T>(type_, data_);
       assert(r.first);
       return r.second;
     }
@@ -132,7 +188,7 @@ namespace mhconfig {
     template <typename T>
     const T as(T default_value) const {
       if (!is_scalar()) return default_value;
-      std::pair<bool, T> r = mhconfig::conversion::as<T>(data_);
+      std::pair<bool, T> r = conversion::as<T>(type_, data_);
       if (!r.first) return default_value;
       return r.second;
     }
@@ -140,11 +196,14 @@ namespace mhconfig {
     template <typename T>
     const std::pair<bool, T> try_as() const {
       if (!is_scalar()) return std::make_pair(true, T());
-      return mhconfig::conversion::as<T>(data_);
+      return conversion::as<T>(type_, data_);
     }
 
     const Sequence* as_sequence() const;
     const Map* as_map() const;
+
+    Sequence* as_sequence_mut();
+    Map* as_map_mut();
 
     Element get(const Literal& key) const;
     Element get(size_t index) const;
@@ -161,68 +220,23 @@ namespace mhconfig {
 
     std::string repr() const;
 
+    void freeze();
+
   private:
-    Data data_;
+    NodeType type_;
+    data_t data_;
+
+    void init_data(NodeType type) noexcept;
+    void destroy_data() noexcept;
+
+    void copy_data(const Element& o) noexcept;
+    void swap_data(Element& o) noexcept;
+
+    void copy(const Element& o) noexcept;
+    void swap(Element&& o) noexcept;
   };
 
-  namespace {
-    inline void increment_refcount(Data& data) {
-      switch ((NodeType) data.index()) {
-        case NodeType::MAP_NODE:
-          node_get<NodeType::MAP_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::SEQUENCE_NODE:
-          node_get<NodeType::SEQUENCE_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::FORMAT_NODE:
-          node_get<NodeType::FORMAT_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::SREF_NODE:
-          node_get<NodeType::SREF_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::REF_NODE:
-          node_get<NodeType::REF_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::OVERRIDE_MAP_NODE:
-          node_get<NodeType::OVERRIDE_MAP_NODE>(data)->increment_refcount();
-          break;
-        case NodeType::OVERRIDE_SEQUENCE_NODE:
-          node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data)->increment_refcount();
-          break;
-        default:
-          break;
-      }
-    }
-
-    inline void decrement_refcount(Data& data) {
-      switch ((NodeType) data.index()) {
-        case NodeType::MAP_NODE:
-          node_get<NodeType::MAP_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::SEQUENCE_NODE:
-          node_get<NodeType::SEQUENCE_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::FORMAT_NODE:
-          node_get<NodeType::FORMAT_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::SREF_NODE:
-          node_get<NodeType::SREF_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::REF_NODE:
-          node_get<NodeType::REF_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::OVERRIDE_MAP_NODE:
-          node_get<NodeType::OVERRIDE_MAP_NODE>(data)->decrement_refcount();
-          break;
-        case NodeType::OVERRIDE_SEQUENCE_NODE:
-          node_get<NodeType::OVERRIDE_SEQUENCE_NODE>(data)->decrement_refcount();
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
+  //TODO Check this
   const static Element UNDEFINED_ELEMENT;
 }
 

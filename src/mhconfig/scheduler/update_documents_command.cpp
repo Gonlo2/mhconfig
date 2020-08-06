@@ -94,10 +94,7 @@ SchedulerCommand::CommandResult UpdateDocumentsCommand::execute_on_namespace(
         ? builder::AffectedDocumentStatus::TO_REMOVE
         : builder::AffectedDocumentStatus::TO_ADD;
 
-      updated_documents_by_flavor_and_override[key].emplace(
-        it.second.document,
-        status
-      );
+      updated_documents_by_flavor_and_override[key][it.second.document] = status;
     }
 
     builder::increment_version_of_the_affected_documents(
@@ -258,7 +255,7 @@ void UpdateDocumentsCommand::insert_updated_documents(
     if (it.second.status == LoadRawConfigStatus::FILE_DONT_EXISTS) {
       spdlog::debug("Removing raw config if possible (override_path: '{}')", it.first);
 
-      override_metadata.raw_config_by_version.try_emplace(
+      override_metadata.raw_config_by_version.emplace(
         config_namespace.current_version,
         nullptr
       );
@@ -285,10 +282,7 @@ void UpdateDocumentsCommand::insert_updated_documents(
 
       it.second.raw_config->id = config_namespace.next_raw_config_id++;
 
-      override_metadata.raw_config_by_version.emplace(
-        config_namespace.current_version,
-        std::move(it.second.raw_config)
-      );
+      override_metadata.raw_config_by_version[config_namespace.current_version] = std::move(it.second.raw_config);
     }
 
     for (size_t i = 0; i < override_metadata.watchers.size();) {

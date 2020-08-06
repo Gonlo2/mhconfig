@@ -54,7 +54,7 @@ public:
         key += part;
       }
 
-      splits.try_emplace(std::move(key), std::move(split));
+      splits[key] = std::move(split);
     }
 
     exact_path_.clear();
@@ -64,7 +64,7 @@ public:
 
     for (auto& it : splits) {
       if (it.second.is_exact) {
-        exact_path_.emplace(it.first, it.second.value);
+        exact_path_[it.first] = std::move(it.second.value);
       } else {
         if (it.second.has_wildcard) it.second.parts.pop_back();
         std::reverse(it.second.parts.begin(), it.second.parts.end());
@@ -257,7 +257,7 @@ private:
           ? new prefix_node_t
           : node->any->clone();
 
-        node->exact.emplace(it.first, new_node);
+        node->exact[it.first] = new_node;
       }
       add_to_prefix_node(it.second, new_node);
     }

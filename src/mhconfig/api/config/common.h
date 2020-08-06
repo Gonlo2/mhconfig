@@ -18,9 +18,9 @@ enum class ValueElement {
   STR_VALUE_ELEMENT = 0,
   UNDEFINED_VALUE_ELEMENT = 1,
   INT_VALUE_ELEMENT = 2,
-  FLOAT_VALUE_ELEMENT = 3,
+  DOUBLE_VALUE_ELEMENT = 3,
   BOOL_VALUE_ELEMENT = 4,
-  NULL_VALUE_ELEMENT = 5,
+  NONE_VALUE_ELEMENT = 5,
   MAP_VALUE_ELEMENT = 6,
   SEQUENCE_VALUE_ELEMENT = 7,
   BIN_VALUE_ELEMENT = 8
@@ -51,19 +51,19 @@ uint32_t fill_elements(
   proto::Element* output
 ) {
   switch (root.type()) {
-    case NodeType::UNDEFINED_NODE: {
+    case NodeType::UNDEFINED: {
       add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       return 1;
     }
 
-    case NodeType::NULL_NODE: // Fallback
-    case NodeType::OVERRIDE_NULL_NODE: {
-      add_value_type(output, ValueElement::NULL_VALUE_ELEMENT);
+    case NodeType::NONE: // Fallback
+    case NodeType::OVERRIDE_NONE: {
+      add_value_type(output, ValueElement::NONE_VALUE_ELEMENT);
       return 1;
     }
 
-    case NodeType::STR_NODE: // Fallback
-    case NodeType::OVERRIDE_STR_NODE: {
+    case NodeType::STR: // Fallback
+    case NodeType::OVERRIDE_STR: {
       auto r = root.try_as<std::string>();
       if (r.first) {
         add_value_type(output, ValueElement::STR_VALUE_ELEMENT);
@@ -74,7 +74,7 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::BIN_NODE: {
+    case NodeType::BIN: {
       auto r = root.try_as<std::string>();
       if (r.first) {
         add_value_type(output, ValueElement::BIN_VALUE_ELEMENT);
@@ -85,7 +85,7 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::INT_NODE: {
+    case NodeType::INT: {
       auto r = root.try_as<int64_t>();
       if (r.first) {
         add_value_type(output, ValueElement::INT_VALUE_ELEMENT);
@@ -96,18 +96,18 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::FLOAT_NODE: {
+    case NodeType::DOUBLE: {
       auto r = root.try_as<double>();
       if (r.first) {
-        add_value_type(output, ValueElement::FLOAT_VALUE_ELEMENT);
-        output->set_value_float(r.second);
+        add_value_type(output, ValueElement::DOUBLE_VALUE_ELEMENT);
+        output->set_value_double(r.second);
       } else {
         add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
       }
       return 1;
     }
 
-    case NodeType::BOOL_NODE: {
+    case NodeType::BOOL: {
       auto r = root.try_as<bool>();
       if (r.first) {
         add_value_type(output, ValueElement::BOOL_VALUE_ELEMENT);
@@ -118,8 +118,8 @@ uint32_t fill_elements(
       return 1;
     }
 
-    case NodeType::MAP_NODE: // Fallback
-    case NodeType::OVERRIDE_MAP_NODE: {
+    case NodeType::MAP: // Fallback
+    case NodeType::OVERRIDE_MAP: {
       add_value_type(output, ValueElement::MAP_VALUE_ELEMENT);
       auto map = root.as_map();
       output->set_size(map->size());
@@ -141,8 +141,8 @@ uint32_t fill_elements(
       return parent_sibling_offset;
     }
 
-    case NodeType::SEQUENCE_NODE: // Fallback
-    case NodeType::OVERRIDE_SEQUENCE_NODE: {
+    case NodeType::SEQUENCE: // Fallback
+    case NodeType::OVERRIDE_SEQUENCE: {
       add_value_type(output, ValueElement::SEQUENCE_VALUE_ELEMENT);
       auto seq = root.as_sequence();
       output->set_size(seq->size());
@@ -162,9 +162,9 @@ uint32_t fill_elements(
       return parent_sibling_offset;
     }
 
-    case NodeType::FORMAT_NODE: // Fallback
-    case NodeType::SREF_NODE: // Fallback
-    case NodeType::REF_NODE:
+    case NodeType::FORMAT: // Fallback
+    case NodeType::SREF: // Fallback
+    case NodeType::REF:
       assert(false);
   }
 

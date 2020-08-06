@@ -14,7 +14,7 @@
 #include "mhconfig/config_namespace.h"
 #include "yaml-cpp/exceptions.h"
 #include "jmutils/common.h"
-#include "jmutils/box.h"
+#include "jmutils/cow.h"
 #include "jmutils/time.h"
 #include "jmutils/base64.h"
 
@@ -27,11 +27,11 @@ namespace builder
 
 const static std::string TAG_NO_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};
-const static std::string TAG_NULL{"tag:yaml.org,2002:null"};
+const static std::string TAG_NONE{"tag:yaml.org,2002:null"};
 const static std::string TAG_STR{"tag:yaml.org,2002:str"};
 const static std::string TAG_BIN{"tag:yaml.org,2002:binary"};
 const static std::string TAG_INT{"tag:yaml.org,2002:int"};
-const static std::string TAG_FLOAT{"tag:yaml.org,2002:float"};
+const static std::string TAG_DOUBLE{"tag:yaml.org,2002:float"};
 const static std::string TAG_BOOL{"tag:yaml.org,2002:bool"};
 
 const static std::string TAG_FORMAT{"!format"};
@@ -56,11 +56,11 @@ struct load_raw_config_result_t {
 };
 
 enum class VirtualNode {
-  UNDEFINED_NODE,
-  MAP_NODE,
-  SEQUENCE_NODE,
-  LITERAL_NODE,
-  REF_NODE
+  UNDEFINED,
+  MAP,
+  SEQUENCE,
+  LITERAL,
+  REF
 };
 
 std::shared_ptr<config_namespace_t> make_config_namespace(
@@ -144,6 +144,7 @@ void load_raw_config(
     result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
     result.raw_config->has_content = true;
     lambda(data, result);
+    result.raw_config->value.freeze();
   } catch(const std::exception &e) {
     spdlog::error(
       "Error making the element (path: '{}'): {}",
@@ -251,12 +252,11 @@ VirtualNode get_virtual_node_type(
   const Element& element
 );
 
-bool apply_tags(
+std::pair<bool, Element> apply_tags(
   jmutils::string::Pool* pool,
-  const Element& element,
+  Element element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document,
-  Element& result
+  const absl::flat_hash_map<std::string, Element> &elements_by_document
 );
 
 Element apply_tag_format(
@@ -360,7 +360,6 @@ inline void with_raw_config(
 
   lambda(
     static_cast<const decltype(override_path)&>(override_path),
-    //static_cast<decltype(override_search->second)&>(override_search->second),
     static_cast<decltype(raw_config_search->second)&>(raw_config_search->second)
   );
 }

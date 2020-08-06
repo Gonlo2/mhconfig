@@ -79,7 +79,7 @@ private:
       if (event_tmp->function == nullptr) {
         event_by_tag_.erase(event_tmp->tag);
       } else {
-        event_by_tag_.emplace(event_tmp->tag, std::move(event_tmp));
+        event_by_tag_[event_tmp->tag] = std::move(event_tmp);
       }
     }
 

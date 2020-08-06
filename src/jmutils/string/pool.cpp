@@ -67,13 +67,14 @@ String::String(String&& o) noexcept : data_(std::exchange(o.data_, 0)) {
 }
 
 String& String::operator=(const String& o) noexcept {
-  if(&o == this) return *this;
-  if (!is_small() && (data_ != 0)) {
-    ((InternalString*) data_)->decrement_refcount();
-  }
-  data_ = o.data_;
-  if (!is_small() && (data_ != 0)) {
-    ((InternalString*) data_)->increment_refcount();
+  if(&o != this) {
+    if (!is_small() && (data_ != 0)) {
+      ((InternalString*) data_)->decrement_refcount();
+    }
+    data_ = o.data_;
+    if (!is_small() && (data_ != 0)) {
+      ((InternalString*) data_)->increment_refcount();
+    }
   }
   return *this;
 }

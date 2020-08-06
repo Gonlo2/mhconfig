@@ -81,7 +81,7 @@ public:
         );
         if (!ok) return false;
 
-        entity_by_id.emplace(raw_entity.entity, std::move(entity));
+        entity_by_id[raw_entity.entity] = std::move(entity);
       }
 
       absl::flat_hash_map<std::string, std::unique_ptr<Token>> token_by_id;
@@ -97,12 +97,9 @@ public:
           return false;
         }
 
-        token_by_id.emplace(
-          raw_token.token,
-          std::make_unique<Token>(
-            raw_token.expires_on,
-            search->second
-          )
+        token_by_id[raw_token.token] = std::make_unique<Token>(
+          raw_token.expires_on,
+          search->second
         );
       }
 

@@ -61,14 +61,15 @@ bool BuildCommand::execute(
       );
 
       if (!config.is_undefined()) {
-        mhconfig::builder::apply_tags(
+        build_element.config = mhconfig::builder::apply_tags(
           pool_.get(),
           config,
           config,
-          ref_elements_by_document,
-          build_element.config
-        );
+          ref_elements_by_document
+        ).second;
       }
+
+      build_element.config.freeze();
     }
 
     ref_elements_by_document[build_element.name] = build_element.config;

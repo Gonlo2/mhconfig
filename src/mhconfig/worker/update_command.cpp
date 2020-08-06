@@ -43,7 +43,7 @@ bool UpdateCommand::execute(
         if (result.status != LoadRawConfigStatus::OK) {
           return false;
         }
-        items.emplace(override_path, std::move(result));
+        items[override_path] = std::move(result);
         return true;
       }
     );
@@ -86,7 +86,7 @@ bool UpdateCommand::add_items(
           result.flavor,
           override_path
         );
-        items.emplace(override_path, std::move(result));
+        items[override_path] = std::move(result);
         continue;
 
       case LoadRawConfigStatus::INVALID_FILENAME: // Fallback

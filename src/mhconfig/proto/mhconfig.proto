@@ -212,7 +212,7 @@ message Element {
     string value_str = 4;
     sint64 value_int = 5;
     bool value_bool = 6;
-    double value_float = 7;
+    double value_double = 7;
     bytes value_bin = 9;
   }
   oneof key {
