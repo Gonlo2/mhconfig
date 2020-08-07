@@ -76,6 +76,8 @@ bool BuildCommand::execute(
   }
 
   proto::GetResponse get_response;
+  auto checksum = wait_build_->elements_to_build.back().config.make_checksum();
+  get_response.set_checksum(checksum.data(), checksum.size());
   api::config::fill_elements(
     wait_build_->elements_to_build.back().config,
     &get_response,

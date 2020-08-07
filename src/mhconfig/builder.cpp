@@ -373,9 +373,9 @@ VirtualNode get_virtual_node_type(
     case NodeType::NONE: // Fallback
     case NodeType::STR: // Fallback
     case NodeType::BIN: // Fallback
-    case NodeType::INT: // Fallback
+    case NodeType::INT64: // Fallback
     case NodeType::DOUBLE: // Fallback
-    case NodeType::BOOL: // Fallback
+    case NodeType::BOOL:
       return VirtualNode::LITERAL;
   }
   assert(false);
@@ -917,7 +917,6 @@ split_filename_result_t split_filename(
   result.ok = true;
   return result;
 }
-
 
 } /* builder */
 } /* mhconfig */

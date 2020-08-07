@@ -206,7 +206,7 @@ This token is specified in the gRPC call through the metadata `mhconfig-auth-tok
 Most methods that make use of a configuration path return a namespace identifier, this value is a 64bits value generated randomly and its purpose is to tell the client if the version number is still valid, if the instance has been restarted, etc. From now on we will call the set of configurations that are in a particular path namespace.
 
 Also this kind of responses return a version number that allow reproducible results for some time in the case that the
-configuration has been updated between two calls. Take in mind that returns a different value does not mean that the required configuration has been changed, but rather that some configuration has been updated.
+configuration has been updated between two calls. Take in mind that returns a different value does not mean that the required configuration has been changed, but rather that some configuration has been updated. If you want to check if the content is different you can use the checksum field (it's a sha256 of a reproducible content of the configuration), so it can be useful to deduplicate the documents or decide to launch the watchers callbacks after receiving a different namespace identifier.
 
 ### Get
 
@@ -241,6 +241,8 @@ message GetResponse {
   // the returned version, it's the last version if the asked version was the zero.
   uint32 version = 3;
   repeated Element elements = 4;
+  // A checksum of the file content, being a sha256 checksum the current implementation
+  bytes checksum = 5;
 }
 ```
 
@@ -329,6 +331,8 @@ message WatchResponse {
   // The uid of the elements need be the same of the request
   // to allow reuse the serialization cache
   repeated Element elements = 4;
+  // A checksum of the file content, being a sha256 checksum the current implementation
+  bytes checksum = 5;
 
   // the id assigned to the watcher.
   uint32 uid = 10;

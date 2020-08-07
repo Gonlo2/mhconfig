@@ -15,15 +15,15 @@ namespace config
 {
 
 enum class ValueElement {
-  STR_VALUE_ELEMENT = 0,
-  UNDEFINED_VALUE_ELEMENT = 1,
-  INT_VALUE_ELEMENT = 2,
-  DOUBLE_VALUE_ELEMENT = 3,
-  BOOL_VALUE_ELEMENT = 4,
-  NONE_VALUE_ELEMENT = 5,
-  MAP_VALUE_ELEMENT = 6,
-  SEQUENCE_VALUE_ELEMENT = 7,
-  BIN_VALUE_ELEMENT = 8
+  STR = 0,
+  UNDEFINED = 1,
+  INT64 = 2,
+  DOUBLE = 3,
+  BOOL = 4,
+  NONE = 5,
+  MAP = 6,
+  SEQUENCE = 7,
+  BIN = 8
 };
 
 enum class KeyElement {
@@ -52,13 +52,13 @@ uint32_t fill_elements(
 ) {
   switch (root.type()) {
     case NodeType::UNDEFINED: {
-      add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::UNDEFINED);
       return 1;
     }
 
     case NodeType::NONE: // Fallback
     case NodeType::OVERRIDE_NONE: {
-      add_value_type(output, ValueElement::NONE_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::NONE);
       return 1;
     }
 
@@ -66,10 +66,10 @@ uint32_t fill_elements(
     case NodeType::OVERRIDE_STR: {
       auto r = root.try_as<std::string>();
       if (r.first) {
-        add_value_type(output, ValueElement::STR_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::STR);
         output->set_value_str(r.second);
       } else {
-        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED);
       }
       return 1;
     }
@@ -77,21 +77,21 @@ uint32_t fill_elements(
     case NodeType::BIN: {
       auto r = root.try_as<std::string>();
       if (r.first) {
-        add_value_type(output, ValueElement::BIN_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::BIN);
         output->set_value_bin(r.second);
       } else {
-        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED);
       }
       return 1;
     }
 
-    case NodeType::INT: {
+    case NodeType::INT64: {
       auto r = root.try_as<int64_t>();
       if (r.first) {
-        add_value_type(output, ValueElement::INT_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::INT64);
         output->set_value_int(r.second);
       } else {
-        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED);
       }
       return 1;
     }
@@ -99,10 +99,10 @@ uint32_t fill_elements(
     case NodeType::DOUBLE: {
       auto r = root.try_as<double>();
       if (r.first) {
-        add_value_type(output, ValueElement::DOUBLE_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::DOUBLE);
         output->set_value_double(r.second);
       } else {
-        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED);
       }
       return 1;
     }
@@ -110,17 +110,17 @@ uint32_t fill_elements(
     case NodeType::BOOL: {
       auto r = root.try_as<bool>();
       if (r.first) {
-        add_value_type(output, ValueElement::BOOL_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::BOOL);
         output->set_value_bool(r.second);
       } else {
-        add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+        add_value_type(output, ValueElement::UNDEFINED);
       }
       return 1;
     }
 
     case NodeType::MAP: // Fallback
     case NodeType::OVERRIDE_MAP: {
-      add_value_type(output, ValueElement::MAP_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::MAP);
       auto map = root.as_map();
       output->set_size(map->size());
 
@@ -143,7 +143,7 @@ uint32_t fill_elements(
 
     case NodeType::SEQUENCE: // Fallback
     case NodeType::OVERRIDE_SEQUENCE: {
-      add_value_type(output, ValueElement::SEQUENCE_VALUE_ELEMENT);
+      add_value_type(output, ValueElement::SEQUENCE);
       auto seq = root.as_sequence();
       output->set_size(seq->size());
 
@@ -168,7 +168,7 @@ uint32_t fill_elements(
       assert(false);
   }
 
-  add_value_type(output, ValueElement::UNDEFINED_VALUE_ELEMENT);
+  add_value_type(output, ValueElement::UNDEFINED);
   return 1;
 }
 

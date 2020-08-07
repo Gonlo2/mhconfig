@@ -57,8 +57,6 @@ void WatchOutputMessageImpl::set_version(uint32_t version) {
 }
 
 void WatchOutputMessageImpl::set_element(const mhconfig::Element& element) {
-  elements_data_.clear();
-  proto_response_->clear_elements();
   mhconfig::api::config::fill_elements(
     element,
     proto_response_,
@@ -66,16 +64,18 @@ void WatchOutputMessageImpl::set_element(const mhconfig::Element& element) {
   );
 }
 
-void WatchOutputMessageImpl::set_element_bytes(const char* data, size_t len) {
-  elements_data_.clear();
-  elements_data_.write(data, len);
-  proto_response_->clear_elements();
+void WatchOutputMessageImpl::set_checksum(const uint8_t* data, size_t len) {
+  proto_response_->set_checksum(data, len);
+}
+
+void WatchOutputMessageImpl::set_preprocessed_payload(const char* data, size_t len) {
+  preprocessed_payload_.write(data, len);
 }
 
 bool WatchOutputMessageImpl::send(bool finish) {
   if (auto stream = stream_.lock()) {
-    if (proto_response_->SerializeToOstream(&elements_data_)) {
-      slice_ = grpc::Slice(elements_data_.str());
+    if (proto_response_->SerializeToOstream(&preprocessed_payload_)) {
+      slice_ = grpc::Slice(preprocessed_payload_.str());
       response_ = grpc::ByteBuffer(&slice_, 1);
       return stream->send(shared_from_this(), finish);
     }
@@ -207,8 +207,12 @@ void WatchGetRequest::set_element(const mhconfig::Element& element) {
   output_message_->set_element(element);
 }
 
-void WatchGetRequest::set_element_bytes(const char* data, size_t len) {
-  output_message_->set_element_bytes(data, len);
+void WatchGetRequest::set_checksum(const uint8_t* data, size_t len) {
+  output_message_->set_checksum(data, len);
+}
+
+void WatchGetRequest::set_preprocessed_payload(const char* data, size_t len) {
+  output_message_->set_preprocessed_payload(data, len);
 }
 
 bool WatchGetRequest::commit() {

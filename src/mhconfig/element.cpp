@@ -12,11 +12,11 @@ namespace mhconfig {
       case NodeType::NONE:
         return "NONE";
       case NodeType::STR:
-        return "STRING";
+        return "STR";
       case NodeType::BIN:
-        return "STRING";
-      case NodeType::INT:
-        return "INTEGER";
+        return "BIN";
+      case NodeType::INT64:
+        return "INT64";
       case NodeType::DOUBLE:
         return "DOUBLE";
       case NodeType::BOOL:
@@ -52,18 +52,60 @@ namespace mhconfig {
   }
 
   Element::Element(int64_t value) noexcept {
-    type_ = NodeType::INT;
+    type_ = NodeType::INT64;
     data_.int64_value = value;
   }
 
   Element::Element(double value) noexcept {
     type_ = NodeType::DOUBLE;
-    data_.int64_value = value;
+    data_.double_value = value;
   }
 
   Element::Element(bool value) noexcept {
     type_ = NodeType::BOOL;
     data_.bool_value = value;
+  }
+
+  Element::Element(const Literal& value, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::LITERAL);
+    type_ = type;
+    new (&data_.literal) Literal();
+    data_.literal = value;
+  }
+
+  Element::Element(Literal&& value, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::LITERAL);
+    type_ = type;
+    new (&data_.literal) Literal();
+    data_.literal = value;
+  }
+
+  Element::Element(const MapCow& map, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::MAP);
+    type_ = type;
+    new (&data_.map) MapCow();
+    data_.map = map;
+  }
+
+  Element::Element(MapCow&& map, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::MAP);
+    type_ = type;
+    new (&data_.map) MapCow();
+    data_.map = map;
+  }
+
+  Element::Element(const SequenceCow& sequence, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
+    type_ = type;
+    new (&data_.seq) SequenceCow();
+    data_.seq = sequence;
+  }
+
+  Element::Element(SequenceCow&& sequence, NodeType type) noexcept {
+    assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
+    type_ = type;
+    new (&data_.seq) SequenceCow();
+    data_.seq = sequence;
   }
 
   Element::Element(const Element& rhs) noexcept {
@@ -163,7 +205,7 @@ namespace mhconfig {
     switch (type()) {
       case NodeType::STR: // Fallback
       case NodeType::BIN: // Fallback
-      case NodeType::INT: // Fallback
+      case NodeType::INT64: // Fallback
       case NodeType::DOUBLE: // Fallback
       case NodeType::BOOL: // Fallback
       case NodeType::OVERRIDE_STR:
@@ -242,7 +284,7 @@ namespace mhconfig {
       case NodeType::OVERRIDE_STR: // Fallback
       case NodeType::BIN:
         return Element(data_.literal);
-      case NodeType::INT:
+      case NodeType::INT64:
         return Element(data_.int64_value);
       case NodeType::DOUBLE:
         return Element(data_.double_value);
@@ -303,6 +345,76 @@ namespace mhconfig {
         });
         break;
       default:
+        break;
+    }
+  }
+
+  std::array<uint8_t, 32> Element::make_checksum() const {
+    std::string fingerprint;
+    jmutils::push_varint(fingerprint, 0); // fingerprint & checksum version
+    add_fingerprint(fingerprint);
+
+    std::array<uint8_t, 32> checksum;
+
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, fingerprint.data(), fingerprint.size());
+    SHA256_Final(checksum.data(), &sha256);
+
+    return checksum;
+  }
+
+  void Element::add_fingerprint(std::string& output) const {
+    output.push_back((uint8_t) type_);
+
+    switch (get_internal_data_type(type_)) {
+      case InternalDataType::MAP: {
+        auto map = data_.map.get();
+        std::vector<std::pair<std::string, Element>> sorted_values;
+        sorted_values.reserve(map->size());
+        for (const auto& it: *map) {
+          sorted_values.emplace_back(it.first.str(), it.second);
+        }
+        std::sort(
+          sorted_values.begin(),
+          sorted_values.end(),
+          [](const auto& a, const auto& b) { return a.first < b.first; }
+        );
+
+        jmutils::push_varint(output, map->size());
+        for (size_t i = 0, l = sorted_values.size(); i < l; ++i) {
+          jmutils::push_str(output, sorted_values[i].first);
+          sorted_values[i].second.add_fingerprint(output);
+        }
+        break;
+      }
+
+      case InternalDataType::SEQUENCE: {
+        auto seq = data_.seq.get();
+        jmutils::push_varint(output, seq->size());
+        for (const auto& x: *seq) {
+          x.add_fingerprint(output);
+        }
+        break;
+      }
+
+      case InternalDataType::LITERAL:
+        jmutils::push_str(output, data_.literal.str());
+        break;
+
+      case InternalDataType::INT64:
+        jmutils::push_uint64(output, data_.uint64_value);
+        break;
+
+      case InternalDataType::DOUBLE:
+        jmutils::push_double(output, data_.double_value);
+        break;
+
+      case InternalDataType::BOOL:
+        output.push_back(data_.bool_value ? 0 : 1);
+        break;
+
+      case InternalDataType::EMPTY:
         break;
     }
   }

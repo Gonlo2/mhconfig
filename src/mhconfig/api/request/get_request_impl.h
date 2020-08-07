@@ -43,7 +43,9 @@ public:
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
   void set_element(const mhconfig::Element& element) override;
-  void set_element_bytes(const char* data, size_t len) override;
+  void set_checksum(const uint8_t* data, size_t len) override;
+
+  void set_preprocessed_payload(const char* data, size_t len) override;
 
   bool commit() override;
 
@@ -60,7 +62,7 @@ protected:
   mhconfig::proto::GetRequest* request_;
   mhconfig::proto::GetResponse* response_;
 
-  std::stringstream elements_data_;
+  std::stringstream preprocessed_payload_;
 
   std::vector<std::string> overrides_;
   std::vector<std::string> flavors_;

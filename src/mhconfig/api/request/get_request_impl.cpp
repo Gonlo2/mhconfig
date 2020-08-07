@@ -72,16 +72,17 @@ void GetRequestImpl::set_version(uint32_t version) {
 }
 
 void GetRequestImpl::set_element(const mhconfig::Element& element) {
-  elements_data_.clear();
-  response_->clear_elements();
   config::fill_elements(element, response_, response_->add_elements());
 }
 
-void GetRequestImpl::set_element_bytes(const char* data, size_t len) {
-  elements_data_.clear();
-  elements_data_.write(data, len);
-  response_->clear_elements();
+void GetRequestImpl::set_checksum(const uint8_t* data, size_t len) {
+  response_->set_checksum(data, len);
 }
+
+void GetRequestImpl::set_preprocessed_payload(const char* data, size_t len) {
+  preprocessed_payload_.write(data, len);
+}
+
 
 bool GetRequestImpl::commit() {
   return finish();
@@ -148,9 +149,9 @@ void GetRequestImpl::request(
 bool GetRequestImpl::finish(const grpc::Status& status) {
   if (auto t = tag(RequestStatus::PROCESS)) {
     if (status.ok()) {
-      bool ok = response_->SerializeToOstream(&elements_data_);
+      bool ok = response_->SerializeToOstream(&preprocessed_payload_);
       if (ok) {
-        grpc::Slice slice(elements_data_.str());
+        grpc::Slice slice(preprocessed_payload_.str());
         grpc::ByteBuffer raw_response(&slice, 1);
 
         responder_.Finish(raw_response, status, t);

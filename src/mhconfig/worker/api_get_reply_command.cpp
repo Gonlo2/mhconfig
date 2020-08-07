@@ -42,8 +42,10 @@ bool ApiGetReplyCommand::execute(
     case MergedConfigStatus::BUILDING:
       assert(false);
     case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED: {
-      ::mhconfig::proto::GetResponse get_response;
-      ::mhconfig::api::config::fill_elements(
+      proto::GetResponse get_response;
+      auto checksum = merged_config_->value.make_checksum();
+      get_response.set_checksum(checksum.data(), checksum.size());
+      api::config::fill_elements(
         merged_config_->value,
         &get_response,
         get_response.add_elements()
@@ -55,7 +57,7 @@ bool ApiGetReplyCommand::execute(
           {},
           merged_config_->preprocesed_value.size()
         );
-        request_->set_element_bytes(
+        request_->set_preprocessed_payload(
           merged_config_->preprocesed_value.c_str(),
           merged_config_->preprocesed_value.size()
         );
@@ -67,15 +69,21 @@ bool ApiGetReplyCommand::execute(
         );
       } else {
         spdlog::warn("Can't optimize the config of the document");
+        request_->set_checksum(checksum.data(), checksum.size());
         request_->set_element(merged_config_->value);
       }
       break;
     }
-    case MergedConfigStatus::OK_CONFIG_OPTIMIZING:
+    case MergedConfigStatus::OK_CONFIG_OPTIMIZING: {
+      // Maybe it's better wait to the optimized value to avoid
+      // make the checksum again
+      auto checksum = merged_config_->value.make_checksum();
+      request_->set_checksum(checksum.data(), checksum.size());
       request_->set_element(merged_config_->value);
       break;
+    }
     case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
-      request_->set_element_bytes(
+      request_->set_preprocessed_payload(
         merged_config_->preprocesed_value.c_str(),
         merged_config_->preprocesed_value.size()
       );

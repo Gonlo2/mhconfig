@@ -190,17 +190,17 @@ void UpdateDocumentsCommand::filter_existing_documents(
 
   for (const auto& it: items_) {
     if (it.second.status == LoadRawConfigStatus::OK) {
-      uint32_t new_crc32 = it.second.raw_config->crc32;
+      uint64_t new_checksum = it.second.raw_config->checksum;
       with_raw_config(
         config_namespace,
         it.first,
         0,
-        [&override_paths_to_remove, new_crc32](const auto& override_path, const auto& raw_config) {
-          if (raw_config->has_content && (raw_config->crc32 == new_crc32)) {
+        [&override_paths_to_remove, new_checksum](const auto& override_path, const auto& raw_config) {
+          if (raw_config->has_content && (raw_config->checksum == new_checksum)) {
             spdlog::debug(
-              "Filtering the existing raw config (override_path: '{}', crc32: {:X})",
+              "Filtering the existing raw config (override_path: '{}', checksum: {:X})",
               override_path,
-              new_crc32
+              new_checksum
             );
             override_paths_to_remove.push_back(override_path);
           }

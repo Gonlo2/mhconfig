@@ -4,8 +4,6 @@
 #include <filesystem>
 #include <fstream>
 
-#include <zlib.h>
-
 #include <absl/container/flat_hash_set.h>
 
 #include "mhconfig/string_pool.h"
@@ -33,6 +31,7 @@ const static std::string TAG_BIN{"tag:yaml.org,2002:binary"};
 const static std::string TAG_INT{"tag:yaml.org,2002:int"};
 const static std::string TAG_DOUBLE{"tag:yaml.org,2002:float"};
 const static std::string TAG_BOOL{"tag:yaml.org,2002:bool"};
+
 
 const static std::string TAG_FORMAT{"!format"};
 const static std::string TAG_SREF{"!sref"};
@@ -139,12 +138,19 @@ void load_raw_config(
     fin.seekg(0, std::ios::beg);
     data.assign(std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>());
 
-    // TODO Avoid import zlib only to calculate the crc32
     result.raw_config = std::make_shared<raw_config_t>();
-    result.raw_config->crc32 = crc32(0, (const unsigned char*)data.c_str(), data.size());
     result.raw_config->has_content = true;
+
     lambda(data, result);
+
     result.raw_config->value.freeze();
+
+    auto full_checksum = result.raw_config->value.make_checksum();
+    result.raw_config->checksum = 0;
+    for (size_t i = 0; i < 8; ++i) {
+      result.raw_config->checksum <<= 8;
+      result.raw_config->checksum |= full_checksum[i];
+    }
   } catch(const std::exception &e) {
     spdlog::error(
       "Error making the element (path: '{}'): {}",
@@ -436,6 +442,8 @@ struct split_filename_result_t {
 split_filename_result_t split_filename(
   std::string_view stem
 );
+
+std::array<uint8_t, 32> make_checksum(const Element& element);
 
 } /* builder */
 } /* mhconfig */

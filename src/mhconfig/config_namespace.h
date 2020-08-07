@@ -29,17 +29,16 @@ const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
 
 struct raw_config_t {
   uint32_t id{0};
-  uint32_t crc32{0};
-  // TODO Add in the empty space a u63 with the last modification timestamp
   bool has_content{false};
+  uint64_t checksum{0};
   Element value;
   std::vector<std::string> reference_to;
 
   std::shared_ptr<raw_config_t> clone() {
     auto result = std::make_shared<raw_config_t>();
     result->id = id;
-    result->crc32 = crc32;
     result->has_content = has_content;
+    result->checksum = checksum;
     result->value = value;
     result->reference_to = reference_to;
     return result;
@@ -59,7 +58,7 @@ struct merged_config_t {
   uint64_t creation_timestamp : 56;
   uint64_t last_access_timestamp;
   Element value;
-  // The preprocesed_value field store the rendered template or the optimized value
+  // The preprocesed_value field store the optimized value
   std::string preprocesed_value;
 
   merged_config_t()

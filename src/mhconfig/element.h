@@ -9,10 +9,12 @@
 #include <type_traits>
 #include <variant>
 
+#include <openssl/sha.h>
 #include "yaml-cpp/yaml.h"
 #include "spdlog/spdlog.h"
 #include "jmutils/string/pool.h"
 #include "jmutils/cow.h"
+#include "jmutils/common.h"
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 
@@ -20,25 +22,25 @@
 
 namespace mhconfig {
   enum class NodeType : uint8_t {
-    UNDEFINED,
-    MAP,
-    SEQUENCE,
-    NONE,
-    STR,
-    BIN,
-    INT,
-    DOUBLE,
-    BOOL,
+    UNDEFINED         = 0,
+    MAP               = 1,
+    SEQUENCE          = 2,
+    NONE              = 3,
+    STR               = 4,
+    BIN               = 5,
+    INT64             = 6,
+    DOUBLE            = 7,
+    BOOL              = 8,
 
     // Virtual nodes
-    FORMAT,  // Sequence
-    SREF,  // Sequence
-    REF,  // Sequence
-    DELETE, // None
-    OVERRIDE_MAP, // Map
-    OVERRIDE_SEQUENCE, // Sequence
-    OVERRIDE_NONE, // None
-    OVERRIDE_STR // Str
+    FORMAT            = 9,  // Sequence
+    SREF              = 10, // Sequence
+    REF               = 11, // Sequence
+    DELETE            = 12, // None
+    OVERRIDE_MAP      = 13, // Map
+    OVERRIDE_SEQUENCE = 14, // Sequence
+    OVERRIDE_NONE     = 15, // None
+    OVERRIDE_STR      = 16  // Str
   };
 
   enum class InternalDataType {
@@ -71,7 +73,7 @@ namespace mhconfig {
       case NodeType::OVERRIDE_NONE: // Fallback
       case NodeType::DELETE:
         return InternalDataType::EMPTY;
-      case NodeType::INT:
+      case NodeType::INT64:
         return InternalDataType::INT64;
       case NodeType::DOUBLE:
         return InternalDataType::DOUBLE;
@@ -98,6 +100,9 @@ namespace mhconfig {
     double double_value;
     bool bool_value;
 
+    // This is used to create the fingerprint
+    uint64_t uint64_value;
+
     data_t() noexcept {}
     ~data_t() noexcept {}
   };
@@ -117,51 +122,18 @@ namespace mhconfig {
   public:
     Element() noexcept;
     explicit Element(NodeType type) noexcept;
-    explicit Element(const int64_t value) noexcept;
-    explicit Element(const double value) noexcept;
-    explicit Element(const bool value) noexcept;
+    explicit Element(int64_t value) noexcept;
+    explicit Element(double value) noexcept;
+    explicit Element(bool value) noexcept;
 
-    explicit Element(const Literal& value, NodeType type = NodeType::STR) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::LITERAL);
-      type_ = type;
-      new (&data_.literal) Literal();
-      data_.literal = value;
-    }
+    explicit Element(const Literal& value, NodeType type = NodeType::STR) noexcept;
+    explicit Element(Literal&& value, NodeType type = NodeType::STR) noexcept;
 
-    explicit Element(Literal&& value, NodeType type = NodeType::STR) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::LITERAL);
-      type_ = type;
-      new (&data_.literal) Literal();
-      data_.literal = value;
-    }
+    explicit Element(const MapCow& map, NodeType type = NodeType::MAP) noexcept;
+    explicit Element(MapCow&& map, NodeType type = NodeType::MAP) noexcept;
 
-    explicit Element(const MapCow& map, NodeType type = NodeType::MAP) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::MAP);
-      type_ = type;
-      new (&data_.map) MapCow();
-      data_.map = map;
-    }
-
-    explicit Element(MapCow&& map, NodeType type = NodeType::MAP) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::MAP);
-      type_ = type;
-      new (&data_.map) MapCow();
-      data_.map = map;
-    }
-
-    explicit Element(const SequenceCow& sequence, NodeType type = NodeType::SEQUENCE) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
-      type_ = type;
-      new (&data_.seq) SequenceCow();
-      data_.seq = sequence;
-    }
-
-    explicit Element(SequenceCow&& sequence, NodeType type = NodeType::SEQUENCE) noexcept {
-      assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
-      type_ = type;
-      new (&data_.seq) SequenceCow();
-      data_.seq = sequence;
-    }
+    explicit Element(const SequenceCow& sequence, NodeType type = NodeType::SEQUENCE) noexcept;
+    explicit Element(SequenceCow&& sequence, NodeType type = NodeType::SEQUENCE) noexcept;
 
     Element(const Element& rhs) noexcept;
     Element(Element&& rhs) noexcept;
@@ -222,6 +194,8 @@ namespace mhconfig {
 
     void freeze();
 
+    std::array<uint8_t, 32> make_checksum() const;
+
   private:
     NodeType type_;
     data_t data_;
@@ -234,6 +208,8 @@ namespace mhconfig {
 
     void copy(const Element& o) noexcept;
     void swap(Element&& o) noexcept;
+
+    void add_fingerprint(std::string& output) const;
   };
 
   //TODO Check this
