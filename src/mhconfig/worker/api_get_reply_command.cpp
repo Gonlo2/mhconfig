@@ -58,7 +58,7 @@ bool ApiGetReplyCommand::execute(
           merged_config_->preprocesed_value.size()
         );
         request_->set_preprocessed_payload(
-          merged_config_->preprocesed_value.c_str(),
+          merged_config_->preprocesed_value.data(),
           merged_config_->preprocesed_value.size()
         );
 
@@ -84,7 +84,7 @@ bool ApiGetReplyCommand::execute(
     }
     case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
       request_->set_preprocessed_payload(
-        merged_config_->preprocesed_value.c_str(),
+        merged_config_->preprocesed_value.data(),
         merged_config_->preprocesed_value.size()
       );
       break;

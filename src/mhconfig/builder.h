@@ -23,7 +23,7 @@ namespace mhconfig
 namespace builder
 {
 
-const static std::string TAG_NO_PLAIN_SCALAR{"!"};
+const static std::string TAG_NON_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};
 const static std::string TAG_NONE{"tag:yaml.org,2002:null"};
 const static std::string TAG_STR{"tag:yaml.org,2002:str"};
@@ -300,6 +300,40 @@ bool is_a_valid_path(
 );
 
 Element make_element(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
+);
+
+Element make_element_from_scalar(
+  jmutils::string::Pool* pool,
+  YAML::Node &node
+);
+
+Element make_element_from_plain_scalar(
+  jmutils::string::Pool* pool,
+  YAML::Node &node
+);
+
+Element make_element_from_int64(
+  YAML::Node &node
+);
+
+Element make_element_from_double(
+  YAML::Node &node
+);
+
+Element make_element_from_bool(
+  YAML::Node &node
+);
+
+Element make_element_from_map(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
+);
+
+Element make_element_from_sequence(
   jmutils::string::Pool* pool,
   YAML::Node &node,
   absl::flat_hash_set<std::string> &reference_to

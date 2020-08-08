@@ -741,101 +741,168 @@ Element make_element(
       return Element();
 
     case YAML::NodeType::Scalar:
-      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
-        return Element(pool->add(node.as<std::string>()));
-      } else if (node.Tag() == TAG_STR) {
-        return Element(pool->add(node.as<std::string>()));
-      } else if (node.Tag() == TAG_BIN) {
-        std::string encoded_value = node.as<std::string>();
+      return make_element_from_scalar(pool, node);
 
-        if (!jmutils::base64_sanitize(encoded_value)) {
-          spdlog::warn("The base64 '{}' don't have a valid structure", encoded_value);
-          return Element();
-        }
+    case YAML::NodeType::Sequence:
+      return make_element_from_sequence(pool, node, reference_to);
 
-        std::string binary_value;
-        jmutils::base64_decode(encoded_value, binary_value);
-        return Element(pool->add(binary_value), NodeType::BIN);
-      } else if (node.Tag() == TAG_INT) {
-        auto str{node.as<std::string>()};
-        errno = 0;
-        int64_t value = std::strtoll(str.c_str(), nullptr, 10);
-        if (errno == 0) return Element(value);
-        spdlog::warn("Can't parse '{}' as a int", str);
-        return Element();
-      } else if (node.Tag() == TAG_DOUBLE) {
-        auto str{node.as<std::string>()};
-        errno = 0;
-        double value = std::strtod(str.c_str(), nullptr);
-        if (errno == 0) return Element(value);
-        spdlog::warn("Can't parse '{}' as a float", str);
-        return Element();
-      } else if (node.Tag() == TAG_BOOL) {
-        auto str{node.as<std::string>()};
-        if (str == "true") {
-          return Element(true);
-        } else if (str == "false") {
-          return Element(false);
-        }
-        spdlog::warn("Can't parse '{}' as a bool", str);
-        return Element();
-      } else if (node.Tag() == TAG_DELETE) {
-        return Element(NodeType::DELETE);
-      } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(pool->add(node.as<std::string>()), NodeType::OVERRIDE_STR);
-      }
-      spdlog::error(
-        "Unknown tag '{}' for the scalar value {}",
-        node.Tag(),
-        node.as<std::string>()
-      );
-      return Element();
-
-    case YAML::NodeType::Sequence: {
-      SequenceCow seq_cow;
-      auto seq = seq_cow.get_mut();
-      seq->reserve(node.size());
-      for (auto it : node) {
-        seq->push_back(make_and_check_element(pool, it, reference_to));
-      }
-      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
-        return Element(std::move(seq_cow));
-      } else if (node.Tag() == TAG_FORMAT) {
-        return Element(std::move(seq_cow), NodeType::FORMAT);
-      } else if (node.Tag() == TAG_SREF) {
-        return Element(std::move(seq_cow), NodeType::SREF);
-      } else if (node.Tag() == TAG_REF) {
-        return Element(std::move(seq_cow), NodeType::REF);
-      } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(std::move(seq_cow), NodeType::OVERRIDE_SEQUENCE);
-      }
-      spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
-      return Element();
-    }
-
-    case YAML::NodeType::Map: {
-      MapCow map_cow;
-      auto map = map_cow.get_mut();
-      map->reserve(node.size());
-      for (auto it : node) {
-        auto k = make_and_check_element(pool, it.first, reference_to);
-        auto kk = k.try_as<jmutils::string::String>();
-        if (!kk.first) {
-          spdlog::error("The key of a map must be a string");
-          return Element();
-        }
-        (*map)[kk.second] = make_and_check_element(pool, it.second, reference_to);
-      }
-      if ((node.Tag() == TAG_PLAIN_SCALAR) || (node.Tag() == TAG_NO_PLAIN_SCALAR)) {
-        return Element(std::move(map_cow));
-      } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(std::move(map_cow), NodeType::OVERRIDE_MAP);
-      }
-      spdlog::error("Unknown tag '{}' for a map value", node.Tag());
-      return Element();
-    }
+    case YAML::NodeType::Map:
+      return make_element_from_map(pool, node, reference_to);
   }
 
+  return Element();
+}
+
+Element make_element_from_scalar(
+  jmutils::string::Pool* pool,
+  YAML::Node &node
+) {
+  if ((node.Tag() == TAG_NON_PLAIN_SCALAR) || (node.Tag() == TAG_STR)) {
+    return Element(pool->add(node.as<std::string>()));
+  } else if (node.Tag() == TAG_PLAIN_SCALAR) {
+    return make_element_from_plain_scalar(pool, node);
+  } else if (node.Tag() == TAG_BIN) {
+    std::string encoded_value = node.as<std::string>();
+
+    if (!jmutils::base64_sanitize(encoded_value)) {
+      spdlog::warn("The base64 '{}' don't have a valid structure", encoded_value);
+      return Element();
+    }
+
+    std::string binary_value;
+    jmutils::base64_decode(encoded_value, binary_value);
+    return Element(pool->add(binary_value), NodeType::BIN);
+  } else if (node.Tag() == TAG_INT) {
+    Element result = make_element_from_int64(node);
+    if (result.is_undefined()) {
+      spdlog::warn("Can't parse '{}' as a int64", node.as<std::string>());
+    }
+    return result;
+  } else if (node.Tag() == TAG_DOUBLE) {
+    Element result = make_element_from_double(node);
+    if (result.is_undefined()) {
+      spdlog::warn("Can't parse '{}' as a double", node.as<std::string>());
+    }
+    return result;
+  } else if (node.Tag() == TAG_BOOL) {
+    Element result = make_element_from_bool(node);
+    if (result.is_undefined()) {
+      spdlog::warn("Can't parse '{}' as a bool", node.as<std::string>());
+    }
+    return result;
+  } else if (node.Tag() == TAG_DELETE) {
+    return Element(NodeType::DELETE);
+  } else if (node.Tag() == TAG_OVERRIDE) {
+    return Element(pool->add(node.as<std::string>()), NodeType::OVERRIDE_STR);
+  }
+  spdlog::error(
+    "Unknown tag '{}' for the scalar value {}",
+    node.Tag(),
+    node.as<std::string>()
+  );
+  return Element();
+}
+
+Element make_element_from_plain_scalar(
+  jmutils::string::Pool* pool,
+  YAML::Node &node
+) {
+  Element e = make_element_from_bool(node);
+  if (!e.is_undefined()) return e;
+
+  e = make_element_from_int64(node);
+  if (!e.is_undefined()) return e;
+
+  e = make_element_from_double(node);
+  if (!e.is_undefined()) return e;
+
+  return Element(pool->add(node.as<std::string>()));
+}
+
+Element make_element_from_int64(
+  YAML::Node &node
+) {
+  auto str(node.as<std::string>());
+  char *end;
+  errno = 0;
+  int64_t value = std::strtoll(str.c_str(), &end, 10);
+  return (errno || (str.c_str() == end) || (*end != 0))
+    ? Element()
+    : Element(value);
+}
+
+Element make_element_from_double(
+  YAML::Node &node
+) {
+  auto str(node.as<std::string>());
+  char *end;
+  errno = 0;
+  double value = std::strtod(str.c_str(), &end);
+  return (errno || (str.c_str() == end) || (*end != 0))
+    ? Element()
+    : Element(value);
+}
+
+Element make_element_from_bool(
+  YAML::Node &node
+) {
+  auto str(node.as<std::string>());
+  if (str == "true") {
+    return Element(true);
+  } else if (str == "false") {
+    return Element(false);
+  }
+  return Element();
+}
+
+Element make_element_from_map(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
+) {
+  MapCow map_cow;
+  auto map = map_cow.get_mut();
+  map->reserve(node.size());
+  for (auto it : node) {
+    if (!it.first.IsScalar()) {
+      spdlog::error("The key of a map must be a scalar");
+      return Element();
+    }
+    jmutils::string::String key(pool->add(it.first.as<std::string>()));
+    (*map)[key] = make_and_check_element(pool, it.second, reference_to);
+  }
+  if (node.Tag() == TAG_PLAIN_SCALAR) {
+    return Element(std::move(map_cow));
+  } else if (node.Tag() == TAG_OVERRIDE) {
+    return Element(std::move(map_cow), NodeType::OVERRIDE_MAP);
+  }
+  spdlog::error("Unknown tag '{}' for a map value", node.Tag());
+  return Element();
+}
+
+Element make_element_from_sequence(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  absl::flat_hash_set<std::string> &reference_to
+) {
+  SequenceCow seq_cow;
+  auto seq = seq_cow.get_mut();
+  seq->reserve(node.size());
+  for (auto it : node) {
+    seq->push_back(make_and_check_element(pool, it, reference_to));
+  }
+  if (node.Tag() == TAG_PLAIN_SCALAR) {
+    return Element(std::move(seq_cow));
+  } else if (node.Tag() == TAG_FORMAT) {
+    return Element(std::move(seq_cow), NodeType::FORMAT);
+  } else if (node.Tag() == TAG_SREF) {
+    return Element(std::move(seq_cow), NodeType::SREF);
+  } else if (node.Tag() == TAG_REF) {
+    return Element(std::move(seq_cow), NodeType::REF);
+  } else if (node.Tag() == TAG_OVERRIDE) {
+    return Element(std::move(seq_cow), NodeType::OVERRIDE_SEQUENCE);
+  }
+  spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
   return Element();
 }
 
