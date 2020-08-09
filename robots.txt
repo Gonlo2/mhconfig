@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /mhconfig/js/
+Disallow: /mhconfig/css/
+Disallow: /mhconfig/img/
+Disallow: /mhconfig/vendor/
+Sitemap: /mhconfig/sitemap/https.xml

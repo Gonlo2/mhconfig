@@ -1,0 +1,200 @@
+<!DOCTYPE html><html lang=en_US> <head><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1, shrink-to-fit=no"><title>Documentation | MHConfig</title><link rel="shortcut icon" href=/mhconfig/img/ico/favicon.ico type=image/vnd.microsoft.icon><link rel=icon sizes=16x16 href=/mhconfig/img/ico/favicon-16x16.png><link rel=icon sizes=32x32 href=/mhconfig/img/ico/favicon-32x32.png><link rel=icon sizes=256x256 href=/mhconfig/img/ico/favicon.png><link rel=apple-touch-icon sizes=256x256 href=/mhconfig/img/ico/favicon.png><meta name=theme-color content=#3273dc><link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,700" rel=stylesheet><link rel=stylesheet href=/mhconfig/css/bulma.min.css><link rel=stylesheet href=/mhconfig/css/fontawesome.min.css><link rel=stylesheet href=/mhconfig/css/main.min.css></head> <body> <div class=page-container> <div class=content-wrapper> <nav class=navbar role=navigation aria-label="main navigation"> <div class=container> <div class=navbar-brand> <a href=/mhconfig/ class=navbar-item> <img class=img-fluid src=/mhconfig/img/logo/header.png alt=Logo> </a> <a role=button class="navbar-burger burger" aria-label=menu aria-expanded=false data-target=navbar> <span aria-hidden=true></span> <span aria-hidden=true></span> <span aria-hidden=true></span> </a> </div> <div id=navbar class=navbar-menu> <div class=navbar-end> <a href=/mhconfig/en/doc/ class=navbar-item> <span class=icon> <i class="fas fa-book"></i> </span> <span>Documentation</span> </a> <div class=buttons> <a class=button href=https://github.com/Gonlo2/mhconfig> <span class=icon> <i class="fab fa-github"></i> </span> <span>GitHub</span> </a> </div> </div> </div> </div> </nav> <noscript> <p class=enable-js>Enable JavaScript in your browser for a better experience.</p> </noscript> <section class="section has-background-light" id=doc> <div class="columns reverse-column-order-mobile"> <div class="column  is-8-tablet is-7-widescreen  is-offset-1-tablet is-offset-2-widescreen"> <div class=content> <h1 id=getting-started>Getting Started</h1> <h2 id=prerequisites>Prerequisites</h2> <p>This service need cmake and a c++ compiler, to facilitate the build process a docker image with all the requirements is provided, in this case you only need to have installed docker, docker-compose and <a href=https://github.com/Gonlo2/an-ci>an-ci</a>.</p> <p>First of all you need to build the docker-image</p> <div class=codehilite><pre><span></span><code><span class=nb>cd</span> dockerfiles/cpp-builder/
+docker build -t mhconfig-builder:0.2  .
+</code></pre></div> <p>After that go to the root path, prepare the thirdparties and build the server</p> <div class=codehilite><pre><span></span><code><span class=nb>cd</span> ../..
+git submodule update --init
+an-ci third_party
+an-ci build
+</code></pre></div> <p>You could find the executable in <code>./build/mhconfig</code></p> <h2 id=execution>Execution</h2> <p>To run the program execute</p> <div class=codehilite><pre><span></span><code>./mhconfig &lt;daemon config path&gt; &lt;gRPC listen address&gt; &lt;prometheus listen address&gt; &lt;num grpc threads&gt; &lt;num workers&gt;
+</code></pre></div> <p>For example</p> <div class=codehilite><pre><span></span><code><span class=nv>SPDLOG_LEVEL</span><span class=o>=</span>debug ./mhconfig daemon_config <span class=m>0</span>.0.0.0:2222 <span class=m>0</span>.0.0.0:1111 <span class=m>13</span> <span class=m>13</span>
+</code></pre></div> <p>To test it you could implement a client using the protobuf file <code>./src/mhconfig/proto/mhconfig.proto</code> or using some tool like <a href=https://github.com/fullstorydev/grpcurl>grpcurl</a> or <a href=https://ghz.sh/ >ghz</a>.</p> <p>PS: the logger configuration format could be obtained from https://github.com/gabime/spdlog/releases/tag/v1.6.0 PS2: for the moment it isn't possible to reload the configuration of the daemon.</p> <h1 id=configuration>Configuration</h1> <p>The configuration use YAML files and the mapping between files and configuration is simple, the file name is the first level of the configuration and the file content is appended to this first level.</p> <h2 id=tags>Tags</h2> <p>Some custom tags are allowed to facilitate the configuration administration.</p> <ul> <li><code>!format</code> allow format a string with some parameters.</li> <li><code>!ref</code> insert the configuration of another file if don't exists a circular dependency.</li> <li><code>!sref</code> insert a scalar or a null value from the same configuration file.</li> <li><code>!delete</code> remove the previous element with that path.</li> <li><code>!override</code> force override one value instead merge it.</li> <li><code>!!str</code>, <code>!!binary</code>, <code>!!int</code>, <code>!!float</code> and <code>!!bool</code> defines the type of a scalar.</li> </ul> <h3 id=format>Format</h3> <p>The <code>!format</code> tag allow create a string from some named variables, it use <a href=https://fmt.dev/latest/syntax.html>fmt</a> under the hood so it's possible use all the flexibility that it provide. The syntax is the next:</p> <div class=codehilite><pre><span></span><code><span class=kt>!format</span>
+<span class="p p-Indicator">-</span> <span class=s>&quot;{host}:{port}</span><span class=nv> </span><span class=s>(database:</span><span class=nv> </span><span class=s>{database},</span><span class=nv> </span><span class=s>table:</span><span class=nv> </span><span class=s>{table})&quot;</span>
+<span class="p p-Indicator">-</span> <span class=nt>host</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+  <span class=nt>port</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">2332</span>
+  <span class=nt>database</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">test_me</span>
+  <span class=nt>table</span><span class=p>:</span> <span class=kt>!sref</span> <span class="p p-Indicator">[</span><span class=nv>another</span><span class="p p-Indicator">,</span> <span class=nv>table</span><span class="p p-Indicator">,</span> <span class=nv>path</span><span class="p p-Indicator">]</span>
+</code></pre></div> <p>Take in mind that it's possible use references in the variable part, so it's possible write something like:</p> <div class=codehilite><pre><span></span><code><span class=kt>!format</span>
+<span class="p p-Indicator">-</span> <span class=s>&quot;{host}:{port}</span><span class=nv> </span><span class=s>(database:</span><span class=nv> </span><span class=s>{database},</span><span class=nv> </span><span class=s>table:</span><span class=nv> </span><span class=s>{table})&quot;</span>
+<span class="p p-Indicator">-</span> <span class=kt>!ref</span> <span class="p p-Indicator">[</span><span class=nv>databaseParameters</span><span class="p p-Indicator">,</span> <span class=nv>default</span><span class="p p-Indicator">]</span>
+</code></pre></div> <p>PS: fmt don't allow the usage of variable named arguments so it's supported only up to eight named arguments.</p> <h3 id=reference-and-scalar-reference>Reference and scalar reference</h3> <p>The tag <code>!ref</code> allow use some configuration provided in another configuration file if don't exists circular dependencies, also it's possible override that configuration in a next override. Like in some cases it's necessary reuse some value provided in the same configuration document the <code>!sref</code> allow do that but only if the referenced element is a scalar or null.</p> <h3 id=delete>Delete</h3> <p>If it's necessary remove the content of a previous override it's possible do that with the <code>!delete</code> tag.</p> <h3 id=override>Override</h3> <p>By default only it's possible merge values of the same kind with the overrides, to force the override it's necessary use the tag <code>!override</code>.</p> <h2 id=flavors>Flavors</h2> <p>Sometimes you want to change the configuration according to multiple logical dimensions, for these cases you have to use the flavors.</p> <p>The way to put the settings together is to repeat the overrides for each flavor, so if we have the overrides <code>override-1</code> and <code>override-2</code> and the flavors <code>flavor-1</code> and <code>flavor-2</code> would be the same as if we put the settings together in the following order</p> <div class=codehilite><pre><span></span><code>&lt;no-flavor&gt; / &lt;override-1&gt;
+&lt;no-flavor&gt; / &lt;override-2&gt;
+&lt;flavor-1&gt; / &lt;override-1&gt;
+&lt;flavor-1&gt; / &lt;override-2&gt;
+&lt;flavor-2&gt; / &lt;override-1&gt;
+&lt;flavor-2&gt; / &lt;override-2&gt;
+</code></pre></div> <p>The way to define a flavor is by the name of the file itself, up to the first point is the document while from this point is the flavor. For example, the file <code>service-routes.virtual-environment.mr-universe.yaml</code> is interpreted as the <code>virtual-environment.mr-universe</code> flavor of the <code>service-routes</code> document.</p> <h2 id=special-files>Special files</h2> <p>By default only configuration files with the <code>.yaml</code> extension are read, but it is possible to specify that a file is special if it starts with a underscore. These files follow the same logic as configuration files but have a prefix (the special file type) and a suffix (the file extension), and at the moment there are two: binary files and text files.</p> <p>For example, file <code>_bin.secret.p12</code> would be a binary file, with the document name <code>_bin.secret.p12</code> and no flavor, and file <code>_text.nginx-template.virtual-environment.load-test.conf</code> would be a text file with the document name <code>_text.nginx-template.conf</code> and the flavor <code>virtual-environment.load-test</code>.</p> <h2 id=restrictions>Restrictions</h2> <p>The overrides have some restrictions:</p> <ul> <li>A scalar or null value can only be overwritten with another scalar or null value, if you want to overwrite it you have to use the <code>!override</code> tag to force it.</li> <li>A map or a list can only be merged with another element of the same type, if you want to overwrite it you must use the <code>!override</code> tag.</li> <li>The <code>!ref</code> tag can only be used if the resulting configuration does not have cycles, that is, you cannot refer to a configuration directly or indirectly uses the self configuration.</li> <li>You can only use the sref tag for scalars in the document.</li> </ul> <h1 id=access-control-lists>Access Control Lists</h1> <p>It is possible to configure the server to control access to sensitive resources or procedures, that said, the permission logic can be divided into the following parts: policies, entities and tokens.</p> <h2 id=policies>Policies</h2> <p>A policy allows you to restrict access to resources based on root path and overrides. Each policy is defined in the <code>policy</code> subfolder of the configuration folder as a YAML file, whose name is the policy name, this file has the following structure:</p> <div class=codehilite><pre><span></span><code><span class=nt>root_path</span><span class=p>:</span>
+<span class="p p-Indicator">-</span> <span class=nt>path</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">/mnt/data/mhconfig/+</span>
+  <span class=nt>capabilities</span><span class=p>:</span> <span class="p p-Indicator">[</span><span class=nv>GET</span><span class="p p-Indicator">,</span> <span class=nv>WATCH</span><span class="p p-Indicator">,</span> <span class=nv>TRACE</span><span class="p p-Indicator">]</span>
+<span class=nt>overrides</span><span class=p>:</span>
+<span class="p p-Indicator">-</span> <span class=nt>path</span><span class=p>:</span> <span class=s>&#39;*&#39;</span>
+  <span class=nt>capabilities</span><span class=p>:</span> <span class="p p-Indicator">[</span><span class=nv>GET</span><span class="p p-Indicator">,</span> <span class=nv>WATCH</span><span class="p p-Indicator">]</span>
+<span class="p p-Indicator">-</span> <span class=nt>path</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">/dev/*</span>
+  <span class=nt>capabilities</span><span class=p>:</span> <span class="p p-Indicator">[</span><span class=nv>GET</span><span class="p p-Indicator">,</span> <span class=nv>WATCH</span><span class="p p-Indicator">,</span> <span class=nv>TRACE</span><span class="p p-Indicator">]</span>
+</code></pre></div> <p>Where a path could have two special characters: - The character <code>+</code> to denote any value within a single path segment. - The character <code>*</code> to denote any number of path segments, this can only be used at the end of the path.</p> <p>And the possible capabilities are: <code>GET</code>, <code>WATCH</code>, <code>TRACE</code>, <code>UPDATE</code> (it only check the <code>root_path</code>) and <code>RUN_GC</code> (it only check the entity capability).</p> <h2 id=entities>Entities</h2> <p>A entity encapsulates the capabilities and policies that an being can have. Each entity is defined in the <code>entity</code> subfolder of the configuration folder as a YAML file, whose name is the entity name, this file has the following structure:</p> <div class=codehilite><pre><span></span><code><span class=nt>capabilities</span><span class=p>:</span> <span class="p p-Indicator">[</span><span class=nv>GET</span><span class="p p-Indicator">]</span>
+<span class=nt>policies</span><span class=p>:</span>
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">test</span>
+</code></pre></div> <p>Policies are ordered from lowest to highest priority, so if two or more policies have the same path, the one with the highest priority will be used.</p> <p>It's also necessary to take into account that the capabilities of the entity have priority over those of the paths and, therefore, even if an operation is allowed on a path if it is not also defined in the entity, the permission will be denied.</p> <h2 id=tokens>Tokens</h2> <p>A token allows to authenticate an entity and configure some authentication parameters, although at the moment it only allows you to define the expiration date of the token through a unix timestamp. Each token is defined in the <code>token</code> subfolder of the configuration folder as a YAML file, whose name is the token itself, this file has the following structure:</p> <div class=codehilite><pre><span></span><code><span class=nt>expires_on</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">1595800000</span>  <span class=c1># A zero value indicate that the token don&#39;t expire</span>
+<span class=nt>entity</span><span class=p>:</span> <span class="l l-Scalar l-Scalar-Plain">test</span>
+</code></pre></div> <p>This token is specified in the gRPC call through the metadata <code>mhconfig-auth-token</code>.</p> <h1 id=api>API</h1> <p>A gRPC API is used to communicate with the daemon, where most of the methods that make use of a configuration path return a namespace identifier. This value is a 64bits unsigned integer generated randomly and its purpose is to tell the client if the previously asked information is still valid.</p> <p>Also this kind of responses return a version number that allow reproducible results for some time in the case that the configuration has been updated between two calls. Take in mind that returns a different value does not mean that the required configuration has been changed, but rather that some configuration has been updated.</p> <p>If you want to check if the content is different you can use the checksum field (it's a sha256 of the configuration content), so it can be useful to deduplicate the documents or decide to launch the watchers callbacks after receiving a different namespace identifier.</p> <h2 id=get>Get</h2> <p>This method allow retrieve a configuration and the protobuf definition is:</p> <div class=codehilite><pre><span></span><code><span class=kd>message</span> <span class=nc>GetRequest</span> <span class=p>{</span>
+  <span class=c1>// the root path of the namespace to obtain the configuration.</span>
+  <span class=kt>string</span> <span class=na>root_path</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=c1>// the list of overrides to apply from lower to higher priority.</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>overrides</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// the list of flavors to apply from lower to higher priority.</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>flavors</span> <span class=o>=</span> <span class=mi>6</span><span class=p>;</span>
+  <span class=c1>// the version of the configuration to retrieve, it retrieve the latest</span>
+  <span class=c1>// version with a zero value and the proper version otherwise.</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=c1>// the document to retrieve</span>
+  <span class=kt>string</span> <span class=na>document</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+<span class=p>}</span>
+
+<span class=kd>message</span> <span class=nc>GetResponse</span> <span class=p>{</span>
+  <span class=kd>enum</span> <span class=n>Status</span> <span class=p>{</span>
+    <span class=na>OK</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+    <span class=na>ERROR</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+    <span class=c1>// has been requested a removed or inexistent version.</span>
+    <span class=na>INVALID_VERSION</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+    <span class=c1>// in the case of use the `ref` tag, the dependency graph have a cycle.</span>
+    <span class=na>REF_GRAPH_IS_NOT_DAG</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=p>}</span>
+  <span class=n>Status</span> <span class=na>status</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=kt>uint64</span> <span class=na>namespace_id</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// the returned version, it&#39;s the last version if the asked version was the zero.</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=k>repeated</span> <span class=n>Element</span> <span class=na>elements</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+  <span class=c1>// A checksum of the file content, being a sha256 checksum the current implementation</span>
+  <span class=kt>bytes</span> <span class=na>checksum</span> <span class=o>=</span> <span class=mi>5</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div> <h2 id=update>Update</h2> <p>This method allow notify that a configuration file has been changed. It's necessary to specify that the updates comply with three properties: atomicity because all the configuration changes are visible at the same time, consistency because if some configuration file is bad formed one of them will be updated and isolation because it's possible retrieve the configurations like in some snapshot (at least for some time).</p> <div class=codehilite><pre><span></span><code><span class=kd>message</span> <span class=nc>UpdateRequest</span> <span class=p>{</span>
+  <span class=c1>// the root path of the namespace that has been changed.</span>
+  <span class=kt>string</span> <span class=na>root_path</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=c1>// the list of paths to check for changes, this apply to creations,</span>
+  <span class=c1>// modifications and deletions.</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>relative_paths</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// reload all the config files of the namespace, if this flag is</span>
+  <span class=c1>// on the relative_paths are ignored</span>
+  <span class=kt>bool</span> <span class=na>reload</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+<span class=p>}</span>
+
+<span class=kd>message</span> <span class=nc>UpdateResponse</span> <span class=p>{</span>
+  <span class=kt>uint64</span> <span class=na>namespace_id</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=kd>enum</span> <span class=n>Status</span> <span class=p>{</span>
+    <span class=na>OK</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+    <span class=na>ERROR</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=p>}</span>
+  <span class=n>Status</span> <span class=na>status</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// the new version.</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div> <h2 id=watch>Watch</h2> <p>To avoid sporadic requests to the service to detect configuration changes it's possible watch some configuration documents, it this case a stream is created and the service will send the new configuration when some change take place.</p> <div class=codehilite><pre><span></span><code><span class=kd>message</span> <span class=nc>WatchRequest</span> <span class=p>{</span>
+  <span class=c1>// the id to assign to the watcher (this is assigned by the client).</span>
+  <span class=kt>uint32</span> <span class=na>uid</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=c1>// if the purpose of the call is remove the watcher with the provided uid.</span>
+  <span class=kt>bool</span> <span class=na>remove</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// the root path of the namespace to obtain the configuration.</span>
+  <span class=kt>string</span> <span class=na>root_path</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=c1>// the list of overrides to apply from lower to higher priority.</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>overrides</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+  <span class=c1>// the list of flavors to apply from lower to higher priority.</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>flavors</span> <span class=o>=</span> <span class=mi>8</span><span class=p>;</span>
+  <span class=c1>// the last know version of the configuration, in the case of zero the server</span>
+  <span class=c1>// will reply the latest one, in other case the server will reply when exists</span>
+  <span class=c1>// a newer version that change the configuration. Please note that this means</span>
+  <span class=c1>// that the server can skip several versions if the server don&#39;t change the</span>
+  <span class=c1>// requested document directly or indirectly</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>5</span><span class=p>;</span>
+  <span class=c1>// document to watch.</span>
+  <span class=kt>string</span> <span class=na>document</span> <span class=o>=</span> <span class=mi>6</span><span class=p>;</span>
+<span class=p>}</span>
+
+<span class=kd>message</span> <span class=nc>WatchResponse</span> <span class=p>{</span>
+  <span class=kd>enum</span> <span class=n>Status</span> <span class=p>{</span>
+    <span class=na>OK</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+    <span class=c1>// if some error take place the watcher will be removed</span>
+    <span class=na>ERROR</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+    <span class=c1>// has been requested a removed or inexistent version</span>
+    <span class=na>INVALID_VERSION</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+    <span class=c1>// in the case of use the `ref` tag, the dependency graph have a cycle.</span>
+    <span class=na>REF_GRAPH_IS_NOT_DAG</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+    <span class=c1>// the provided uid is already in use.</span>
+    <span class=na>UID_IN_USE</span> <span class=o>=</span> <span class=mi>20</span><span class=p>;</span>
+    <span class=c1>// the provided uid don&#39;t exists in the system.</span>
+    <span class=na>UNKNOWN_UID</span> <span class=o>=</span> <span class=mi>21</span><span class=p>;</span>
+    <span class=c1>// the provided uid has been removed, keep in mind that it&#39;s possible</span>
+    <span class=c1>// to have career conditions in this method if:</span>
+    <span class=c1>// - a file has been changed and processing of the watcher has begun</span>
+    <span class=c1>// - an watcher has been requested to be removed</span>
+    <span class=c1>// - it&#39;s returned that the watcher has been removed</span>
+    <span class=c1>// - a configuration with the removed watcher identifier is returned</span>
+    <span class=c1>// PS: the server could remove the watcher if the namespace has been</span>
+    <span class=c1>// deleted and it&#39;s the client responsibility to re-register if it</span>
+    <span class=c1>// wish to do so</span>
+    <span class=na>REMOVED</span> <span class=o>=</span> <span class=mi>22</span><span class=p>;</span>
+  <span class=p>}</span>
+  <span class=n>Status</span> <span class=na>status</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=kt>uint64</span> <span class=na>namespace_id</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=c1>// The uid of the elements need be the same of the request</span>
+  <span class=c1>// to allow reuse the serialization cache</span>
+  <span class=k>repeated</span> <span class=n>Element</span> <span class=na>elements</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+  <span class=c1>// A checksum of the file content, being a sha256 checksum the current implementation</span>
+  <span class=kt>bytes</span> <span class=na>checksum</span> <span class=o>=</span> <span class=mi>5</span><span class=p>;</span>
+
+  <span class=c1>// the id assigned to the watcher.</span>
+  <span class=kt>uint32</span> <span class=na>uid</span> <span class=o>=</span> <span class=mi>10</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div> <h2 id=trace>Trace</h2> <p>To know if some service is using some document it's possible to add traces that will be activated when certain conditions are met.</p> <div class=codehilite><pre><span></span><code><span class=c1>// The trace request parameters can be seen as a conditional like</span>
+<span class=c1>//   (overrides is empty or overrides is a subset of A)</span>
+<span class=c1>//   and (flavors is empty or flavors is a subset of B)</span>
+<span class=c1>//   and (document is empty or document == C)</span>
+<span class=c1>// where</span>
+<span class=c1>//   A is a override got/watched</span>
+<span class=c1>//   B is a flavor got/watched</span>
+<span class=c1>//   C is a document got/watched</span>
+<span class=kd>message</span> <span class=nc>TraceRequest</span> <span class=p>{</span>
+  <span class=c1>// the root path of the namespace where trace the configuration.</span>
+  <span class=kt>string</span> <span class=na>root_path</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=c1>// the list of overrides to trace, if some document with one of them</span>
+  <span class=c1>// is asked it will be returned</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>overrides</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=c1>// the list of flavors to trace, if some document with one of them</span>
+  <span class=c1>// is asked it will be returned</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>flavors</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=c1>// the document to trace, in case it is not defined it will not be used</span>
+  <span class=c1>// in the query</span>
+  <span class=kt>string</span> <span class=na>document</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+<span class=p>}</span>
+
+<span class=kd>message</span> <span class=nc>TraceResponse</span> <span class=p>{</span>
+  <span class=kd>enum</span> <span class=n>Status</span> <span class=p>{</span>
+    <span class=na>RETURNED_ELEMENTS</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+    <span class=na>ERROR</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+    <span class=na>ADDED_WATCHER</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+    <span class=na>EXISTING_WATCHER</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+    <span class=na>REMOVED_WATCHER</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+  <span class=p>}</span>
+  <span class=n>Status</span> <span class=na>status</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=kt>uint64</span> <span class=na>namespace_id</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+  <span class=kt>uint32</span> <span class=na>version</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>overrides</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+  <span class=k>repeated</span> <span class=kt>string</span> <span class=na>flavors</span> <span class=o>=</span> <span class=mi>5</span><span class=p>;</span>
+  <span class=kt>string</span> <span class=na>document</span> <span class=o>=</span> <span class=mi>6</span><span class=p>;</span>
+  <span class=c1>// The client ip/socket/etc used to connect to the server</span>
+  <span class=kt>string</span> <span class=na>peer</span> <span class=o>=</span> <span class=mi>8</span><span class=p>;</span>
+<span class=p>}</span>
+</code></pre></div> <h2 id=run-garbage-collector>Run garbage collector</h2> <p>This is a administration method which allows for finer control of the garbage collector although it is not necessary to use it for normal use.</p> <div class=codehilite><pre><span></span><code><span class=kd>message</span> <span class=nc>RunGCRequest</span> <span class=p>{</span>
+  <span class=kd>enum</span> <span class=n>Type</span> <span class=p>{</span>
+    <span class=na>CACHE_GENERATION_0</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span>
+    <span class=na>CACHE_GENERATION_1</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+    <span class=na>CACHE_GENERATION_2</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+    <span class=na>DEAD_POINTERS</span> <span class=o>=</span> <span class=mi>3</span><span class=p>;</span>
+    <span class=na>NAMESPACES</span> <span class=o>=</span> <span class=mi>4</span><span class=p>;</span>
+    <span class=na>VERSIONS</span> <span class=o>=</span> <span class=mi>5</span><span class=p>;</span>
+  <span class=p>}</span>
+  <span class=n>Type</span> <span class=na>type</span> <span class=o>=</span> <span class=mi>1</span><span class=p>;</span>
+  <span class=kt>uint32</span> <span class=na>max_live_in_seconds</span> <span class=o>=</span> <span class=mi>2</span><span class=p>;</span>
+<span class=p>}</span>
+
+<span class=kd>message</span> <span class=nc>RunGCResponse</span> <span class=p>{</span>
+<span class=p>}</span>
+</code></pre></div> <h1 id=metrics>Metrics</h1> <p>The server expose some metrics through a prometheus client, some of this metrics are:</p> <ul> <li>The quantile 0.5, 0.9 and 0.99 of the requests duration (the stats are sampled).</li> <li>The quantile 0.5, 0.9 and 0.99 of the internal threads (the stats are sampled).</li> <li>Some internal stats.</li> </ul> <h1 id=faq>FAQ</h1> <h2 id=what-differentiates-the-overrides-from-the-flavors>What differentiates the overrides from the flavors?</h2> <p>What differentiates these two concepts are the owners of them, the owners of the overrides are the infrastructure teams while the owners of the flavors are the developers.</p> </div> </div> <div class="column  is-3-tablet is-2-widescreen"> <div class=sticky> <nav class=toc-container> <nav id=toc class=toc data-toggle=toc> <ul class="nav navbar-nav"> <li><a class="nav-link js-scroll-trigger" href=#getting-started>Getting Started</a><ul class="nav navbar-nav"><li><a class="nav-link js-scroll-trigger" href=#prerequisites>Prerequisites</a></li><li><a class="nav-link js-scroll-trigger" href=#execution>Execution</a></li></ul><li><a class="nav-link js-scroll-trigger" href=#configuration>Configuration</a><ul class="nav navbar-nav"><li><a class="nav-link js-scroll-trigger" href=#tags>Tags</a></li><li><a class="nav-link js-scroll-trigger" href=#flavors>Flavors</a></li><li><a class="nav-link js-scroll-trigger" href=#special-files>Special files</a></li><li><a class="nav-link js-scroll-trigger" href=#restrictions>Restrictions</a></li></ul><li><a class="nav-link js-scroll-trigger" href=#access-control-lists>Access Control Lists</a><ul class="nav navbar-nav"><li><a class="nav-link js-scroll-trigger" href=#policies>Policies</a></li><li><a class="nav-link js-scroll-trigger" href=#entities>Entities</a></li><li><a class="nav-link js-scroll-trigger" href=#tokens>Tokens</a></li></ul><li><a class="nav-link js-scroll-trigger" href=#api>API</a><ul class="nav navbar-nav"><li><a class="nav-link js-scroll-trigger" href=#get>Get</a></li><li><a class="nav-link js-scroll-trigger" href=#update>Update</a></li><li><a class="nav-link js-scroll-trigger" href=#watch>Watch</a></li><li><a class="nav-link js-scroll-trigger" href=#trace>Trace</a></li><li><a class="nav-link js-scroll-trigger" href=#run-garbage-collector>Run garbage collector</a></li></ul><li><a class="nav-link js-scroll-trigger" href=#metrics>Metrics</a></li><li><a class="nav-link js-scroll-trigger" href=#faq>FAQ</a><ul class="nav navbar-nav"><li><a class="nav-link js-scroll-trigger" href=#what-differentiates-the-overrides-from-the-flavors>What differentiates the overrides from the flavors?</a> </ul> </nav> </nav> </div> </div> </div> </section> </div> <footer class=footer> <div class="content has-text-centered"> <p><p>© <a href=https://gonlo2.github.io/blog/en/about_me/ >Juan Manuel Fdez</a> 2020. Made with curiosity, coffee and neovim.</p> </p> <div> <a class=is-link href=https://github.com/Gonlo2/mhconfig> <span class="title icon has-text-grey-darker"> <i class="fab fa-github"></i> </span> </a> </div> </div> </footer> </div> <script defer src=/mhconfig/vendor/jquery/jquery.min.js></script> <script defer src=/mhconfig/vendor/jquery-easing/jquery.easing.min.js></script> <script defer src=/mhconfig/vendor/jquery-lazy/jquery.lazy.min.js></script> <script async src="https://www.googletagmanager.com/gtag/js?id=UA-174941702-1"></script> <script defer src=/mhconfig/js/main.min.js></script> </body> </html>
