@@ -78,7 +78,7 @@ inline void make_override_path(
   output += override_;
   output.push_back('/');
   output += document;
-  output.push_back('@');
+  output.push_back('/');
   output += flavor;
 }
 
@@ -92,8 +92,8 @@ inline split_override_path_result_t split_override_path(
   const std::string_view override_path
 ) {
   split_override_path_result_t result;
-  auto document_end_pos = override_path.rfind('@');
-  auto override_end_pos = override_path.rfind('/', document_end_pos);
+  auto document_end_pos = override_path.rfind('/');
+  auto override_end_pos = override_path.rfind('/', document_end_pos-1);
   result.override_ = std::string_view(
     override_path.data(),
     override_end_pos

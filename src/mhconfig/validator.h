@@ -35,21 +35,18 @@ inline bool is_a_valid_absolute_path(
 
 inline bool is_a_valid_document_name(const std::string& document) {
   for (size_t i = 0, l = document.size(); i < l; ++i) {
-    if ((document[i] == '/') || (document[i] == '@')) return false;
+    if (document[i] == '/') return false;
   }
   return true;
 }
 
 inline bool is_a_valid_path(const std::string& path) {
-  for (size_t i = 0, l = path.size(); i < l; ++i) {
-    if (path[i] == '@') return false;
-  }
   return true;
 }
 
 inline bool is_a_valid_flavor(const std::string& flavor) {
   for (size_t i = 0, l = flavor.size(); i < l; ++i) {
-    if ((flavor[i] == '/') || (flavor[i] == '@')) return false;
+    if (flavor[i] == '/') return false;
   }
   return true;
 }
