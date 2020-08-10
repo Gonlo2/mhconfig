@@ -264,7 +264,7 @@ namespace mhconfig {
   }
 
   Element Element::clone_without_virtual() const {
-    switch (type()) {
+    switch (type_) {
       case NodeType::UNDEFINED: // Fallback
       case NodeType::DELETE:
         return Element();
@@ -281,9 +281,10 @@ namespace mhconfig {
       case NodeType::OVERRIDE_NONE:
         return Element(NodeType::NONE);
       case NodeType::STR: // Fallback
-      case NodeType::OVERRIDE_STR: // Fallback
-      case NodeType::BIN:
+      case NodeType::OVERRIDE_STR:
         return Element(data_.literal);
+      case NodeType::BIN:
+        return Element(data_.literal, NodeType::BIN);
       case NodeType::INT64:
         return Element(data_.int64_value);
       case NodeType::DOUBLE:
