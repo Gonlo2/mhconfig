@@ -70,7 +70,7 @@ void for_each_trace_to_trigger(
         .find(message->overrides()[i]);
 
       if (search != config_namespace.traces_by_override.end()) {
-        for (size_t j = 0; j < search->second.size(); ++j) {
+        for (size_t j = 0; j < search->second.size();) {
           if (auto trace = search->second[j].lock()) {
             match_by_trace[trace].overrides += 1;
             ++j;
@@ -92,7 +92,7 @@ void for_each_trace_to_trigger(
         .find(message->flavors()[i]);
 
       if (search != config_namespace.traces_by_flavor.end()) {
-        for (size_t j = 0; j < search->second.size(); ++j) {
+        for (size_t j = 0; j < search->second.size();) {
           if (auto trace = search->second[j].lock()) {
             match_by_trace[trace].flavors += 1;
             ++j;
@@ -113,7 +113,7 @@ void for_each_trace_to_trigger(
       .find(message->document());
 
     if (search != config_namespace.traces_by_document.end()) {
-      for (size_t i = 0; i < search->second.size(); ++i) {
+      for (size_t i = 0; i < search->second.size();) {
         if (auto trace = search->second[i].lock()) {
           match_by_trace[trace].document = true;
           ++i;
@@ -128,7 +128,7 @@ void for_each_trace_to_trigger(
     }
   }
 
-  for (size_t i = 0; i < config_namespace.to_trace_always.size(); ++i) {
+  for (size_t i = 0; i < config_namespace.to_trace_always.size();) {
     if (auto trace = config_namespace.to_trace_always[i].lock()) {
       lambda(config_namespace.id, message, trace.get());
       ++i;
