@@ -193,7 +193,7 @@ private:
         break;
       }
 
-      if (static_cast<Parent*>(this)->metricate(event, sequential_id)) {
+      if (static_cast<Parent*>(this)->metricate(event, sequential_id++)) {
         name = static_cast<Parent*>(this)->event_name(event);
 
         auto start_time = jmutils::monotonic_now();
@@ -210,8 +210,6 @@ private:
           spdlog::error("Some error take place processing a event");
         }
       }
-
-      sequential_id = (sequential_id+1) & 0xefffffff;
     }
 
     spdlog::trace("Stoping the worker {}", (void*)this);

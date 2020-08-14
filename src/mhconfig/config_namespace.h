@@ -10,34 +10,42 @@
 #include <boost/functional/hash.hpp>
 
 #include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/request/update_request.h"
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/element.h"
 
+#include "jmutils/container/weak_container.h"
+#include "jmutils/container/weak_multimap.h"
 #include "jmutils/string/pool.h"
 #include "jmutils/common.h"
 
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/btree_map.h>
+#include <absl/synchronization/mutex.h>
 
 namespace mhconfig
 {
 
 //TODO Review the names
 
-const static uint8_t NUMBER_OF_GC_GENERATIONS{3};
+typedef uint16_t DocumentId;
+typedef uint16_t RawConfigId;
+typedef uint16_t VersionId;
+
+const static uint8_t NUMBER_OF_MC_GENERATIONS{3};
 
 struct raw_config_t {
-  uint32_t id{0};
   bool has_content{false};
-  uint64_t checksum{0};
+  RawConfigId id;
+  uint64_t checksum;
   Element value;
   std::vector<std::string> reference_to;
 
   std::shared_ptr<raw_config_t> clone() {
     auto result = std::make_shared<raw_config_t>();
-    result->id = id;
     result->has_content = has_content;
+    result->id = id;
     result->checksum = checksum;
     result->value = value;
     result->reference_to = reference_to;
@@ -50,16 +58,46 @@ enum class MergedConfigStatus {
   BUILDING,
   OK_CONFIG_NO_OPTIMIZED,
   OK_CONFIG_OPTIMIZING,
-  OK_CONFIG_OPTIMIZED
+  OK_CONFIG_OPTIMIZED,
+  REF_GRAPH_IS_NOT_DAG,
+  INVALID_VERSION
+};
+
+struct merged_config_t;
+struct document_t;
+
+struct build_element_t {
+  bool to_build{false};
+  mhconfig::Element config;
+  std::shared_ptr<document_t> document;
+  std::shared_ptr<merged_config_t> merged_config;
+  std::vector<std::shared_ptr<raw_config_t>> raw_configs_to_merge;
+  std::vector<std::unique_ptr<build_element_t>> children;
+};
+
+struct pending_build_t {
+  std::atomic<uint32_t> num_pending;
+  VersionId version;
+  std::shared_ptr<api::request::GetRequest> request;
+  std::unique_ptr<build_element_t> element;
 };
 
 struct merged_config_t {
+  absl::Mutex mutex;
   MergedConfigStatus status : 8;
   uint64_t creation_timestamp : 56;
   uint64_t last_access_timestamp;
   Element value;
   // The preprocesed_value field store the optimized value
   std::string preprocesed_value;
+
+  // Change this to a shared_ptr (?)
+  absl::flat_hash_set<std::string> reference_to;
+
+  std::vector<std::shared_ptr<pending_build_t>> to_build;
+  std::vector<std::shared_ptr<api::request::GetRequest>> waiting;
+
+  std::shared_ptr<merged_config_t> next;
 
   merged_config_t()
     : status(MergedConfigStatus::UNDEFINED),
@@ -68,91 +106,78 @@ struct merged_config_t {
   {}
 };
 
-struct override_metadata_t {
-  absl::btree_map<uint32_t, std::shared_ptr<raw_config_t>> raw_config_by_version;
-  std::vector<std::weak_ptr<::mhconfig::api::stream::WatchInputMessage>> watchers;
+struct override_t {
+  absl::btree_map<VersionId, std::shared_ptr<raw_config_t>> raw_config_by_version;
 };
 
-// TODO move to the builder file
-namespace build {
-  struct build_element_t {
-    bool to_build{true};
-    mhconfig::Element config;
-    std::string name;
-    std::string overrides_key;
-  };
+struct merged_config_generation_t {
+  absl::Mutex gc_mutex;
+  std::shared_ptr<merged_config_t> head;
+};
 
-  struct wait_built_t {
-    uint32_t specific_version;
-    uint16_t num_pending_elements;
-    bool is_preprocesed_value_ok;
-    std::shared_ptr<::mhconfig::api::request::GetRequest> request;
-    std::string overrides_key;
-    std::string preprocesed_value;
-    std::vector<build_element_t> elements_to_build;
+struct document_t {
+  absl::Mutex mutex;
+  DocumentId id;
+  RawConfigId next_raw_config_id{0};
+  VersionId oldest_version;
 
-    absl::flat_hash_map<
-      std::string,
-      std::shared_ptr<raw_config_t>
-    > raw_config_by_override_path;
-  };
-}
-
-struct config_namespace_t {
-  uint32_t next_raw_config_id{1};
-  uint32_t current_version{1};
-  uint64_t id;
-  uint64_t last_access_timestamp : 56;
-  bool ok : 8;
-  std::string root_path;
-
-  std::shared_ptr<jmutils::string::Pool> pool;
-
-  //TODO Check if it's better use a unique_ptr for this to avoid copy
-  // the data in the hash table rebuilds
-  absl::flat_hash_map<
-    std::string,
-    absl::flat_hash_map<std::string, ::jmutils::zero_value_t<uint32_t>>
-  > referenced_by_by_document;
-
-  absl::flat_hash_map<std::string, override_metadata_t> override_metadata_by_override_path;
+  absl::flat_hash_map<std::string, override_t> override_by_path;
 
   absl::flat_hash_map<
     std::string,
     std::weak_ptr<merged_config_t>
   > merged_config_by_overrides_key;
 
+  std::string name;
+
+  merged_config_generation_t mc_generation[NUMBER_OF_MC_GENERATIONS];
+};
+
+struct document_versions_t {
+  absl::Mutex mutex;
+  absl::btree_map<VersionId, std::shared_ptr<document_t>> document_by_version;
+  jmutils::container::WeakContainer<api::stream::WatchInputMessage> watchers;
+  absl::flat_hash_map<std::string, ::jmutils::zero_value_t<uint32_t>> referenced_by;
+};
+
+enum class ConfigNamespaceStatus : uint8_t {
+  UNDEFINED,
+  BUILDING,
+  OK,
+  OK_UPDATING,
+  DELETED
+};
+
+struct config_namespace_t {
+  absl::Mutex mutex;
+  uint64_t last_access_timestamp;
+  ConfigNamespaceStatus status{ConfigNamespaceStatus::UNDEFINED};
+  DocumentId next_document_id{0};
+  VersionId oldest_version{1};
+  VersionId current_version{1};
+  uint64_t id;
+
+  absl::flat_hash_map<std::string, std::unique_ptr<document_versions_t>> document_versions_by_name;
+
   // Start trace structures
-  absl::flat_hash_map<
-    std::string,
-    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
-  > traces_by_override;
-
-  absl::flat_hash_map<
-    std::string,
-    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
-  > traces_by_flavor;
-
-  absl::flat_hash_map<
-    std::string,
-    std::vector<std::weak_ptr<api::stream::TraceInputMessage>>
-  > traces_by_document;
-
-  std::vector<std::weak_ptr<api::stream::TraceInputMessage>> to_trace_always;
+  jmutils::container::WeakMultimap<std::string, api::stream::TraceInputMessage> traces_by_override;
+  jmutils::container::WeakMultimap<std::string, api::stream::TraceInputMessage> traces_by_flavor;
+  jmutils::container::WeakMultimap<std::string, api::stream::TraceInputMessage> traces_by_document;
+  jmutils::container::WeakContainer<api::stream::TraceInputMessage> to_trace_always;
   // End trace structures
 
-  std::vector<std::weak_ptr<api::stream::WatchInputMessage>> watchers;
+  // Rarely accessed datastructures
+  std::string root_path;
+  std::shared_ptr<jmutils::string::Pool> pool;
 
-  std::vector<
-    std::shared_ptr<merged_config_t>
-  > merged_config_by_gc_generation[NUMBER_OF_GC_GENERATIONS];
+  absl::flat_hash_set<DocumentId> document_ids_in_use;
 
-  absl::flat_hash_map<
-    std::string,
-    std::vector<std::shared_ptr<build::wait_built_t>>
-  > wait_builts_by_key;
+  std::deque<std::pair<VersionId, uint64_t>> stored_versions;
 
-  std::deque<std::pair<uint64_t, uint32_t>> stored_versions_by_deprecation_timestamp;
+  std::vector<std::shared_ptr<api::request::GetRequest>> get_requests_waiting;
+  std::deque<std::shared_ptr<api::request::UpdateRequest>> update_requests_waiting;
+  std::vector<std::shared_ptr<api::stream::WatchInputMessage>> watch_requests_waiting;
+  std::vector<std::shared_ptr<api::stream::TraceInputMessage>> trace_requests_waiting;
 };
 
 } /* mhconfig */

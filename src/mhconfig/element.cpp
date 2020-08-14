@@ -304,27 +304,27 @@ namespace mhconfig {
     switch (get_internal_data_type(type_)) {
       case InternalDataType::EMPTY:
         break;
-      case InternalDataType::MAP: // Fallback
+      case InternalDataType::MAP:
         ss << ", size: " << as_map()->size();
         break;
-      case InternalDataType::SEQUENCE: // Fallback
+      case InternalDataType::SEQUENCE:
         ss << ", size: " << as_sequence()->size();
         break;
       case InternalDataType::LITERAL:
-        ss << ", literal: '" << data_.literal.str();
+        ss << ", literal: '" << data_.literal.str() << "'";
         break;
       case InternalDataType::INT64:
-        ss << ", int64: '" << data_.int64_value;
+        ss << ", int64: " << data_.int64_value;
         break;
       case InternalDataType::DOUBLE:
-        ss << ", double: '" << data_.double_value;
+        ss << ", double: " << data_.double_value;
         break;
       case InternalDataType::BOOL:
-        ss << ", bool: '" << data_.bool_value;
+        ss << ", bool: " << data_.bool_value;
         break;
     }
 
-    ss << "')";
+    ss << ")";
 
     return ss.str();
   }

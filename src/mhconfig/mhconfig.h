@@ -7,12 +7,14 @@
 
 #include "mhconfig/api/service.h"
 #include "mhconfig/auth/acl.h"
-#include "mhconfig/scheduler.h"
 #include "mhconfig/worker.h"
-#include "mhconfig/scheduler/run_gc_command.h"
-#include "mhconfig/metrics/sync_metrics_service.h"
-#include "mhconfig/metrics/async_metrics_service.h"
-#include "mhconfig/metrics/metrics_worker.h"
+#include "mhconfig/metrics.h"
+#include "mhconfig/gc.h"
+
+#include "mhconfig/worker/gc_merged_configs_command.h"
+#include "mhconfig/worker/gc_dead_pointers_command.h"
+#include "mhconfig/worker/gc_config_namespaces_command.h"
+#include "mhconfig/worker/gc_raw_config_versions_command.h"
 
 #include "jmutils/parallelism/time_worker.h"
 #include "jmutils/time.h"
@@ -54,20 +56,14 @@ namespace mhconfig
 
     std::string config_path_;
     std::string server_address_;
-    metrics::SyncMetricsService sync_metrics_service_;
+    std::string prometheus_address_;
     size_t num_threads_api_;
     size_t num_threads_workers_;
 
-    SchedulerQueue scheduler_queue_;
-    WorkerQueue worker_queue_;
-    metrics::MetricsQueue metrics_queue_;
-
-    std::unique_ptr<Scheduler> scheduler_;
     std::vector<std::unique_ptr<Worker>> workers_;
     std::unique_ptr<api::Service> service_;
-    std::unique_ptr<metrics::MetricsWorker> metrics_worker_;
     jmutils::TimeWorker time_worker_;
-    std::unique_ptr<auth::Acl> acl_;
+    std::unique_ptr<context_t> ctx_;
 
     bool running_{false};
 

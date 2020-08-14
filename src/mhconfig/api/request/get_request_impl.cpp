@@ -105,8 +105,7 @@ void GetRequestImpl::subscribe(
 }
 
 void GetRequestImpl::request(
-  auth::Acl* acl,
-  SchedulerQueue::Sender* scheduler_sender
+  context_t* ctx
 ) {
   auto status = grpc::SerializationTraits<mhconfig::proto::GetRequest>::Deserialize(
     &raw_request_,
@@ -118,7 +117,7 @@ void GetRequestImpl::request(
 
     auto token = get_auth_token();
     auto auth_result = token
-      ? acl->document_auth(*token, auth::Capability::GET, *this)
+      ? ctx->acl.document_auth(*token, auth::Capability::GET, *this)
       : auth::AuthResult::UNAUTHENTICATED;
 
     if (check_auth(auth_result)) {
@@ -130,10 +129,12 @@ void GetRequestImpl::request(
       );
 
       if (ok) {
-        scheduler_sender->push(
-          std::make_unique<scheduler::ApiGetCommand>(
-            shared_from_this()
-          )
+        auto cn = get_or_build_cn(ctx, root_path());
+        cn->last_access_timestamp = jmutils::monotonic_now_sec();
+        process_get_request<worker::SetupCommand>(
+          std::move(cn),
+          shared_from_this(),
+          ctx
         );
       } else {
         set_status(Status::ERROR);

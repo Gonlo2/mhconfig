@@ -4,9 +4,10 @@
 #include "jmutils/container/queue.h"
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/update_request.h"
+#include "mhconfig/worker/setup_command.h"
+#include "mhconfig/worker/update_command.h"
 #include "mhconfig/command.h"
 #include "mhconfig/validator.h"
-#include "mhconfig/scheduler/api_update_command.h"
 
 namespace mhconfig
 {
@@ -54,8 +55,7 @@ protected:
   std::vector<std::string> relative_paths_;
 
   void request(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
 private:

@@ -1,5 +1,5 @@
-#ifndef JMUTILS__STRUCTURES__THREAD_SAFE_QUEUE_H
-#define JMUTILS__STRUCTURES__THREAD_SAFE_QUEUE_H
+#ifndef JMUTILS__STRUCTURES__QUEUE_H
+#define JMUTILS__STRUCTURES__QUEUE_H
 
 #include <stdlib.h>
 #include <memory>
@@ -21,11 +21,7 @@ template <typename T>
 class Queue
 {
 public:
-  Queue() {
-  }
-  virtual ~Queue() {
-  }
-
+  Queue() {}
   Queue(const Queue&) = delete;
   Queue(Queue&&) = delete;
 

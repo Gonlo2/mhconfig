@@ -2,80 +2,63 @@
 
 namespace mhconfig
 {
-namespace builder
-{
 
 // Setup logic
 
-std::shared_ptr<config_namespace_t> make_config_namespace(
-  const std::filesystem::path& root_path,
-  metrics::MetricsService& metrics
+bool init_config_namespace(
+  config_namespace_t* cn,
+  std::shared_ptr<jmutils::string::Pool>&& pool
 ) {
-  auto config_namespace = std::make_shared<config_namespace_t>();
-  config_namespace->ok = false;
-  config_namespace->root_path = root_path;
-  config_namespace->id = std::uniform_int_distribution<uint64_t>{0, 0xffffffffffffffff}(jmutils::prng_engine());
-  config_namespace->last_access_timestamp = 0;
-  config_namespace->pool = std::make_shared<jmutils::string::Pool>(
-    std::make_unique<::mhconfig::string_pool::MetricsStatsObserver>(metrics, root_path)
-  );
-
-  spdlog::debug("To index the files in the path '{}'", root_path.string());
+  cn->id = std::uniform_int_distribution<uint64_t>{0, 0xffffffffffffffff}(jmutils::prng_engine());
+  cn->last_access_timestamp = 0;
+  cn->pool = std::move(pool);
 
   absl::flat_hash_map<
-    std::pair<std::string, std::string>,
+    std::string,
     absl::flat_hash_map<std::string, AffectedDocumentStatus>
-  > updated_documents_by_flavor_and_override;
+  > updated_documents_by_path;
 
   bool ok = index_files(
-    config_namespace->pool.get(),
-    root_path,
-    [&config_namespace, &updated_documents_by_flavor_and_override](const auto& override_path, auto&& result) {
+    cn->pool.get(),
+    cn->root_path,
+    [cn, &updated_documents_by_path](const auto& path, auto&& result) {
       if (result.status != LoadRawConfigStatus::OK) {
         return false;
       }
 
+      cn->mutex.Lock();
       for (const auto& reference_to : result.raw_config->reference_to) {
-        config_namespace->referenced_by_by_document[reference_to][result.document].v += 1;
+        get_or_guild_document_versions_locked(cn, reference_to)->referenced_by[result.document].v += 1;
       }
+      cn->mutex.Unlock();
 
-      result.raw_config->id = config_namespace->next_raw_config_id++;
+      auto document = try_obtain_non_full_document(cn, result.document, 1);
+      if (document == nullptr) return false;
 
-      config_namespace->override_metadata_by_override_path[override_path]
-        .raw_config_by_version[1] = std::move(result.raw_config);
+      result.raw_config->id = document->next_raw_config_id++;
+      document->override_by_path[path].raw_config_by_version[1] = std::move(result.raw_config);
+      document->mutex.Unlock();
 
-      auto flavor_and_override = std::make_pair(
-        std::move(result.flavor),
-        std::move(result.override_)
-      );
-      updated_documents_by_flavor_and_override[flavor_and_override][result.document] = AffectedDocumentStatus::TO_ADD;
+      updated_documents_by_path[path][result.document] = AffectedDocumentStatus::TO_ADD;
 
       return true;
     }
   );
 
-  if (!ok) {
-    return config_namespace;
-  }
+  if (!ok) return false;
 
   spdlog::debug("Setting the ids of the nonexistent affected documents");
 
-  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>> watchers_to_trigger;
-  increment_version_of_the_affected_documents(
-    *config_namespace,
-    updated_documents_by_flavor_and_override,
-    watchers_to_trigger,
-    true
-  );
+  auto dep_by_doc = get_dep_by_doc(cn, updated_documents_by_path);
 
-  config_namespace->ok = true;
-  config_namespace->last_access_timestamp = jmutils::monotonic_now_sec();
-  config_namespace->stored_versions_by_deprecation_timestamp.emplace_back(
-    0,
-    config_namespace->current_version
-  );
+  if (!touch_affected_documents(cn, 1, dep_by_doc, true)) {
+    return false;
+  }
 
-  return config_namespace;
+  cn->last_access_timestamp = jmutils::monotonic_now_sec();
+  cn->stored_versions.emplace_back(0, cn->current_version);
+
+  return true;
 }
 
 load_raw_config_result_t index_file(
@@ -138,7 +121,12 @@ load_raw_config_result_t index_file(
         YAML::Node node = YAML::Load(data);
 
         absl::flat_hash_set<std::string> reference_to;
-        result.raw_config->value = make_and_check_element(pool, node, reference_to);
+        result.raw_config->value = make_and_check_element(
+          pool,
+          node,
+          result.document,
+          reference_to
+        );
         result.raw_config->reference_to.reserve(reference_to.size());
         for (const auto& x : reference_to) {
           result.raw_config->reference_to.push_back(x);
@@ -153,73 +141,71 @@ load_raw_config_result_t index_file(
   return result;
 }
 
-void increment_version_of_the_affected_documents(
-  config_namespace_t& config_namespace,
-  absl::flat_hash_map<std::pair<std::string, std::string>, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_flavor_and_override,
-  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>>& watchers_to_trigger,
+absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>> get_dep_by_doc(
+  config_namespace_t* cn,
+  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_path
+) {
+  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>> dep_by_doc;
+
+  for (auto& it : updated_documents_by_path) {
+    fill_affected_documents(cn, it.second);
+
+    for (const auto& it2 : it.second) {
+      dep_by_doc[it2.first][it.first] = it2.second;
+    }
+  }
+
+  return dep_by_doc;
+}
+
+bool touch_affected_documents(
+  config_namespace_t* cn,
+  VersionId version,
+  const absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& dep_by_doc,
   bool only_nonexistent
 ) {
-  std::string override_path;
-  for (auto& updated_documents_it : updated_documents_by_flavor_and_override) {
-    fill_affected_documents(config_namespace, updated_documents_it.second);
+  for (const auto& it : dep_by_doc) {
+    auto document = try_obtain_non_full_document(cn, it.first, version, it.second.size());
+    if (document == nullptr) {
+      spdlog::debug("Some error happens obtaining a non full document for '{}'", it.first);
+      return false;
+    }
 
-    for (const auto& it : updated_documents_it.second) {
-      bool is_to_remove_but_dependency = it.second == AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY;
-      if (is_to_remove_but_dependency || (it.second == AffectedDocumentStatus::DEPENDENCY)) {
-        make_override_path(
-          updated_documents_it.first.second,
-          it.first,
-          updated_documents_it.first.first,
-          override_path
-        );
-        auto& override_metadata = config_namespace.override_metadata_by_override_path[override_path];
+    for (const auto& it2 : it.second) {
+      if (
+        (it2.second == AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY)
+        || (it2.second == AffectedDocumentStatus::DEPENDENCY)
+      ) {
+        auto& override_ = document->override_by_path[it2.first];
+        if (override_.raw_config_by_version.empty() || !only_nonexistent) {
+          auto last_version = get_last_raw_config_locked(override_);
+          auto new_raw_config = (last_version != nullptr) && (it2.second != AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY)
+            ? last_version->clone()
+            : std::make_shared<raw_config_t>();
 
-        if (!override_metadata.raw_config_by_version.empty() && only_nonexistent) {
-          continue;
-        }
+          spdlog::debug(
+            "Updating affected raw config (document: '{}', path: '{}', version: {}, old_id: {}, new_id: {})",
+            it.first,
+            it2.first,
+            version,
+            last_version == nullptr ? 0 : last_version->id,
+            document->next_raw_config_id
+          );
 
-        auto new_raw_config = !is_to_remove_but_dependency && has_last_version(override_metadata)
-          ? override_metadata.raw_config_by_version.crbegin()->second->clone()
-          : std::make_shared<raw_config_t>();
+          new_raw_config->id = document->next_raw_config_id++;
 
-        spdlog::debug(
-          "Updating affected raw config (override_path: '{}', old_id: {}, new_id: {})",
-          override_path,
-          new_raw_config->id,
-          config_namespace.next_raw_config_id
-        );
-
-        new_raw_config->id = config_namespace.next_raw_config_id++;
-
-        override_metadata.raw_config_by_version[config_namespace.current_version] = std::move(new_raw_config);
-
-        for (size_t i = 0; i < override_metadata.watchers.size();) {
-          if (auto watcher = override_metadata.watchers[i].lock()) {
-            watchers_to_trigger.insert(watcher);
-            ++i;
-          } else {
-            jmutils::swap_delete(override_metadata.watchers, i);
-          }
+          override_.raw_config_by_version[version] = std::move(new_raw_config);
         }
       }
     }
-  }
-}
-
-bool has_last_version(
-  const override_metadata_t& override_metadata
-) {
-  if (override_metadata.raw_config_by_version.empty()) {
-    return false;
+    document->mutex.Unlock();
   }
 
-  auto ptr = override_metadata.raw_config_by_version.crbegin()->second.get();
-  return (ptr != nullptr) && ptr->has_content;
+  return true;
 }
-
 
 void fill_affected_documents(
-  const config_namespace_t& config_namespace,
+  config_namespace_t* cn,
   absl::flat_hash_map<std::string, AffectedDocumentStatus>& affected_documents
 ) {
   std::vector<std::string> to_check;
@@ -228,14 +214,14 @@ void fill_affected_documents(
     to_check.push_back(it.first);
   }
 
-  std::string doc;
+  cn->mutex.ReaderLock();
   while (!to_check.empty()) {
-    doc = std::move(to_check.back());
-    to_check.pop_back();
-
-    auto search = config_namespace.referenced_by_by_document.find(doc);
-    if (search != config_namespace.referenced_by_by_document.end()) {
-      for (const auto& it : search->second) {
+    if (
+      auto search = cn->document_versions_by_name.find(to_check.back());
+      search != cn->document_versions_by_name.end()
+    ) {
+      search->second->mutex.ReaderLock();
+      for (const auto& it : search->second->referenced_by) {
         auto inserted = affected_documents.emplace(
           it.first,
           AffectedDocumentStatus::DEPENDENCY
@@ -246,14 +232,17 @@ void fill_affected_documents(
           inserted.first->second = AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY;
         }
       }
+      search->second->mutex.ReaderUnlock();
     }
+    to_check.pop_back();
   }
+  cn->mutex.ReaderUnlock();
 }
 
 Element override_with(
   const Element& a,
   const Element& b,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 ) {
   if (b.is_override()) {
     return b.clone_without_virtual();
@@ -263,13 +252,13 @@ Element override_with(
   if (is_first_a_ref || (b.type() == NodeType::REF)) {
     auto referenced_element = apply_tag_ref(
       is_first_a_ref ? a : b,
-      elements_by_document
+      element_by_document_name
     );
 
     return override_with(
       is_first_a_ref ? referenced_element : a,
       is_first_a_ref ? b : referenced_element,
-      elements_by_document
+      element_by_document_name
     );
   }
 
@@ -319,7 +308,7 @@ Element override_with(
           (*map_a)[x.first] = override_with(
             search->second,
             x.second,
-            elements_by_document
+            element_by_document_name
           );
         }
       }
@@ -385,7 +374,7 @@ std::pair<bool, Element> apply_tags(
   jmutils::string::Pool* pool,
   Element element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 ) {
   bool any_changed = false;
 
@@ -403,7 +392,7 @@ std::pair<bool, Element> apply_tags(
             pool,
             it.second,
             root,
-            elements_by_document
+            element_by_document_name
           );
           if (r.first) {
             to_modify.emplace_back(it.first, r.second);
@@ -443,7 +432,7 @@ std::pair<bool, Element> apply_tags(
             pool,
             (*current_sequence)[i],
             root,
-            elements_by_document
+            element_by_document_name
           );
           any_changed |= r.first;
           new_sequence.push_back(r.second);
@@ -464,7 +453,7 @@ std::pair<bool, Element> apply_tags(
   }
 
   if (element.type() == NodeType::REF) {
-    element = apply_tag_ref(element, elements_by_document);
+    element = apply_tag_ref(element, element_by_document_name);
     any_changed = true;
   }
 
@@ -638,13 +627,13 @@ std::string format_str(
 
 Element apply_tag_ref(
   const Element& element,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 ) {
   const auto path = element.as_sequence();
 
   std::string key = (*path)[0].as<std::string>();
-  auto search = elements_by_document.find(key);
-  if (search == elements_by_document.end()) {
+  auto search = element_by_document_name.find(key);
+  if (search == element_by_document_name.end()) {
     spdlog::error("Can't ref to the document '{}'", key);
     return Element();
   }
@@ -685,14 +674,21 @@ Element apply_tag_sref(
 Element make_and_check_element(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 ) {
-  auto element = make_element(pool, node, reference_to);
+  auto element = make_element(pool, node, document, reference_to);
 
   if (element.type() == NodeType::REF) {
     const auto path = element.as_sequence();
     if (!is_a_valid_path(path, TAG_REF)) return Element();
-    reference_to.insert(path->front().as<std::string>());
+    auto ref_document = path->front().as<std::string>();
+    if (document == ref_document) {
+      spdlog::error("A reference can't use the same document");
+      return Element();
+    } else {
+      reference_to.insert(ref_document);
+    }
   } else if (element.type() == NodeType::SREF) {
     if (!is_a_valid_path(element.as_sequence(), TAG_SREF)) return Element();
   }
@@ -728,6 +724,7 @@ bool is_a_valid_path(
 Element make_element(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 ) {
   switch (node.Type()) {
@@ -744,10 +741,10 @@ Element make_element(
       return make_element_from_scalar(pool, node);
 
     case YAML::NodeType::Sequence:
-      return make_element_from_sequence(pool, node, reference_to);
+      return make_element_from_sequence(pool, node, document, reference_to);
 
     case YAML::NodeType::Map:
-      return make_element_from_map(pool, node, reference_to);
+      return make_element_from_map(pool, node, document, reference_to);
   }
 
   return Element();
@@ -858,6 +855,7 @@ Element make_element_from_bool(
 Element make_element_from_map(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 ) {
   MapCow map_cow;
@@ -869,7 +867,7 @@ Element make_element_from_map(
       return Element();
     }
     jmutils::string::String key(pool->add(it.first.as<std::string>()));
-    (*map)[key] = make_and_check_element(pool, it.second, reference_to);
+    (*map)[key] = make_and_check_element(pool, it.second, document, reference_to);
   }
   if (node.Tag() == TAG_PLAIN_SCALAR) {
     return Element(std::move(map_cow));
@@ -883,13 +881,14 @@ Element make_element_from_map(
 Element make_element_from_sequence(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 ) {
   SequenceCow seq_cow;
   auto seq = seq_cow.get_mut();
   seq->reserve(node.size());
   for (auto it : node) {
-    seq->push_back(make_and_check_element(pool, it, reference_to));
+    seq->push_back(make_and_check_element(pool, it, document, reference_to));
   }
   if (node.Tag() == TAG_PLAIN_SCALAR) {
     return Element(std::move(seq_cow));
@@ -908,48 +907,206 @@ Element make_element_from_sequence(
 
 // Get logic
 
-std::shared_ptr<merged_config_t> get_or_build_merged_config(
-  config_namespace_t& config_namespace,
-  const std::string& overrides_key
+std::shared_ptr<document_t> get_document_locked(
+  const config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
 ) {
-  auto merged_config = get_merged_config(
-    config_namespace,
-    overrides_key
-  );
-  if (merged_config == nullptr) {
-    merged_config = std::make_shared<merged_config_t>();
-    merged_config->creation_timestamp = jmutils::monotonic_now_sec();
-    config_namespace.merged_config_by_overrides_key[overrides_key] = merged_config;
-    config_namespace.merged_config_by_gc_generation[0].push_back(merged_config);
+  if (
+    auto versions_search = cn->document_versions_by_name.find(name);
+    versions_search != cn->document_versions_by_name.end()
+  ) {
+    if (
+      auto search = versions_search->second->document_by_version.upper_bound(version);
+      search != versions_search->second->document_by_version.begin()
+    ) {
+      return std::prev(search)->second;
+    }
   }
 
-  return merged_config;
+  return nullptr;
+}
+
+std::optional<DocumentId> next_document_id_locked(
+  config_namespace_t* cn
+) {
+  DocumentId document_id = cn->next_document_id;
+  do {
+    if (!cn->document_ids_in_use.contains(document_id)) {
+      cn->next_document_id = document_id+1;
+      return std::optional<DocumentId>(document_id);
+    }
+  } while (++document_id != cn->next_document_id);
+  return std::optional<DocumentId>();
+}
+
+bool try_insert_document_locked(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version,
+  std::shared_ptr<document_t>& document
+) {
+  if (auto document_id = next_document_id_locked(cn); document_id) {
+    document->id = *document_id;
+    document->oldest_version = cn->oldest_version;
+    document->name = name;
+
+    get_or_guild_document_versions_locked(cn, name)->document_by_version[version] = document;
+    cn->document_ids_in_use.insert(*document_id);
+
+    return true;
+  }
+
+  return false;
+}
+
+std::shared_ptr<document_t> try_get_or_build_document(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
+) {
+  cn->mutex.ReaderLock();
+  auto document = get_document_locked(cn, name, version);
+  if (document != nullptr) document->mutex.Lock();
+  cn->mutex.ReaderUnlock();
+
+  if (document == nullptr) {
+    cn->mutex.Lock();
+    document = try_get_or_build_document_locked(cn, name, version);
+    if (document != nullptr) document->mutex.Lock();
+    cn->mutex.Unlock();
+  }
+
+  return document;
+}
+
+std::shared_ptr<document_t> try_migrate_document_locked(
+  config_namespace_t* cn,
+  document_t* document,
+  VersionId version
+) {
+  auto new_document = std::make_shared<document_t>();
+
+  new_document->override_by_path.reserve(document->override_by_path.size());
+  for (auto& it: document->override_by_path) {
+    auto last_version = get_last_raw_config_locked(it.second);
+    if (last_version != nullptr) {
+      auto& new_override = new_document->override_by_path[it.first];
+      if (is_document_full_locked(new_document.get())) {
+        document->mutex.Unlock();
+        return nullptr;
+      }
+
+      auto new_raw_config = last_version->clone();
+      new_raw_config->id = new_document->next_raw_config_id++;
+      new_override.raw_config_by_version[version] = std::move(new_raw_config);
+    }
+  }
+
+  cn->mutex.Lock();
+  if (try_insert_document_locked(cn, document->name, version, new_document)) {
+    new_document->mutex.Lock();
+  } else {
+    new_document = nullptr;
+  }
+  document->mutex.Unlock();
+  cn->mutex.Unlock();
+
+  return new_document;
+}
+
+std::shared_ptr<document_t> try_obtain_non_full_document(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version,
+  size_t required_size
+) {
+  auto document = try_get_or_build_document(cn, name, version);
+  if (document == nullptr) return nullptr;
+
+  if (required_size + document->next_raw_config_id >= 0xffff) {
+    auto new_document = try_migrate_document_locked(cn, document.get(), version);
+    if (new_document == nullptr) return nullptr;
+    std::swap(document, new_document);
+    if (required_size + document->next_raw_config_id >= 0xffff) {
+      document->mutex.Unlock();
+      return nullptr;
+    }
+  }
+
+  return document;
+}
+
+std::shared_ptr<merged_config_t> get_or_build_merged_config(
+  document_t* document,
+  const std::string& overrides_key
+) {
+  std::shared_ptr<merged_config_t> result;
+
+  document->mutex.ReaderLock();
+  if (
+    auto search = document->merged_config_by_overrides_key.find(overrides_key);
+    search != document->merged_config_by_overrides_key.end()
+  ) {
+    result = search->second.lock();
+  }
+  document->mutex.ReaderUnlock();
+
+  if (result == nullptr) {
+    document->mutex.Lock();
+
+    if (
+      auto search = document->merged_config_by_overrides_key.find(overrides_key);
+      search != document->merged_config_by_overrides_key.end()
+    ) {
+      result = search->second.lock();
+    }
+
+    if (result == nullptr) {
+      result = std::make_shared<merged_config_t>();
+      result->next = result;
+
+      document->merged_config_by_overrides_key[overrides_key] = result;
+      std::swap(result->next, document->mc_generation[0].head);
+    }
+
+    document->mutex.Unlock();
+  }
+
+  return result;
 }
 
 std::shared_ptr<merged_config_t> get_merged_config(
-  config_namespace_t& config_namespace,
+  document_t* document,
   const std::string& overrides_key
 ) {
-  // First we search if exists cached some mergd config using the overrides_key
-  auto search = config_namespace.merged_config_by_overrides_key
-    .find(overrides_key);
+  std::shared_ptr<merged_config_t> result;
+  bool found;
 
-  if (search == config_namespace.merged_config_by_overrides_key.end()) {
-    return nullptr;
+  document->mutex.ReaderLock();
+  if (
+    auto search = document->merged_config_by_overrides_key.find(overrides_key);
+    found = (search != document->merged_config_by_overrides_key.end())
+  ) {
+    result = search->second.lock();
+  }
+  document->mutex.ReaderUnlock();
+
+  if (found && (result == nullptr)) {
+    document->mutex.Lock();
+    if (
+      auto search = document->merged_config_by_overrides_key.find(overrides_key);
+      search != document->merged_config_by_overrides_key.end()
+    ) {
+      result = search->second.lock();
+      if (result == nullptr) {
+        document->merged_config_by_overrides_key.erase(search);
+      }
+    }
+    document->mutex.Unlock();
   }
 
-  // We use a weak pointer to free the old merged config so it's
-  // possible that the obtained pointer is empty
-  if (auto merged_config = search->second.lock()) {
-    return merged_config;
-  }
-
-  // If the pointer is invalidated we drop the item to avoid
-  // do this check in a future, I'm to lazy ;)
-  config_namespace.merged_config_by_overrides_key
-    .erase(search);
-
-  return nullptr;
+  return result;
 }
 
 split_filename_result_t split_filename(
@@ -985,5 +1142,102 @@ split_filename_result_t split_filename(
   return result;
 }
 
-} /* builder */
+std::shared_ptr<config_namespace_t> get_cn(
+  context_t* ctx,
+  const std::string& root_path
+) {
+  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+
+  ctx->mutex.ReaderLock();
+  auto result = get_cn_locked(ctx, root_path);
+  ctx->mutex.ReaderUnlock();
+
+  return result;
+}
+
+std::shared_ptr<config_namespace_t> get_or_build_cn(
+  context_t* ctx,
+  const std::string& root_path
+) {
+  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+
+  ctx->mutex.ReaderLock();
+  auto result = get_cn_locked(ctx, root_path);
+  ctx->mutex.ReaderUnlock();
+
+  if (result == nullptr) {
+    ctx->mutex.Lock();
+
+    auto inserted = ctx->cn_by_root_path.try_emplace(
+      root_path,
+      std::make_shared<config_namespace_t>()
+    );
+    result = inserted.first->second;
+
+    ctx->mutex.Unlock();
+  }
+
+  return result;
+}
+
+void delete_cn_locked(
+  config_namespace_t* cn
+) {
+  spdlog::debug("Deleting the config namespace for the root path '{}'", cn->root_path);
+
+  cn->status = ConfigNamespaceStatus::DELETED;
+
+  for (auto& it : cn->document_versions_by_name) {
+    it.second->watchers.consume(
+      [cn](auto&& watcher) {
+        watcher->unregister(cn);
+
+        auto output_message = watcher->make_output_message();
+        output_message->set_status(api::stream::WatchStatus::REMOVED);
+        output_message->send();
+      }
+    );
+  }
+
+  for (size_t i = 0, l = cn->get_requests_waiting.size(); i < l; ++i) {
+    cn->get_requests_waiting[i]->set_namespace_id(cn->id);
+    cn->get_requests_waiting[i]->set_status(api::request::GetRequest::Status::ERROR);
+    cn->get_requests_waiting[i]->commit();
+  }
+  cn->get_requests_waiting.clear();
+
+  for (auto& request: cn->update_requests_waiting) {
+    request->set_namespace_id(cn->id);
+    request->set_status(api::request::UpdateRequest::Status::ERROR);
+    request->commit();
+  }
+  cn->update_requests_waiting.clear();
+
+  for (size_t i = 0, l = cn->trace_requests_waiting.size(); i < l; ++i) {
+    auto om = cn->trace_requests_waiting[i]->make_output_message();
+    om->set_status(api::stream::TraceOutputMessage::Status::ERROR);
+    om->send(true);
+  }
+  cn->trace_requests_waiting.clear();
+}
+
+void remove_cn_locked(
+  context_t* ctx,
+  const std::string& root_path,
+  uint64_t id
+) {
+  spdlog::debug(
+    "Removing the config namespace with the root path '{}' and id {}",
+    root_path,
+    id
+  );
+
+  auto search = ctx->cn_by_root_path.find(root_path);
+  if (search != ctx->cn_by_root_path.end()) {
+    if (search->second->id == id) {
+      ctx->cn_by_root_path.erase(search);
+    }
+  }
+}
+
 } /* mhconfig */

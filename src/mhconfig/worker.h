@@ -7,7 +7,7 @@
 #include "jmutils/container/queue.h"
 #include "jmutils/time.h"
 #include "jmutils/parallelism/worker.h"
-#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/metrics.h"
 #include "mhconfig/command.h"
 
 namespace mhconfig
@@ -17,8 +17,7 @@ class Worker : public ::jmutils::Worker<Worker, WorkerCommandRef>
 {
 public:
   Worker(
-    WorkerQueue::ReceiverRef&& worker_queue,
-    WorkerCommand::context_t&& context
+    context_t* ctx
   );
 
   virtual ~Worker();
@@ -26,8 +25,7 @@ public:
 private:
   friend class ::jmutils::Worker<Worker, WorkerCommandRef>;
 
-  WorkerQueue::ReceiverRef worker_queue_;
-  WorkerCommand::context_t context_;
+  context_t* ctx_;
 
   void on_start() noexcept {
   }
@@ -35,7 +33,7 @@ private:
   inline bool pop(
     WorkerCommandRef& command
   ) noexcept {
-    worker_queue_->pop(command);
+    ctx_->worker_queue.pop(command);
     return true;
   }
 
@@ -53,7 +51,7 @@ private:
   }
 
   inline bool execute(WorkerCommandRef&& command) {
-    return command->execute(context_);
+    return command->execute(ctx_);
   }
 
   inline void loop_stats(
@@ -65,8 +63,8 @@ private:
       end_time - start_time
     ).count();
 
-    context_.async_metrics_service->add(
-      metrics::MetricsService::MetricId::WORKER_DURATION_NANOSECONDS,
+    ctx_->metrics.add(
+      Metrics::Id::WORKER_DURATION_NANOSECONDS,
       {{"type", name}},
       duration_ns
     );

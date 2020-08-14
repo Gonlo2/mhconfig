@@ -42,41 +42,42 @@ bool RunGCRequestImpl::commit() {
 }
 
 void RunGCRequestImpl::request(
-  auth::Acl* acl,
-  SchedulerQueue::Sender* scheduler_sender
+  context_t* ctx
 ) {
   auto token = get_auth_token();
   auto auth_result = token
-    ? acl->basic_auth(*token, auth::Capability::RUN_GC)
+    ? ctx->acl.basic_auth(*token, auth::Capability::RUN_GC)
     : auth::AuthResult::UNAUTHENTICATED;
 
   if (check_auth(auth_result)) {
-    scheduler_sender->push(
-      std::make_unique<scheduler::RunGcCommand>(
-        type(),
-        max_live_in_seconds()
-      )
-    );
+    if (auto command = make_gc_command(); command != nullptr) {
+      ctx->worker_queue.push(std::move(command));
+    }
 
-    finish();  // The run_gc request use a fire & forget logic
+    finish();
   };
 }
 
-scheduler::RunGcCommand::Type RunGCRequestImpl::type() {
+std::unique_ptr<WorkerCommand> RunGCRequestImpl::make_gc_command() {
+  auto now = jmutils::monotonic_now_sec();
+  auto timelimit_s = now < max_live_in_seconds() ? 0 : now - max_live_in_seconds();
+
   switch (request_->type()) {
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_0:
-      return scheduler::RunGcCommand::Type::CACHE_GENERATION_0;
+      return std::make_unique<worker::GCMergedConfigsCommand>(0, timelimit_s);
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_1:
-      return scheduler::RunGcCommand::Type::CACHE_GENERATION_1;
+      return std::make_unique<worker::GCMergedConfigsCommand>(1, timelimit_s);
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_CACHE_GENERATION_2:
-      return scheduler::RunGcCommand::Type::CACHE_GENERATION_2;
+      return std::make_unique<worker::GCMergedConfigsCommand>(2, timelimit_s);
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_DEAD_POINTERS:
-      return scheduler::RunGcCommand::Type::DEAD_POINTERS;
+      return std::make_unique<worker::GCDeadPointersCommand>();
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_NAMESPACES:
-      return scheduler::RunGcCommand::Type::NAMESPACES;
+      return std::make_unique<worker::GCConfigNamespacesCommand>(timelimit_s);
     case mhconfig::proto::RunGCRequest::Type::RunGCRequest_Type_VERSIONS:
-      return scheduler::RunGcCommand::Type::VERSIONS;
+      return std::make_unique<worker::GCRawConfigVersionsCommand>(timelimit_s);
   }
+
+  return nullptr;
 }
 
 uint32_t RunGCRequestImpl::max_live_in_seconds() {

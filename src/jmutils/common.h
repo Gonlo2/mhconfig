@@ -2,6 +2,7 @@
 #define JMUTILS__COMMON_H
 
 #include <random>
+#include <absl/synchronization/mutex.h>
 
 namespace jmutils
 {
@@ -50,6 +51,11 @@ inline void push_uint32(std::string& output, uint32_t n) {
   output.push_back((n >> 24) & 0xff);
 }
 
+inline void push_uint16(std::string& output, uint16_t n) {
+  output.push_back(n & 0xff);
+  output.push_back((n >> 8) & 0xff);
+}
+
 inline void push_varint(std::string& output, uint32_t n) {
   if (n < 0x80) {
     output.push_back(static_cast<uint8_t>(n));
@@ -85,49 +91,35 @@ inline void swap_delete(T& container, size_t pos) {
 }
 
 template <typename T>
-inline void remove_expired(
-  T& values
-) {
-  for (size_t i = 0; i < values.size();) {
-    if (values[i].expired()) {
-      jmutils::swap_delete(values, i);
-    } else {
-      ++i;
-    }
-  }
-}
-
-template <typename T>
-inline void remove_expired_map(
-  T& values
+inline size_t remove_expired_map(
+  absl::Mutex& mtx,
+  T& map
 ) {
   std::vector<typename T::key_type> to_remove;
-  for (auto& it: values) {
+
+  mtx.ReaderLock();
+  size_t size = map.size();
+  for (auto& it: map) {
     if (it.second.expired()) {
       to_remove.push_back(it.first);
     }
   }
+  mtx.ReaderUnlock();
 
-  for (const auto& k : to_remove) {
-    values.erase(k);
-  }
-}
-
-template <typename T>
-inline void remove_expired_map_values(
-  T& values
-) {
-  std::vector<typename T::key_type> to_remove;
-  for (auto& it : values) {
-    remove_expired(it.second);
-    if (it.second.empty()) {
-      to_remove.push_back(it.first);
+  if (!to_remove.empty()) {
+    mtx.Lock();
+    for (size_t i = 0, l = to_remove.size(); i < l; ++i) {
+      if (auto search = map.find(to_remove[i]); search != map.end()) {
+        if (search->second.expired()) {
+          map.erase(search);
+        }
+      }
     }
+    size = map.size();
+    mtx.Unlock();
   }
 
-  for (const auto& k : to_remove) {
-    values.erase(k);
-  }
+  return size;
 }
 
 } /* jmutils */

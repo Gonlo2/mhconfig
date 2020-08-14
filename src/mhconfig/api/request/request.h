@@ -8,7 +8,7 @@
 #include <chrono>
 
 #include "mhconfig/api/session.h"
-#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/metrics.h"
 #include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
@@ -30,9 +30,7 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics,
+    context_t* ctx,
     uint_fast32_t& sequential_id
   ) override;
 
@@ -44,8 +42,7 @@ protected:
   };
 
   virtual void request(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) = 0;
 
   inline void* tag(RequestStatus status) {

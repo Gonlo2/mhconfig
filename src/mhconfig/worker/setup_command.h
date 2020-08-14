@@ -5,30 +5,31 @@
 #include <string>
 
 #include "mhconfig/command.h"
-#include "mhconfig/scheduler/add_namespace_command.h"
 #include "mhconfig/builder.h"
+#include "mhconfig/provider.h"
+#include "mhconfig/worker/update_command.h"
+#include "mhconfig/api/stream/watch_stream_impl.h"
 
 namespace mhconfig
 {
 namespace worker
 {
 
-class SetupCommand : public WorkerCommand
+class SetupCommand final : public WorkerCommand
 {
 public:
-  explicit SetupCommand(const std::string& path);
-  virtual ~SetupCommand();
+  explicit SetupCommand(std::shared_ptr<config_namespace_t>&& cn);
 
   std::string name() const override;
 
   bool force_take_metric() const override;
 
   bool execute(
-    context_t& context
+    context_t* ctx
   ) override;
 
 private:
-  std::string path_;
+  std::shared_ptr<config_namespace_t> cn_;
 };
 
 } /* worker */

@@ -15,9 +15,6 @@ TraceOutputMessageImpl::TraceOutputMessageImpl(
   response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::TraceResponse>(&arena_);
 }
 
-TraceOutputMessageImpl::~TraceOutputMessageImpl() {
-}
-
 void TraceOutputMessageImpl::set_status(Status status) {
   switch (status) {
     case Status::RETURNED_ELEMENTS:
@@ -82,9 +79,6 @@ TraceStreamImpl::TraceStreamImpl()
   request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::TraceRequest>(&arena_);
 }
 
-TraceStreamImpl::~TraceStreamImpl() {
-}
-
 const std::string& TraceStreamImpl::root_path() const {
   return request_->root_path();
 }
@@ -122,15 +116,14 @@ void TraceStreamImpl::subscribe(
 }
 
 void TraceStreamImpl::on_create(
-  auth::Acl* acl,
-  SchedulerQueue::Sender* scheduler_sender
+  context_t* ctx
 ) {
   overrides_ = to_vector(request_->overrides());
   flavors_ = to_vector(request_->flavors());
 
   auto token = get_auth_token();
   auto auth_result = token
-    ? acl->document_auth(*token, auth::Capability::TRACE, *this)
+    ? ctx->acl.document_auth(*token, auth::Capability::TRACE, *this)
     : auth::AuthResult::UNAUTHENTICATED;
 
   if (check_auth(auth_result)) {
@@ -142,10 +135,12 @@ void TraceStreamImpl::on_create(
     );
 
     if (ok) {
-      scheduler_sender->push(
-        std::make_unique<scheduler::ApiTraceCommand>(
-          shared_from_this()
-        )
+      auto cn = get_or_build_cn(ctx, root_path());
+      cn->last_access_timestamp = jmutils::monotonic_now_sec();
+      process_trace_request<worker::SetupCommand>(
+        std::move(cn),
+        shared_from_this(),
+        ctx
       );
     } else {
       auto output_message = make_output_message();
@@ -156,8 +151,7 @@ void TraceStreamImpl::on_create(
 }
 
 void TraceStreamImpl::on_read(
-  auth::Acl* acl,
-  SchedulerQueue::Sender* scheduler_sender
+  context_t* ctx
 ) {
 }
 

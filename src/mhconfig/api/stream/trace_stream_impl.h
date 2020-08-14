@@ -4,9 +4,10 @@
 #include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/config/common.h"
+#include "mhconfig/worker/setup_command.h"
 #include "mhconfig/command.h"
 #include "mhconfig/validator.h"
-#include "mhconfig/scheduler/api_trace_command.h"
+#include "mhconfig/provider.h"
 
 #include "spdlog/spdlog.h"
 
@@ -19,13 +20,14 @@ namespace stream
 
 class TraceStreamImpl;
 
-class TraceOutputMessageImpl : public TraceOutputMessage, public std::enable_shared_from_this<TraceOutputMessageImpl>
+class TraceOutputMessageImpl final
+  : public TraceOutputMessage,
+    public std::enable_shared_from_this<TraceOutputMessageImpl>
 {
 public:
   TraceOutputMessageImpl(
     std::weak_ptr<TraceStreamImpl>&& stream
   );
-  virtual ~TraceOutputMessageImpl();
 
   void set_status(Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
@@ -57,7 +59,6 @@ class TraceStreamImpl final
 {
 public:
   TraceStreamImpl();
-  virtual ~TraceStreamImpl();
 
   const std::string& root_path() const override;
   const std::vector<std::string>& overrides() const override;
@@ -81,13 +82,11 @@ protected:
   friend class TraceOutputMessageImpl;
 
   void on_create(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
   void on_read(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
 private:

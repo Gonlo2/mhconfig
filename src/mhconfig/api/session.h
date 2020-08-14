@@ -8,8 +8,6 @@
 
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
 #include "mhconfig/command.h"
-#include "mhconfig/auth/acl.h"
-#include "mhconfig/auth/common.h"
 
 namespace mhconfig
 {
@@ -82,17 +80,14 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics,
+    context_t* ctx,
     uint_fast32_t& sequential_id
   );
 
   //TODO move this function to the private sections and make the
   //class Service friend of this
   std::shared_ptr<Session> error(
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics
+    context_t* ctx
   );
 
   std::string session_peer() const {
@@ -109,15 +104,14 @@ private:
   bool closed_{false};
 
   inline std::shared_ptr<Session> decrement_cq_refcount(
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics
+    context_t* ctx
   ) {
     std::shared_ptr<Session> tmp{nullptr};
     if (--cq_refcount_ == 0) {
       closed_ = true;
       tmp.swap(this_shared_);
       spdlog::trace("Destroying the gRPC event {}", (void*) this);
-      on_destroy(scheduler_sender, metrics);
+      on_destroy(ctx);
     }
     return tmp;
   }
@@ -155,15 +149,12 @@ protected:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics,
+    context_t* ctx,
     uint_fast32_t& sequential_id
   ) = 0;
 
   virtual void on_destroy(
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics
+    context_t* ctx
   ) {
   };
 

@@ -1,11 +1,13 @@
 #ifndef MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 #define MHCONFIG__API__REQUEST__GET_REQUEST_IMPL_H
 
+#include "mhconfig/api/request/request.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/config/common.h"
 #include "mhconfig/command.h"
+#include "mhconfig/worker/setup_command.h"
 #include "mhconfig/validator.h"
-#include "mhconfig/scheduler/api_get_command.h"
+#include "mhconfig/provider.h"
 
 #include <grpcpp/impl/codegen/serialization_traits.h>
 
@@ -70,8 +72,7 @@ protected:
   Element element_;
 
   void request(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
 };

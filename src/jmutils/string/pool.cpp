@@ -195,8 +195,6 @@ Pool::~Pool() {
   if (stats_observer_ != nullptr) {
     stats_observer_->on_updated_stats(pool_context_->stats, true);
   }
-
-  pool_context_->set.clear();
   pool_context_->mutex.Unlock();
 
   for (Chunk* chunk : chunks_) {
@@ -208,19 +206,21 @@ const String Pool::add(const std::string& str) {
   InternalString internal_string;
   String s = make_string(str, &internal_string);
   if (!s.is_small()) {
-    //TODO Rethink the string build part to avoid create the str and
-    //change the unique mutex with a shared one to allow parallel
-    //calls if the string already exists in the set
-    pool_context_->mutex.Lock();
+    pool_context_->mutex.ReaderLock();
+    if (auto search = pool_context_->set.find(s); search != pool_context_->set.end()) {
+      String result = *search;
+      pool_context_->mutex.ReaderUnlock();
+      return result;
+    }
+    pool_context_->mutex.ReaderUnlock();
 
-    auto search = pool_context_->set.find(s);
-    if (search != pool_context_->set.end()) {
+    pool_context_->mutex.Lock();
+    if (auto search = pool_context_->set.find(s); search != pool_context_->set.end()) {
       String result = *search;
       pool_context_->mutex.Unlock();
       return result;
     }
 
-    spdlog::trace("Adding a new string");
     auto result = store_string(str);
     pool_context_->set.insert(result);
     pool_context_->mutex.Unlock();
@@ -321,7 +321,6 @@ String Chunk::add(const std::string& str) {
   tail_->init(str, &data_[next_data_], this);
   memcpy(&data_[next_data_], str.c_str(), str.size());
 
-  spdlog::trace("Moving the next_data pointer {} bytes", str.size());
   next_data_ += str.size();
   pool_context_->stats.used_bytes += str.size();
   String result((uint64_t)tail_);
@@ -381,8 +380,8 @@ void Chunk::reallocate(InternalString* s) {
 
 
 bool make_small_string(const std::string& str, uint64_t& result) {
+  result = 0;
   if (str.size() <= 7) {
-    result = 0;
     for (ssize_t i = str.size()-1; i >= 0; --i) {
       result |= static_cast<uint8_t>(str[i]);
       result <<= 8;
@@ -391,7 +390,6 @@ bool make_small_string(const std::string& str, uint64_t& result) {
 
     return true;
   } else if (str.size() <= 10) {
-    result = 0;
     for (ssize_t i = str.size()-1; i >= 0; --i) {
       result <<= 6;
       char c = ASCII_CHAR_TO_CODED_VALUE[static_cast<uint8_t>(str[i])];

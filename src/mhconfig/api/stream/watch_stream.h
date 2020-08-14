@@ -7,6 +7,9 @@
 
 namespace mhconfig
 {
+
+struct config_namespace_t;
+
 namespace api
 {
 namespace stream
@@ -53,12 +56,11 @@ public:
   virtual const std::string& root_path() const = 0;
   virtual const std::vector<std::string>& overrides() const = 0;
   virtual const std::vector<std::string>& flavors() const = 0;
-  virtual uint32_t version() const = 0;
   virtual const std::string& document() const = 0;
 
   virtual std::string peer() const = 0;
 
-  virtual bool unregister() = 0;
+  virtual bool unregister(config_namespace_t* cn) = 0;
 
   virtual std::shared_ptr<WatchOutputMessage> make_output_message() = 0;
 };

@@ -17,8 +17,7 @@
 
 #include "mhconfig/command.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
-#include "mhconfig/metrics/metrics_service.h"
-#include "mhconfig/metrics/async_metrics_service.h"
+#include "mhconfig/metrics.h"
 
 #include "mhconfig/api/session.h"
 #include "mhconfig/api/request/get_request_impl.h"
@@ -41,8 +40,8 @@ class Service final
 public:
   Service(
     const std::string& server_address,
-    std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& senders,
-    auth::Acl* acl
+    size_t num_threads,
+    context_t* ctx
   );
 
   ~Service();
@@ -63,22 +62,14 @@ private:
     ServiceThread(
       CustomService* service,
       std::unique_ptr<grpc::ServerCompletionQueue>&& cq,
-      SchedulerQueue::SenderRef&& sender,
-      metrics::AsyncMetricsService&& metrics,
-      auth::Acl* acl
+      context_t* ctx
     ) : service_(service),
       cq_(std::move(cq)),
-      sender_(std::move(sender)),
-      metrics_(std::move(metrics)),
-      acl_(acl)
+      ctx_(ctx)
     {}
 
     void stop() {
       cq_->Shutdown();
-    }
-
-    void set_acl(auth::Acl* acl) {
-      acl_ = acl;
     }
 
   private:
@@ -86,9 +77,7 @@ private:
 
     CustomService* service_;
     std::unique_ptr<grpc::ServerCompletionQueue> cq_;
-    SchedulerQueue::SenderRef sender_;
-    metrics::AsyncMetricsService metrics_;
-    auth::Acl* acl_;
+    context_t* ctx_;
     uint_fast32_t request_id_{0};
 
     void on_start() noexcept {
@@ -140,22 +129,14 @@ private:
             (void*) session,
             status
           );
-          auto _ = session->proceed(
-            status,
-            service_,
-            cq_.get(),
-            acl_,
-            sender_.get(),
-            &metrics_,
-            request_id_
-          );
+          auto _ = session->proceed(status, service_, cq_.get(), ctx_, request_id_);
         } else {
           spdlog::trace(
             "Obtained the error gRPC event {} with the status {}",
             (void*) session,
             status
           );
-          auto _ = session->error(sender_.get(), &metrics_);
+          auto _ = session->error(ctx_);
         }
         return true;
       } catch (const std::exception &e) {
@@ -184,12 +165,11 @@ private:
   };
 
   std::string server_address_;
-  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>> thread_vars_;
+  size_t num_threads_;
   std::vector<std::unique_ptr<ServiceThread>> threads_;
-
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
-  auth::Acl* acl_;
+  context_t* ctx_;
 };
 
 } /* api */

@@ -74,22 +74,23 @@ void UpdateRequestImpl::subscribe(
 }
 
 void UpdateRequestImpl::request(
-  auth::Acl* acl,
-  SchedulerQueue::Sender* scheduler_sender
+  context_t* ctx
 ) {
   relative_paths_ = to_vector(request_->relative_paths());
 
   auto token = get_auth_token();
   auto auth_result = token
-    ? acl->root_path_auth(*token, auth::Capability::UPDATE, *this)
+    ? ctx->acl.root_path_auth(*token, auth::Capability::UPDATE, *this)
     : auth::AuthResult::UNAUTHENTICATED;
 
   if (check_auth(auth_result)) {
     if (validate_request()) {
-      scheduler_sender->push(
-        std::make_unique<scheduler::ApiUpdateCommand>(
-          shared_from_this()
-        )
+      auto cn = get_or_build_cn(ctx, root_path());
+      cn->last_access_timestamp = jmutils::monotonic_now_sec();
+      process_update_request<worker::SetupCommand, worker::UpdateCommand>(
+        std::move(cn),
+        shared_from_this(),
+        ctx
       );
     } else {
       set_status(Status::ERROR);

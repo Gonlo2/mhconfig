@@ -6,11 +6,12 @@
 #include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/api/config/common.h"
+#include "mhconfig/worker/setup_command.h"
+#include "mhconfig/worker/update_command.h"
 #include "mhconfig/command.h"
 #include "mhconfig/validator.h"
-#include "mhconfig/scheduler/api_watch_command.h"
-#include "mhconfig/scheduler/on_watchers_removed_command.h"
-#include "mhconfig/scheduler/common.h"
+#include "mhconfig/provider.h"
+#include "mhconfig/builder.h"
 
 #include <absl/container/flat_hash_map.h>
 #include <absl/synchronization/mutex.h>
@@ -79,10 +80,9 @@ public:
   const std::string& root_path() const override;
   const std::vector<std::string>& overrides() const override;
   const std::vector<std::string>& flavors() const override;
-  uint32_t version() const override;
   const std::string& document() const override;
 
-  bool unregister() override;
+  bool unregister(config_namespace_t* cn) override;
 
   std::string peer() const override;
 
@@ -100,6 +100,7 @@ class WatchGetRequest : public ::mhconfig::api::request::GetRequest
 {
 public:
   WatchGetRequest(
+    uint32_t version,
     std::shared_ptr<WatchInputMessage> input_message,
     std::shared_ptr<WatchOutputMessage> output_message
   );
@@ -124,6 +125,7 @@ public:
   std::string peer() const override;
 
 private:
+  uint32_t version_;
   std::shared_ptr<WatchInputMessage> input_message_;
   std::shared_ptr<WatchOutputMessage> output_message_;
 };
@@ -147,33 +149,35 @@ public:
     grpc::ServerCompletionQueue* cq
   ) override;
 
-  bool unregister(uint32_t uid);
+  bool unregister(
+    config_namespace_t* cn,
+    uint32_t uid
+  );
+
+  std::pair<bool, std::shared_ptr<config_namespace_t>> unregister(
+    context_t* ctx,
+    uint32_t uid
+  );
 
 protected:
   friend class WatchOutputMessageImpl;
 
   void on_create(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
   void on_read(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) override;
 
   void on_destroy(
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics
+    context_t* ctx
   ) override;
 
 private:
   grpc::ByteBuffer next_req_;
   absl::flat_hash_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
-  SchedulerQueue::Sender* scheduler_sender_{nullptr};
   absl::Mutex mutex_;
-
-  bool unregister(SchedulerQueue::Sender* scheduler_sender, uint32_t uid);
 
   inline void prepare_next_request() {
     if (auto t = tag(Status::READ)) {
@@ -182,6 +186,10 @@ private:
     }
   }
 
+  void on_removed_watcher(
+    config_namespace_t* cn,
+    const WatchInputMessage* request
+  );
 };
 
 

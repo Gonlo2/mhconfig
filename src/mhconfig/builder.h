@@ -20,8 +20,6 @@
 
 namespace mhconfig
 {
-namespace builder
-{
 
 const static std::string TAG_NON_PLAIN_SCALAR{"!"};
 const static std::string TAG_PLAIN_SCALAR{"?"};
@@ -62,29 +60,25 @@ enum class VirtualNode {
   REF
 };
 
-std::shared_ptr<config_namespace_t> make_config_namespace(
-  const std::filesystem::path& root_path,
-  metrics::MetricsService& metrics
+bool init_config_namespace(
+  config_namespace_t* cn,
+  std::shared_ptr<jmutils::string::Pool>&& pool
 );
 
 inline void make_override_path(
   const std::string& override_,
-  const std::string& document,
   const std::string& flavor,
   std::string& output
 ) {
   output.clear();
-  output.reserve(override_.size() + 1 + document.size() + 1 + flavor.size());
+  output.reserve(override_.size() + 1 + flavor.size());
   output += override_;
-  output.push_back('/');
-  output += document;
   output.push_back('/');
   output += flavor;
 }
 
 struct split_override_path_result_t {
   std::string_view override_;
-  std::string_view document;
   std::string_view flavor;
 };
 
@@ -92,20 +86,15 @@ inline split_override_path_result_t split_override_path(
   const std::string_view override_path
 ) {
   split_override_path_result_t result;
-  auto document_end_pos = override_path.rfind('/');
-  auto override_end_pos = override_path.rfind('/', document_end_pos-1);
+  auto override_end_pos = override_path.rfind('/');
   result.override_ = std::string_view(
     override_path.data(),
     override_end_pos
   );
-  result.document = std::string_view(
-    &override_path[override_end_pos+1],
-    document_end_pos-override_end_pos-1
-  );
-  if (override_path.size() != document_end_pos+1) {
+  if (override_path.size() != override_end_pos+1) {
     result.flavor = std::string_view(
-      &override_path[document_end_pos+1],
-      override_path.size()-document_end_pos-1
+      &override_path[override_end_pos+1],
+      override_path.size()-override_end_pos-1
     );
   }
   return result;
@@ -198,7 +187,6 @@ bool index_files(
       if (result.status != LoadRawConfigStatus::INVALID_FILENAME) {
         make_override_path(
           result.override_,
-          result.document,
           result.flavor,
           override_path
         );
@@ -236,22 +224,27 @@ enum class AffectedDocumentStatus {
   TO_REMOVE_BUT_DEPENDENCY
 };
 
-void increment_version_of_the_affected_documents(
-  config_namespace_t& config_namespace,
-  absl::flat_hash_map<std::pair<std::string, std::string>, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_flavor_and_override,
-  absl::flat_hash_set<std::shared_ptr<api::stream::WatchInputMessage>>& watchers_to_trigger,
-  bool only_nonexistent
+absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>> get_dep_by_doc(
+  config_namespace_t* cn,
+  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_path
 );
 
 void fill_affected_documents(
-  const config_namespace_t& config_namespace,
+  config_namespace_t* cn,
   absl::flat_hash_map<std::string, AffectedDocumentStatus>& affected_documents
+);
+
+bool touch_affected_documents(
+  config_namespace_t* cn,
+  VersionId version,
+  const absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& dep_by_doc,
+  bool only_nonexistent
 );
 
 Element override_with(
   const Element& a,
   const Element& b,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 );
 
 VirtualNode get_virtual_node_type(
@@ -262,7 +255,7 @@ std::pair<bool, Element> apply_tags(
   jmutils::string::Pool* pool,
   Element element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 );
 
 Element apply_tag_format(
@@ -277,7 +270,7 @@ std::string format_str(
 
 Element apply_tag_ref(
   const Element& element,
-  const absl::flat_hash_map<std::string, Element> &elements_by_document
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 );
 
 Element apply_tag_sref(
@@ -291,6 +284,7 @@ Element apply_tag_sref(
 Element make_and_check_element(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 );
 
@@ -302,6 +296,7 @@ bool is_a_valid_path(
 Element make_element(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 );
 
@@ -330,32 +325,34 @@ Element make_element_from_bool(
 Element make_element_from_map(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 );
 
 Element make_element_from_sequence(
   jmutils::string::Pool* pool,
   YAML::Node &node,
+  const std::string& document,
   absl::flat_hash_set<std::string> &reference_to
 );
 
 // Get logic
 
 std::shared_ptr<merged_config_t> get_or_build_merged_config(
-  config_namespace_t& config_namespace,
+  document_t* document,
   const std::string& overrides_key
 );
 
 std::shared_ptr<merged_config_t> get_merged_config(
-  config_namespace_t& config_namespace,
+  document_t* document,
   const std::string& overrides_key
 );
 
 template <typename F>
-inline void with_raw_config(
-  config_namespace_t& config_namespace,
+inline void with_raw_config_locked(
+  document_t* document,
   const std::string& override_path,
-  uint32_t version,
+  VersionId version,
   F lambda
 ) {
   spdlog::trace(
@@ -364,75 +361,69 @@ inline void with_raw_config(
     version
   );
 
-  auto override_search = config_namespace.override_metadata_by_override_path
-    .find(override_path);
-
-  if (override_search == config_namespace.override_metadata_by_override_path.end()) {
+  auto o_search = document->override_by_path.find(override_path);
+  if (o_search == document->override_by_path.end()) {
     spdlog::trace("Don't exists the override path '{}'", override_path);
     return;
   }
 
-  auto& raw_config_by_version = override_search->second
-    .raw_config_by_version;
-
-  auto raw_config_search = (version == 0)
-    ? raw_config_by_version.end()
-    : raw_config_by_version.upper_bound(version);
-
-  if (raw_config_search == raw_config_by_version.begin()) {
+  auto rc_search = o_search->second.raw_config_by_version.upper_bound(version);
+  if (rc_search == o_search->second.raw_config_by_version.begin()) {
     spdlog::trace("Don't exists a version lower or equal to {}", version);
-    return;
-  }
+  } else {
+    --rc_search;
+    if (rc_search->second == nullptr) {
+      spdlog::trace(
+        "The raw_config value is deleted for the version {}",
+        rc_search->first
+      );
+    } else {
+      spdlog::trace(
+        "Obtained a raw config with the version {}",
+        rc_search->first
+      );
 
-  --raw_config_search;
-  if (raw_config_search->second == nullptr) {
-    spdlog::trace(
-      "The raw_config value is deleted for the version {}",
-      raw_config_search->first
-    );
-    return;
-  }
-
-  spdlog::trace(
-    "Obtained a raw config with the version {}",
-    raw_config_search->first
-  );
-
-  lambda(
-    static_cast<const decltype(override_path)&>(override_path),
-    static_cast<decltype(raw_config_search->second)&>(raw_config_search->second)
-  );
-}
-
-template <typename F>
-inline void for_each_document_override(
-  config_namespace_t& config_namespace,
-  const std::vector<std::string>& flavors,
-  const std::vector<std::string>& overrides,
-  const std::string& document,
-  uint32_t version,
-  F lambda
-) {
-  for_each_document_override_path(
-    flavors,
-    overrides,
-    document,
-    [&config_namespace, version, lambda](const auto& override_path) {
-      with_raw_config(
-        config_namespace,
-        override_path,
-        version,
-        lambda
+      lambda(
+        static_cast<const decltype(override_path)&>(override_path),
+        static_cast<decltype(rc_search->second)&>(rc_search->second)
       );
     }
-  );
+  }
 }
 
 template <typename F>
-inline void for_each_document_override_path(
+inline bool for_each_document_override(
+  document_t* document,
   const std::vector<std::string>& flavors,
   const std::vector<std::string>& overrides,
-  const std::string& document,
+  VersionId version,
+  F lambda
+) {
+  document->mutex.ReaderLock();
+  bool is_a_valid_version = document->oldest_version <= version;
+  if (is_a_valid_version) {
+    for_each_document_override_path(
+      flavors,
+      overrides,
+      [document, version, lambda](const auto& override_path) -> bool {
+        with_raw_config_locked(
+          document,
+          override_path,
+          version,
+          lambda
+        );
+        return true;
+      }
+    );
+  }
+  document->mutex.ReaderUnlock();
+  return is_a_valid_version;
+}
+
+template <typename F>
+inline bool for_each_document_override_path(
+  const std::vector<std::string>& flavors,
+  const std::vector<std::string>& overrides,
   F lambda
 ) {
   std::string override_path;
@@ -442,28 +433,117 @@ inline void for_each_document_override_path(
   for (size_t override_idx = 0; override_idx < overrides_l; ++override_idx) {
     make_override_path(
       overrides[override_idx],
-      document,
       "",
       override_path
     );
-    lambda(static_cast<const decltype(override_path)&>(override_path));
+    if (!lambda(static_cast<const decltype(override_path)&>(override_path))) {
+      return false;
+    }
   }
 
   for (size_t flavor_idx = 0; flavor_idx < flavors_l; ++flavor_idx) {
     for (size_t override_idx = 0; override_idx < overrides_l; ++override_idx) {
       make_override_path(
         overrides[override_idx],
-        document,
         flavors[flavor_idx],
         override_path
       );
-      lambda(static_cast<const decltype(override_path)&>(override_path));
+      if (!lambda(static_cast<const decltype(override_path)&>(override_path))) {
+        return false;
+      }
     }
   }
+
+  return true;
 }
 
-bool has_last_version(
-  const override_metadata_t& override_metadata
+std::shared_ptr<document_t> get_document_locked(
+  const config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
+);
+
+inline std::shared_ptr<document_t> get_document(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
+) {
+  cn->mutex.ReaderLock();
+  auto result = get_document_locked(cn, name, version);
+  cn->mutex.ReaderUnlock();
+  return result;
+}
+
+std::optional<DocumentId> next_document_id_locked(
+  config_namespace_t* cn
+);
+
+bool try_insert_document_locked(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version,
+  std::shared_ptr<document_t>& document
+);
+
+inline document_versions_t* get_or_guild_document_versions_locked(
+  config_namespace_t* cn,
+  const std::string& name
+) {
+  auto inserted = cn->document_versions_by_name.try_emplace(name, nullptr);
+  if (inserted.second) {
+    inserted.first->second = std::make_unique<document_versions_t>();
+  }
+  return inserted.first->second.get();
+}
+
+inline std::shared_ptr<document_t> try_get_or_build_document_locked(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
+) {
+  auto document = get_document_locked(cn, name, version);
+
+  if (document == nullptr) {
+    document = std::make_shared<document_t>();
+    if (!try_insert_document_locked(cn, name, version, document)) {
+      document = nullptr;
+    }
+  }
+
+  return document;
+}
+
+std::shared_ptr<document_t> try_get_or_build_document(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version
+);
+
+inline raw_config_t* get_last_raw_config_locked(
+  const override_t& override_
+) {
+  return override_.raw_config_by_version.empty()
+    ? nullptr
+    : override_.raw_config_by_version.crbegin()->second.get();
+}
+
+std::shared_ptr<document_t> try_migrate_document_locked(
+  config_namespace_t* cn,
+  document_t* document,
+  VersionId version
+);
+
+inline bool is_document_full_locked(
+  const document_t* document
+) {
+  return document->next_raw_config_id == 0xffff;
+}
+
+std::shared_ptr<document_t> try_obtain_non_full_document(
+  config_namespace_t* cn,
+  const std::string& name,
+  VersionId version,
+  size_t required_size = 1
 );
 
 struct split_filename_result_t {
@@ -479,7 +559,225 @@ split_filename_result_t split_filename(
 
 std::array<uint8_t, 32> make_checksum(const Element& element);
 
-} /* builder */
+namespace {
+  struct trace_variables_counter_t {
+    bool document : 1;
+    uint16_t flavors : 15;
+    uint16_t overrides;
+
+    trace_variables_counter_t()
+      : document(false),
+      flavors(0),
+      overrides(0)
+    {
+    }
+  };
+}
+
+template <typename T>
+std::shared_ptr<api::stream::TraceOutputMessage> make_trace_output_message(
+  api::stream::TraceInputMessage* input_message,
+  api::stream::TraceOutputMessage::Status status,
+  uint64_t namespace_id,
+  uint32_t version,
+  T* message
+) {
+  auto output_message = input_message->make_output_message();
+
+  output_message->set_status(status);
+  output_message->set_namespace_id(namespace_id);
+  output_message->set_version(version);
+  output_message->set_overrides(message->overrides());
+  output_message->set_flavors(message->flavors());
+  output_message->set_document(message->document());
+  output_message->set_peer(message->peer());
+
+  return output_message;
+}
+
+template <typename T, typename F>
+void for_each_trace_to_trigger(
+  config_namespace_t* cn,
+  const T* message,
+  F lambda
+) {
+  absl::flat_hash_map<
+    std::shared_ptr<api::stream::TraceInputMessage>,
+    trace_variables_counter_t
+  > match_by_trace;
+
+  if (!cn->traces_by_override.empty()) {
+    for (size_t i = 0, l = message->overrides().size(); i < l; ++i) {
+      cn->traces_by_override.for_each(
+        message->overrides()[i],
+        [&match_by_trace](auto&& trace) { match_by_trace[trace].overrides += 1; }
+      );
+    }
+  }
+
+  if (!cn->traces_by_flavor.empty()) {
+    for (size_t i = 0, l = message->flavors().size(); i < l; ++i) {
+      cn->traces_by_flavor.for_each(
+        message->flavors()[i],
+        [&match_by_trace](auto&& trace) { match_by_trace[trace].flavors += 1; }
+      );
+    }
+  }
+
+  if (!message->document().empty()){
+    cn->traces_by_document.for_each(
+      message->document(),
+      [&match_by_trace](auto&& trace) { match_by_trace[trace].document = true; }
+    );
+  }
+
+  cn->to_trace_always.for_each(
+    [lambda](auto&& trace) {
+      lambda(trace.get());
+    }
+  );
+
+  for (auto& it : match_by_trace) {
+    bool trigger_trace = true;
+
+    if (!it.first->overrides().empty()) {
+      trigger_trace = it.first->overrides().size() == it.second.overrides;
+    }
+    if (trigger_trace && !it.first->flavors().empty()) {
+      trigger_trace = it.first->flavors().size() == it.second.flavors;
+    }
+    if (trigger_trace && !it.first->document().empty()) {
+      trigger_trace = it.second.document;
+    }
+
+    if (trigger_trace) {
+      lambda(it.first.get());
+    }
+  }
+}
+
+inline std::shared_ptr<config_namespace_t> get_cn_locked(
+  context_t* ctx,
+  const std::string& root_path
+) {
+  if (
+    auto search = ctx->cn_by_root_path.find(root_path);
+    search != ctx->cn_by_root_path.end()
+  ) {
+    return search->second;
+  }
+
+  return nullptr;
+}
+
+std::shared_ptr<config_namespace_t> get_cn(
+  context_t* ctx,
+  const std::string& root_path
+);
+
+std::shared_ptr<config_namespace_t> get_or_build_cn(
+  context_t* ctx,
+  const std::string& root_path
+);
+
+inline VersionId get_version(
+  const config_namespace_t* cn,
+  VersionId version
+) {
+  if (version == 0) return cn->current_version;
+  return ((version < cn->oldest_version) || (cn->current_version < version))
+    ? 0
+    : version;
+}
+
+enum CheckMergedConfigResult {
+  IN_PROGRESS,
+  NEED_EXCLUSIVE_LOCK,
+  BUILD_CONFIG,
+  OPTIMIZE_CONFIG,
+  COMMIT_MESSAGE,
+  ERROR
+};
+
+template <bool has_exclusive_lock>
+CheckMergedConfigResult check_merged_config(
+  merged_config_t* merged_config,
+  std::shared_ptr<api::request::GetRequest>& request
+) {
+  switch (merged_config->status) {
+    case MergedConfigStatus::UNDEFINED:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->waiting.push_back(request);
+      merged_config->status = MergedConfigStatus::BUILDING;
+      return CheckMergedConfigResult::BUILD_CONFIG;
+
+    case MergedConfigStatus::BUILDING: // Fallback
+    case MergedConfigStatus::OK_CONFIG_OPTIMIZING:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->waiting.push_back(std::move(request));
+      return CheckMergedConfigResult::IN_PROGRESS;
+
+    case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
+      merged_config->waiting.push_back(std::move(request));
+      return CheckMergedConfigResult::OPTIMIZE_CONFIG;
+
+    case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
+      spdlog::debug("The built document '{}' has been found", request->document());
+
+      request->set_preprocessed_payload(
+        merged_config->preprocesed_value.data(),
+        merged_config->preprocesed_value.size()
+      );
+
+      return CheckMergedConfigResult::COMMIT_MESSAGE;
+
+    case MergedConfigStatus::REF_GRAPH_IS_NOT_DAG:
+      spdlog::debug("The built document '{}' has been found but it isn't a DAG", request->document());
+
+      request->set_status(api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG);
+
+      return CheckMergedConfigResult::COMMIT_MESSAGE;
+  }
+
+  return CheckMergedConfigResult::ERROR;
+}
+
+void delete_cn_locked(
+  config_namespace_t* cn
+);
+
+inline void delete_cn(
+  config_namespace_t* cn
+) {
+  cn->mutex.Lock();
+  delete_cn_locked(cn);
+  cn->mutex.Unlock();
+}
+
+void remove_cn_locked(
+  context_t* ctx,
+  const std::string& root_path,
+  uint64_t id
+);
+
+inline void remove_cn(
+  context_t* ctx,
+  const std::string& root_path,
+  uint64_t id
+) {
+  ctx->mutex.Lock();
+  remove_cn_locked(ctx, root_path, id);
+  ctx->mutex.Lock();
+}
+
 } /* mhconfig */
 
 #endif

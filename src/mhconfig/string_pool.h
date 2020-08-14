@@ -2,18 +2,18 @@
 #define MHCONFIG__STRING_POOL_H
 
 #include "jmutils/string/pool.h"
-#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/metrics.h"
 
 namespace mhconfig
 {
 namespace string_pool
 {
 
-class MetricsStatsObserver : public jmutils::string::StatsObserver
+class MetricsStatsObserver final : public jmutils::string::StatsObserver
 {
 public:
   MetricsStatsObserver(
-    metrics::MetricsService& metrics,
+    Metrics& metrics,
     const std::string& id
   ) : metrics_(metrics),
     id_(id),
@@ -21,32 +21,28 @@ public:
   {
   }
 
-  virtual ~MetricsStatsObserver() {
-  }
-
   void on_updated_stats(const jmutils::string::stats_t& stats, bool force) override {
-    sequential_id_ = (sequential_id_+1) & 0xff;
-    if (force || (sequential_id_ == 0)) {
+    if (force || (sequential_id_++ == 0)) {
       metrics_.add(
-        metrics::MetricsService::MetricId::STRING_POOL_NUM_STRINGS,
+        Metrics::Id::STRING_POOL_NUM_STRINGS,
         {{"pool", id_}},
         stats.num_strings
       );
 
       metrics_.add(
-        metrics::MetricsService::MetricId::STRING_POOL_NUM_CHUNKS,
+        Metrics::Id::STRING_POOL_NUM_CHUNKS,
         {{"pool", id_}},
         stats.num_chunks
       );
 
       metrics_.add(
-        metrics::MetricsService::MetricId::STRING_POOL_RECLAIMED_BYTES,
+        Metrics::Id::STRING_POOL_RECLAIMED_BYTES,
         {{"pool", id_}},
         stats.reclaimed_bytes
       );
 
       metrics_.add(
-        metrics::MetricsService::MetricId::STRING_POOL_USED_BYTES,
+        Metrics::Id::STRING_POOL_USED_BYTES,
         {{"pool", id_}},
         stats.used_bytes
       );
@@ -54,9 +50,9 @@ public:
   }
 
 private:
-  metrics::MetricsService& metrics_;
+  Metrics& metrics_;
   std::string id_;
-  uint_fast16_t sequential_id_;
+  uint8_t sequential_id_;
 };
 
 } /* string_pool */

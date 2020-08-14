@@ -99,13 +99,7 @@ message WatchRequest {
   // the list of overrides to apply from lower to higher priority.
   repeated string overrides = 4;
   // the list of flavors to apply from lower to higher priority.
-  repeated string flavors = 8;
-  // the last know version of the configuration, in the case of zero the server
-  // will reply the latest one, in other case the server will reply when exists
-  // a newer version that change the configuration. Please note that this means
-  // that the server can skip several versions if the server don't change the
-  // requested document directly or indirectly
-  uint32 version = 5;
+  repeated string flavors = 5;
   // document to watch.
   string document = 6;
 }

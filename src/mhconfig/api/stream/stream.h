@@ -11,7 +11,7 @@
 #include <absl/synchronization/mutex.h>
 
 #include "mhconfig/api/session.h"
-#include "mhconfig/metrics/metrics_service.h"
+#include "mhconfig/metrics.h"
 #include "jmutils/time.h"
 
 #include "spdlog/spdlog.h"
@@ -42,19 +42,17 @@ public:
     uint8_t status,
     CustomService* service,
     grpc::ServerCompletionQueue* cq,
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender,
-    metrics::MetricsService* metrics,
+    context_t* ctx,
     uint_fast32_t& sequential_id
   ) override {
     switch (static_cast<Status>(status)) {
       case Status::CREATE:
         clone_and_subscribe(service, cq);
         //TODO add request metrics
-        on_create(acl, scheduler_sender);
+        on_create(ctx);
         break;
       case Status::READ:
-        on_read(acl, scheduler_sender);
+        on_read(ctx);
         break;
       case Status::WRITE:
         mutex_.Lock();
@@ -99,14 +97,12 @@ protected:
 
   //TODO Use this with CRTP
   virtual void on_create(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) = 0;
 
   //TODO Use this with CRTP
   virtual void on_read(
-    auth::Acl* acl,
-    SchedulerQueue::Sender* scheduler_sender
+    context_t* ctx
   ) = 0;
 
   bool send(std::shared_ptr<OutMsg> message, bool finish) {

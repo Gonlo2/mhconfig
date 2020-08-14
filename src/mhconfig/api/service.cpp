@@ -8,12 +8,12 @@ namespace api
 
 Service::Service(
   const std::string& server_address,
-  std::vector<std::pair<SchedulerQueue::SenderRef, metrics::AsyncMetricsService>>&& thread_vars,
-  auth::Acl* acl
+  size_t num_threads,
+  context_t* ctx
 ) :
   server_address_(server_address),
-  thread_vars_(std::move(thread_vars)),
-  acl_(acl)
+  num_threads_(num_threads),
+  ctx_(ctx)
 {
 }
 
@@ -30,23 +30,21 @@ bool Service::start() {
   builder.RegisterService(&service_);
 
   std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
-  cqs.reserve(thread_vars_.size());
-  for (size_t i = 0; i < thread_vars_.size(); ++i) {
+  cqs.reserve(num_threads_);
+  for (size_t i = 0; i < num_threads_; ++i) {
     cqs.push_back(builder.AddCompletionQueue());
   }
 
   server_ = builder.BuildAndStart();
   spdlog::info("Server listening on '{}'", server_address_);
 
-  threads_.reserve(thread_vars_.size());
-  for (size_t i = 0; i < thread_vars_.size(); ++i) {
+  threads_.reserve(num_threads_);
+  for (size_t i = 0; i < num_threads_; ++i) {
     // TODO remove the reclaimed threads in case of error
     auto thread = std::make_unique<ServiceThread>(
       &service_,
       std::move(cqs[i]),
-      std::move(thread_vars_[i].first),
-      std::move(thread_vars_[i].second),
-      acl_
+      ctx_
     );
     if (!thread->start()) return false;
     threads_.push_back(std::move(thread));
