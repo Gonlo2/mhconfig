@@ -11,8 +11,7 @@
 
 #include "spdlog/spdlog.h"
 
-#define CHUNK_DATA_SIZE (1<<20)
-#define CHUNK_STRING_SIZE (1<<15)
+#define CHUNK_DATA_SIZE (1<<16)
 
 namespace jmutils
 {
@@ -58,9 +57,10 @@ namespace string
 
     mutable std::atomic<int32_t> refcount_;
     uint32_t size_;
+    size_t hash_;
     const char* data_;
     Chunk* chunk_;
-    size_t hash_;
+    InternalString* next_;
 
     void init(const std::string& str, const char* data, Chunk* chunk);
 
@@ -236,16 +236,14 @@ private:
 
   mutable std::atomic<uint32_t> refcount_;
   std::atomic<int32_t> fragmented_size_;
-  uint32_t next_data_;
-  uint32_t next_string_in_use_;
-  std::shared_ptr<pool_context_t> pool_context_;
   absl::Mutex mutex_;
-  uint16_t strings_in_use_[CHUNK_STRING_SIZE];
+  std::shared_ptr<pool_context_t> pool_context_;
+  uint32_t next_data_;
+  InternalString* head_;
+  InternalString* tail_;
   char data_[CHUNK_DATA_SIZE];
-  InternalString strings_[CHUNK_STRING_SIZE];
 
   explicit Chunk(std::shared_ptr<pool_context_t> pool_context);
-  ~Chunk();
 
   Chunk(const Chunk& o) = delete;
   Chunk(Chunk&& o) = delete;

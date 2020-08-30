@@ -7,10 +7,11 @@ namespace string
 
 InternalString::InternalString() {
   refcount_.store(0);
+  size_ = 0;
+  hash_ = 0;
   data_ = nullptr;
   chunk_ = nullptr;
-  hash_ = 0;
-  size_ = 0;
+  next_ = nullptr;
 }
 
 inline std::string InternalString::str() const {
@@ -25,10 +26,11 @@ inline std::string InternalString::str() const {
 
 void InternalString::init(const std::string& str, const char* data, Chunk* chunk) {
   refcount_.store(0);
+  size_ = str.size();
+  hash_ = std::hash<std::string>{}(str);
   data_ = data;
   chunk_ = chunk;
-  hash_ = std::hash<std::string>{}(str);
-  size_ = str.size();
+  next_ = nullptr;
 }
 
 inline void InternalString::decrement_refcount() {
@@ -37,6 +39,7 @@ inline void InternalString::decrement_refcount() {
       case 1:
         spdlog::trace("This is the last string, decrementing the chunk refcount");
         chunk_->decrement_refcount();
+        delete this;
         break;
       case 2:
         spdlog::trace("The only string left is the one in the set, marking the space to release");
@@ -247,13 +250,7 @@ const String Pool::store_string(const std::string& str) {
 
   size_t idx = 0;
   size_t end = chunks_.size();
-  while (
-    (idx != end)
-    && (
-      (chunks_[idx]->next_string_in_use_ == CHUNK_STRING_SIZE)
-      || (chunks_[idx]->next_data_ + str.size() >= CHUNK_DATA_SIZE)
-    )
-  ) {
+  while ((idx != end) && (chunks_[idx]->next_data_ + str.size() >= CHUNK_DATA_SIZE)) {
     ++idx;
   }
   if (idx == end) chunks_.push_back(new_chunk());
@@ -280,16 +277,10 @@ Chunk* Pool::new_chunk() {
 
 Chunk::Chunk(std::shared_ptr<pool_context_t> pool_context) : pool_context_(std::move(pool_context)) {
   refcount_.store(1);
-  fragmented_size_.store(0);
   next_data_ = 0;
-  next_string_in_use_ = 0;
-
-  for (size_t i = 0; i < CHUNK_STRING_SIZE; ++i) {
-    strings_in_use_[i] = i;
-  }
-}
-
-Chunk::~Chunk() {
+  fragmented_size_.store(0);
+  head_ = nullptr;
+  tail_ = nullptr;
 }
 
 void Chunk::released_string(uint32_t size) {
@@ -320,13 +311,20 @@ String Chunk::add(const std::string& str) {
   refcount_.fetch_add(1, std::memory_order_relaxed);
 
   spdlog::trace("Adding a string of size {} in {}", str.size(), (void*)this);
-  strings_[next_string_in_use_].init(str, &data_[next_data_], this);
+  if (tail_ == nullptr) {
+    head_ = tail_ = new InternalString();
+  } else {
+    tail_->next_ = new InternalString();
+    tail_ = tail_->next_;
+  }
+  assert(tail_ != nullptr);
+  tail_->init(str, &data_[next_data_], this);
   memcpy(&data_[next_data_], str.c_str(), str.size());
 
   spdlog::trace("Moving the next_data pointer {} bytes", str.size());
   next_data_ += str.size();
   pool_context_->stats.used_bytes += str.size();
-  String result((uint64_t)&strings_[next_string_in_use_++]);
+  String result((uint64_t)tail_);
   mutex_.Unlock();
 
   return result;
@@ -339,22 +337,27 @@ void Chunk::compact() {
   int32_t used_bytes = fragmented_size_.fetch_sub(1073741824, std::memory_order_acq_rel);
   pool_context_->stats.used_bytes -= used_bytes;
 
-  uint32_t end = next_string_in_use_;
-  next_string_in_use_ = 0;
+  InternalString fake_head;
+  fake_head.next_ = head_;
+  InternalString* last = &fake_head;
   next_data_ = 0;
 
   spdlog::trace("Reallocating the strings");
-  for (uint32_t i = 0; i != end; ++i) {
-    InternalString* string = &strings_[strings_in_use_[i]];
-    if (string->refcount_.load(std::memory_order_acq_rel) == 1) {
-      spdlog::trace("Removing the string {}", (void*)string);
-      pool_context_->set.erase(String((uint64_t)string));
+  for (auto* current = last->next_; last->next_; current = last->next_) {
+    if (current->refcount_.load(std::memory_order_acq_rel) == 1) {
+      spdlog::trace("Removing the string {}", (void*)current);
+      last->next_ = current->next_;
+      current->next_ = nullptr;
+      pool_context_->set.erase(String((uint64_t)current));
       pool_context_->stats.num_strings -= 1;
     } else {
-      std::swap(strings_in_use_[next_string_in_use_++], strings_in_use_[i]);
-      reallocate(string);
+      reallocate(current);
+      last = current;
     }
   }
+
+  head_ = fake_head.next_;
+  tail_ = (last == &fake_head) ? nullptr : last;
 
   spdlog::trace("Reallocated the strings");
   pool_context_->stats.used_bytes += next_data_;
@@ -370,7 +373,6 @@ void Chunk::reallocate(InternalString* s) {
   s->data_ = to;
   next_data_ += s->size_;
   if (from != to) {
-    // We compact the data in place \o/
     for (size_t i = s->size_; i; --i) {
       *to++ = *from++;
     }

@@ -119,12 +119,12 @@ TEST_CASE("String pool", "[string-pool]") {
       strings.push_back(pool.add(s));
     }
     REQUIRE(pool.stats().num_strings == 150);
-    REQUIRE(pool.stats().num_chunks == 2);
+    REQUIRE(pool.stats().num_chunks == 25);
 
     strings.clear();
 
     REQUIRE(pool.stats().num_strings < 150);
-    REQUIRE(pool.stats().num_chunks == 2);
+    REQUIRE(pool.stats().num_chunks == 25);
   }
 
   SECTION("Force pool compaction") {
@@ -136,13 +136,13 @@ TEST_CASE("String pool", "[string-pool]") {
       strings.push_back(pool.add(s));
     }
     REQUIRE(pool.stats().num_strings == 150);
-    REQUIRE(pool.stats().num_chunks == 2);
+    REQUIRE(pool.stats().num_chunks == 25);
 
     strings.clear();
     pool.compact();
 
     REQUIRE(pool.stats().num_strings == 0);
-    REQUIRE(pool.stats().num_chunks == 2);
+    REQUIRE(pool.stats().num_chunks == 25);
 
     for (size_t i = 0; i < 150; ++i) {
       std::string s(10000, '\0');
@@ -150,7 +150,7 @@ TEST_CASE("String pool", "[string-pool]") {
       strings.push_back(pool.add(s));
     }
     REQUIRE(pool.stats().num_strings == 150);
-    REQUIRE(pool.stats().num_chunks == 2);
+    REQUIRE(pool.stats().num_chunks == 25);
   }
 
 }
