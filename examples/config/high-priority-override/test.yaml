@@ -4,6 +4,4 @@ hola:
       adios: 2
   mundo: tuyo
   seq: [~]
-  o2: !format
-  - "{host}:{port} (database: {database}, table: {table})"
-  - !ref [mio]
+  o2: !format "{mio/host}:{mio/port} (database: {mio/database}, table: {mio/table})"

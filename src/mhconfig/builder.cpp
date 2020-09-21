@@ -447,18 +447,18 @@ std::pair<bool, Element> apply_tags(
     }
   }
 
-  if (element.type() == NodeType::SREF) {
-    element = apply_tag_sref(element, root);
-    any_changed = true;
-  }
-
   if (element.type() == NodeType::REF) {
     element = apply_tag_ref(element, element_by_document_name);
     any_changed = true;
   }
 
+  if (element.type() == NodeType::SREF) {
+    element = apply_tag_sref(element, root);
+    any_changed = true;
+  }
+
   if (element.type() == NodeType::FORMAT) {
-    element = apply_tag_format(pool, element);
+    element = apply_tag_format(pool, element, root, element_by_document_name);
     any_changed = true;
   }
 
@@ -467,162 +467,22 @@ std::pair<bool, Element> apply_tags(
 
 Element apply_tag_format(
   jmutils::string::Pool* pool,
-  const Element& element
+  const Element& element,
+  const Element& root,
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 ) {
-  if (!element.is_sequence() || (element.as_sequence()->size() != 2)) {
-    spdlog::error(
-      "The structure with the tag '{}' must be a sequence of size 2",
-      TAG_FORMAT
-    );
-    return Element();
-  }
-
-  auto& template_node = (*element.as_sequence())[0];
-  auto template_result = template_node.try_as<std::string>();
-  if (!template_node.is_string() || !template_result.first) {
-    spdlog::error(
-      "The '{}' tag first argument must be a template",
-      TAG_FORMAT
-    );
-    return Element();
-  }
-
-  auto& arguments_node = (*element.as_sequence())[1];
-  if (!arguments_node.is_map()) {
-    spdlog::error(
-      "The '{}' tag second argument must be a map [string -> scalar]",
-      TAG_FORMAT
-    );
-    return Element();
-  }
-
-  std::vector<std::pair<std::string, std::string>> template_arguments;
-  for (const auto& it : *arguments_node.as_map()) {
-    auto r = it.second.try_as<std::string>();
-    if (!it.second.is_scalar() || !r.first) {
-      spdlog::error(
-        "The '{}' tag second argument must be a map [string -> scalar]",
-        TAG_FORMAT
-      );
+  std::stringstream ss;
+  auto slices = element.as_sequence();
+  for (size_t i = 0, l = slices->size(); i < l; ++i) {
+    auto v = apply_tags(pool, (*slices)[i], root, element_by_document_name);
+    if (auto r = v.second.try_as<std::string>(); r.first) {
+      ss << r.second;
+    } else {
+      spdlog::error("The '{}' tag references must be scalars", TAG_FORMAT);
       return Element();
     }
-
-    template_arguments.emplace_back(it.first.str(), r.second);
   }
-
-  if (template_arguments.size() > 8) {
-    spdlog::error(
-      "The '{}' tag can't handle more that 8 arguments",
-      TAG_FORMAT
-    );
-    return Element();
-  }
-
-  try {
-    std::string value = format_str(template_result.second, template_arguments);
-    return Element(pool->add(value));
-  } catch (const std::exception &e) {
-    spdlog::error(
-      "Some error take place formating the template '{}': {}",
-      template_result.second,
-      e.what()
-    );
-  } catch (...) {
-    spdlog::error(
-      "Some unknown error take place formating the template '{}'",
-      template_result.second
-    );
-  }
-
-  return Element();
-}
-
-std::string format_str(
-  const std::string& templ,
-  const std::vector<std::pair<std::string, std::string>>& template_arguments
-) {
-  switch (template_arguments.size()) {
-    case 0:
-      return templ;
-
-    case 1:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second)
-      );
-
-    case 2:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second)
-      );
-
-    case 3:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second)
-      );
-
-    case 4:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second),
-        fmt::arg(template_arguments[3].first, template_arguments[3].second)
-      );
-
-    case 5:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second),
-        fmt::arg(template_arguments[3].first, template_arguments[3].second),
-        fmt::arg(template_arguments[4].first, template_arguments[4].second)
-      );
-
-    case 6:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second),
-        fmt::arg(template_arguments[3].first, template_arguments[3].second),
-        fmt::arg(template_arguments[4].first, template_arguments[4].second),
-        fmt::arg(template_arguments[5].first, template_arguments[5].second)
-      );
-
-    case 7:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second),
-        fmt::arg(template_arguments[3].first, template_arguments[3].second),
-        fmt::arg(template_arguments[4].first, template_arguments[4].second),
-        fmt::arg(template_arguments[5].first, template_arguments[5].second),
-        fmt::arg(template_arguments[6].first, template_arguments[6].second)
-      );
-
-    case 8:
-      return fmt::format(
-        templ,
-        fmt::arg(template_arguments[0].first, template_arguments[0].second),
-        fmt::arg(template_arguments[1].first, template_arguments[1].second),
-        fmt::arg(template_arguments[2].first, template_arguments[2].second),
-        fmt::arg(template_arguments[3].first, template_arguments[3].second),
-        fmt::arg(template_arguments[4].first, template_arguments[4].second),
-        fmt::arg(template_arguments[5].first, template_arguments[5].second),
-        fmt::arg(template_arguments[6].first, template_arguments[6].second),
-        fmt::arg(template_arguments[7].first, template_arguments[7].second)
-      );
-  }
-
-  return "";
+  return Element(pool->add(ss.str()));
 }
 
 Element apply_tag_ref(
@@ -738,7 +598,7 @@ Element make_element(
       return Element();
 
     case YAML::NodeType::Scalar:
-      return make_element_from_scalar(pool, node);
+      return make_element_from_scalar(pool, node, document, reference_to);
 
     case YAML::NodeType::Sequence:
       return make_element_from_sequence(pool, node, document, reference_to);
@@ -752,12 +612,16 @@ Element make_element(
 
 Element make_element_from_scalar(
   jmutils::string::Pool* pool,
-  YAML::Node &node
+  YAML::Node &node,
+  const std::string& document,
+  absl::flat_hash_set<std::string> &reference_to
 ) {
   if ((node.Tag() == TAG_NON_PLAIN_SCALAR) || (node.Tag() == TAG_STR)) {
     return Element(pool->add(node.as<std::string>()));
   } else if (node.Tag() == TAG_PLAIN_SCALAR) {
     return make_element_from_plain_scalar(pool, node);
+  } else if (node.Tag() == TAG_FORMAT) {
+    return make_element_from_format(pool, node, document, reference_to);
   } else if (node.Tag() == TAG_BIN) {
     std::string encoded_value = node.as<std::string>();
 
@@ -814,6 +678,90 @@ Element make_element_from_plain_scalar(
   if (!e.is_undefined()) return e;
 
   return Element(pool->add(node.as<std::string>()));
+}
+
+Element make_element_from_format(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  const std::string& document,
+  absl::flat_hash_set<std::string> &reference_to
+) {
+  SequenceCow tmpl_seq_cow;
+  auto tmpl_seq = tmpl_seq_cow.get_mut();
+
+  auto tmpl = node.as<std::string>();
+  for (size_t i = 0, l = tmpl.size(); i < l; ++i) {
+    std::stringstream ss;
+    for (;i < l; ++i) {
+      if (tmpl[i] == '{') {
+        if (++i >= l) {
+          spdlog::warn("The template '{}' has a unmatched '{' at position '{}'", tmpl, i);
+          return Element();
+        }
+        if (tmpl[i] != '{') break;
+      } else if (tmpl[i] == '}') {
+        if ((++i >= l) || (tmpl[i] != '}')) {
+          spdlog::warn("The template '{}' has a unmatched '}' at position '{}'", tmpl, i);
+          return Element();
+        }
+      }
+      ss << tmpl[i];
+    }
+
+    if (auto x = ss.str(); !x.empty()) {
+      tmpl_seq->push_back(Element(pool->add(x)));
+    }
+
+    if (i < l) {
+      SequenceCow arg_seq_cow;
+      auto arg_seq = arg_seq_cow.get_mut();
+      NodeType type = NodeType::UNDEFINED;
+      if (auto slice = parse_format_slice(tmpl, i)) {
+        if (document == *slice) {
+          type = NodeType::SREF;
+        } else {
+          type = NodeType::REF;
+          arg_seq->push_back(Element(pool->add(*slice)));
+          reference_to.insert(*slice);
+        }
+      } else {
+        return Element();
+      }
+
+      while ((i < l) && (tmpl[i] != '}')) {
+        if (auto slice = parse_format_slice(tmpl, ++i)) {
+          arg_seq->push_back(Element(pool->add(*slice)));
+        } else {
+          return Element();
+        }
+      }
+
+      tmpl_seq->push_back(Element(std::move(arg_seq_cow), type));
+    }
+  }
+
+  return Element(std::move(tmpl_seq_cow), NodeType::FORMAT);
+}
+
+std::optional<std::string> parse_format_slice(
+  const std::string& tmpl,
+  size_t& idx
+) {
+  size_t start = idx;
+  for (size_t l = tmpl.size(); idx < l; ++idx) {
+    switch (tmpl[idx]) {
+      case '}': // Fallback
+      case '/':
+        return std::optional<std::string>(std::string(&tmpl[start], idx-start));
+      case '{':
+        spdlog::error("The template '{}' has a unmatched '{' at position {}", tmpl, idx);
+        return std::optional<std::string>();
+      default:
+        break;
+    }
+  }
+  spdlog::error("The template '{}' has a unmatched '{'", tmpl);
+  return std::optional<std::string>();
 }
 
 Element make_element_from_int64(
@@ -892,8 +840,6 @@ Element make_element_from_sequence(
   }
   if (node.Tag() == TAG_PLAIN_SCALAR) {
     return Element(std::move(seq_cow));
-  } else if (node.Tag() == TAG_FORMAT) {
-    return Element(std::move(seq_cow), NodeType::FORMAT);
   } else if (node.Tag() == TAG_SREF) {
     return Element(std::move(seq_cow), NodeType::SREF);
   } else if (node.Tag() == TAG_REF) {

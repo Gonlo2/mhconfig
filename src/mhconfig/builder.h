@@ -260,12 +260,9 @@ std::pair<bool, Element> apply_tags(
 
 Element apply_tag_format(
   jmutils::string::Pool* pool,
-  const Element& element
-);
-
-std::string format_str(
-  const std::string& templ,
-  const std::vector<std::pair<std::string, std::string>>& template_arguments
+  const Element& element,
+  const Element& root,
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name
 );
 
 Element apply_tag_ref(
@@ -302,12 +299,26 @@ Element make_element(
 
 Element make_element_from_scalar(
   jmutils::string::Pool* pool,
-  YAML::Node &node
+  YAML::Node &node,
+  const std::string& document,
+  absl::flat_hash_set<std::string> &reference_to
 );
 
 Element make_element_from_plain_scalar(
   jmutils::string::Pool* pool,
   YAML::Node &node
+);
+
+Element make_element_from_format(
+  jmutils::string::Pool* pool,
+  YAML::Node &node,
+  const std::string& document,
+  absl::flat_hash_set<std::string> &reference_to
+);
+
+std::optional<std::string> parse_format_slice(
+  const std::string& tmpl,
+  size_t& idx
 );
 
 Element make_element_from_int64(
