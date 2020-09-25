@@ -1,0 +1,65 @@
+address: 127.0.0.1:2222
+actions:
+- root_path: XXX
+  overrides:
+  - low-priority
+  - high-priority
+  #flavors: []
+  document: test
+  writers:
+  - type: file
+    serializer: yaml
+    path: /tmp/hello.yaml
+    mode: 0700
+    uid: nobody
+    gid: nobody
+  - type: file
+    serializer: json
+    serializer_args:
+      binary_as_b64: true
+    path: /tmp/hello.json
+  - type: file
+    serializer: toml
+    path: /tmp/hello.toml
+  - type: file
+    serializer: libconfig
+    serializer_args:
+      binary_as_b64: true
+      lists_as_tuples: true
+    path: /tmp/hello.libconfig
+  - type: file
+    serializer: ini
+    path: /tmp/hello.ini
+  - type: file
+    serializer: properties
+    serializer_args:
+      flat: true
+      force_string: true
+      binary_as_b64: true
+    path: /tmp/hello.properties
+  - type: request
+    serializer: yaml
+    url: http://127.0.0.1:5001/world
+  - type: command
+    serializer: yaml
+    command: "cat > /tmp/command.yaml"
+    shell: true
+    check: false
+  notifiers:
+  - type: signal
+    signal: 15
+    source: cmdline_regex  # pid_file | process_name | cmdline_regex
+  # pid_file: /tmp/sig
+  # process_name: cat
+    cmdline_regex: update_me
+  - type: request
+    method: post
+    url: http://127.0.0.1:5000/hello
+  # params:
+  #   hello: world
+  # headers:
+  #   MY_HEADER: "some value"
+  # timeout: 10
+  # data: XXX
+  - type: command
+    command: [touch, /tmp/updated]
