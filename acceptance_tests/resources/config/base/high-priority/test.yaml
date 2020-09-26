@@ -1,0 +1,11 @@
+hello:
+  to_delete:
+  - ghost: !delete
+    birth: 2
+  seq: [~]
+  format: !format |-
+    string: {params/string}
+    int: {params/int}
+    double: {params/double}
+    bool: {params/bool}
+  text: !ref [_text.lorem.txt]

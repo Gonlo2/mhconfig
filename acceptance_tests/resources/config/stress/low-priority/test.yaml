@@ -1,0 +1,6 @@
+hello:
+  dog: golden
+  some_ref: !ref [params]
+  some_sref: !sref [hello, dog]
+  bye: bye
+another: world
