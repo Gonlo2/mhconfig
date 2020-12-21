@@ -1,14 +1,23 @@
 #ifndef STRING_POOL__POOL_H
 #define STRING_POOL__POOL_H
 
-#include <stdio.h>
-#include <iostream>
-#include <utility>
-
 #include <absl/container/flat_hash_set.h>
-#include <absl/synchronization/mutex.h>
 #include <absl/hash/hash.h>
+#include <absl/synchronization/mutex.h>
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <atomic>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
+#include "absl/hash/hash.h"
 #include "spdlog/spdlog.h"
 
 #define CHUNK_DATA_SIZE (1<<16)

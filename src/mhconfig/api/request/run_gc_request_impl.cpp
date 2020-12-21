@@ -7,55 +7,54 @@ namespace api
 namespace request
 {
 
-RunGCRequestImpl::RunGCRequestImpl()
-  : responder_(&ctx_)
-{
-  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::RunGCRequest>(&arena_);
-  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::RunGCResponse>(&arena_);
-}
-
 RunGCRequestImpl::~RunGCRequestImpl() {
-}
-
-const std::string RunGCRequestImpl::name() const {
-  return "RUN_GC";
-}
-
-void RunGCRequestImpl::clone_and_subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  return make_session<RunGCRequestImpl>()->subscribe(service, cq);
-}
-
-void RunGCRequestImpl::subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  if (auto t = tag(RequestStatus::CREATE)) {
-    service->RequestRunGC(&ctx_, request_, &responder_, cq, cq, t);
-  }
 }
 
 bool RunGCRequestImpl::commit() {
   return finish();
 }
 
-void RunGCRequestImpl::request(
-  context_t* ctx
+void RunGCRequestImpl::subscribe(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
 ) {
-  auto token = get_auth_token();
-  auto auth_result = token
-    ? ctx->acl.basic_auth(*token, auth::Capability::RUN_GC)
-    : auth::AuthResult::UNAUTHENTICATED;
+  if (auto t = make_tag(GrpcStatus::CREATE)) {
+    service->RequestRunGC(&server_ctx_, request_, &responder_, cq, cq, t);
+  }
+}
 
+std::shared_ptr<PolicyCheck> RunGCRequestImpl::on_create(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
+) {
+  make_session<RunGCRequestImpl>(ctx_)->subscribe(service, cq);
+  return nullptr;
+}
+
+std::shared_ptr<PolicyCheck> RunGCRequestImpl::parse_message() {
+  return shared_from_this();
+}
+
+void RunGCRequestImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
   if (check_auth(auth_result)) {
-    if (auto command = make_gc_command(); command != nullptr) {
-      ctx->worker_queue.push(std::move(command));
-    }
+    auth_result = policy->basic_auth(
+      auth::Capability::RUN_GC
+    );
+    if (check_auth(auth_result)) {
+      if (auto command = make_gc_command()) {
+        ctx_->worker_queue.push(std::move(command));
+      }
 
-    finish();
-  };
+      finish();
+    }
+  }
+}
+
+void RunGCRequestImpl::on_check_policy_error() {
+  finish_with_unknown();
 }
 
 std::unique_ptr<WorkerCommand> RunGCRequestImpl::make_gc_command() {
@@ -85,7 +84,7 @@ uint32_t RunGCRequestImpl::max_live_in_seconds() {
 }
 
 bool RunGCRequestImpl::finish(const grpc::Status& status) {
-  if (auto t = tag(RequestStatus::PROCESS)) {
+  if (auto t = make_tag(GrpcStatus::WRITE)) {
     if (status.ok()) {
       responder_.Finish(*response_, status, t);
     } else {

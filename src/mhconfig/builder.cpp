@@ -6,40 +6,43 @@ namespace mhconfig
 // Setup logic
 
 bool init_config_namespace(
-  config_namespace_t* cn,
-  std::shared_ptr<jmutils::string::Pool>&& pool
+  config_namespace_t* cn
 ) {
   cn->id = std::uniform_int_distribution<uint64_t>{0, 0xffffffffffffffff}(jmutils::prng_engine());
   cn->last_access_timestamp = 0;
-  cn->pool = std::move(pool);
 
   absl::flat_hash_map<
-    std::string,
+    Labels,
     absl::flat_hash_map<std::string, AffectedDocumentStatus>
-  > updated_documents_by_path;
+  > updated_documents_by_labels;
 
   bool ok = index_files(
     cn->pool.get(),
     cn->root_path,
-    [cn, &updated_documents_by_path](const auto& path, auto&& result) {
+    [cn, &updated_documents_by_labels](auto&& labels, auto&& result) {
       if (result.status != LoadRawConfigStatus::OK) {
         return false;
       }
 
       cn->mutex.Lock();
       for (const auto& reference_to : result.raw_config->reference_to) {
-        get_or_guild_document_versions_locked(cn, reference_to)->referenced_by[result.document].v += 1;
+        get_or_build_document_versions_locked(cn, reference_to)->referenced_by[result.document].v += 1;
       }
       cn->mutex.Unlock();
 
-      auto document = try_obtain_non_full_document(cn, result.document, 1);
+      auto document = try_obtain_non_full_document(
+        cn,
+        result.document,
+        1
+      );
       if (document == nullptr) return false;
 
       result.raw_config->id = document->next_raw_config_id++;
-      document->override_by_path[path].raw_config_by_version[1] = std::move(result.raw_config);
+      auto override_ = document->lbl_set.get_or_build(labels);
+      override_->raw_config_by_version[1] = std::move(result.raw_config);
       document->mutex.Unlock();
 
-      updated_documents_by_path[path][result.document] = AffectedDocumentStatus::TO_ADD;
+      updated_documents_by_labels[labels][result.document] = AffectedDocumentStatus::TO_ADD;
 
       return true;
     }
@@ -49,7 +52,7 @@ bool init_config_namespace(
 
   spdlog::debug("Setting the ids of the nonexistent affected documents");
 
-  auto dep_by_doc = get_dep_by_doc(cn, updated_documents_by_path);
+  auto dep_by_doc = get_dep_by_doc(cn, updated_documents_by_labels);
 
   if (!touch_affected_documents(cn, 1, dep_by_doc, true)) {
     return false;
@@ -59,6 +62,40 @@ bool init_config_namespace(
   cn->stored_versions.emplace_back(0, cn->current_version);
 
   return true;
+}
+
+std::optional<std::string> read_file(
+  const std::filesystem::path& path
+) {
+  try {
+    spdlog::debug("Loading file '{}'", path.string());
+    std::ifstream fin(path.string());
+    if (!fin.good()) {
+      spdlog::error("Some error take place reading the file '{}'", path.string());
+      return std::optional<std::string>();
+    }
+
+    std::string data;
+    fin.seekg(0, std::ios::end);
+    data.reserve(fin.tellg());
+    fin.seekg(0, std::ios::beg);
+    data.assign(std::istreambuf_iterator<char>(fin), std::istreambuf_iterator<char>());
+
+    return std::optional<std::string>(data);
+  } catch(const std::exception &e) {
+    spdlog::error(
+      "Error reading the file '{}': {}",
+      path.string(),
+      e.what()
+    );
+  } catch(...) {
+    spdlog::error(
+      "Unknown error reading the file '{}'",
+      path.string()
+    );
+  }
+
+  return std::optional<std::string>();
 }
 
 load_raw_config_result_t index_file(
@@ -75,17 +112,13 @@ load_raw_config_result_t index_file(
     return result;
   }
 
-  result.override_ = std::filesystem::relative(path, root_path)
-    .parent_path()
-    .string();
-
   auto stem = path.stem().string();
   auto split_result = split_filename(stem);
   if (!split_result.ok) {
     return result;
   }
 
-  result.flavor = split_result.flavor;
+  absl::flat_hash_set<std::string> reference_to;
 
   if (first_filename_char == '_') {
     result.document = split_result.kind;
@@ -117,20 +150,15 @@ load_raw_config_result_t index_file(
 
     load_raw_config(
       path,
-      [pool](const std::string& data, load_raw_config_result_t& result) {
+      [pool, &reference_to](const std::string& data, load_raw_config_result_t& result) {
         YAML::Node node = YAML::Load(data);
 
-        absl::flat_hash_set<std::string> reference_to;
         result.raw_config->value = make_and_check_element(
           pool,
           node,
           result.document,
           reference_to
         );
-        result.raw_config->reference_to.reserve(reference_to.size());
-        for (const auto& x : reference_to) {
-          result.raw_config->reference_to.push_back(x);
-        }
       },
       result
     );
@@ -138,16 +166,74 @@ load_raw_config_result_t index_file(
     result.status = LoadRawConfigStatus::INVALID_FILENAME;
   }
 
+  if (result.raw_config != nullptr) {
+    // Add a virtual reference to force invalidate the config
+    // if the mhconfig config change
+    if (result.document != "mhconfig") {
+      reference_to.emplace("mhconfig");
+    }
+
+    result.raw_config->reference_to.reserve(reference_to.size());
+    for (const auto& x : reference_to) {
+      result.raw_config->reference_to.push_back(x);
+    }
+  }
+
   return result;
 }
 
-absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>> get_dep_by_doc(
-  config_namespace_t* cn,
-  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_path
+std::optional<Labels> get_path_labels(
+  const std::filesystem::path& path
 ) {
-  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>> dep_by_doc;
+  absl::flat_hash_map<std::string, std::string> labels;
+  for (auto it = path.begin(); it != path.end(); ++it) {
+    std::string v;
 
-  for (auto& it : updated_documents_by_path) {
+    auto k = it->string();
+    auto pos = k.find('=');
+    if (pos == std::string::npos) {
+      if (++it == path.end()) {
+        spdlog::error(
+          "The path '{}' has the last label '{}' without a value",
+          path.string(),
+          k
+        );
+        return std::optional<Labels>();
+      }
+      v = it->string();
+    } else {
+      v = k.substr(pos+1, k.size()-pos-1);
+      k = k.substr(0, pos);
+    }
+
+    auto inserted = labels.emplace(k, std::move(v));
+    if (!inserted.second) {
+      spdlog::error(
+        "The path '{}' has repeated the label '{}'",
+        path.string(),
+        k
+      );
+      return std::optional<Labels>();
+    }
+  }
+
+  std::vector<label_t> result;
+  for (auto& it : labels) {
+    result.emplace_back(it.first, it.second);
+  }
+  return std::optional<Labels>(jmutils::container::make_labels(std::move(result)));
+}
+
+absl::flat_hash_map<std::string, absl::flat_hash_map<Labels, AffectedDocumentStatus>> get_dep_by_doc(
+  config_namespace_t* cn,
+  absl::flat_hash_map<Labels, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& updated_documents_by_labels
+) {
+  absl::flat_hash_map<
+    std::string,
+    absl::flat_hash_map<Labels, AffectedDocumentStatus>
+  > dep_by_doc;
+
+  for (auto& it : updated_documents_by_labels) {
     fill_affected_documents(cn, it.second);
 
     for (const auto& it2 : it.second) {
@@ -161,11 +247,16 @@ absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocume
 bool touch_affected_documents(
   config_namespace_t* cn,
   VersionId version,
-  const absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& dep_by_doc,
+  const absl::flat_hash_map<std::string, absl::flat_hash_map<Labels, AffectedDocumentStatus>>& dep_by_doc,
   bool only_nonexistent
 ) {
   for (const auto& it : dep_by_doc) {
-    auto document = try_obtain_non_full_document(cn, it.first, version, it.second.size());
+    auto document = try_obtain_non_full_document(
+      cn,
+      it.first,
+      version,
+      it.second.size()
+    );
     if (document == nullptr) {
       spdlog::debug("Some error happens obtaining a non full document for '{}'", it.first);
       return false;
@@ -176,17 +267,17 @@ bool touch_affected_documents(
         (it2.second == AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY)
         || (it2.second == AffectedDocumentStatus::DEPENDENCY)
       ) {
-        auto& override_ = document->override_by_path[it2.first];
-        if (override_.raw_config_by_version.empty() || !only_nonexistent) {
+        auto override_ = document->lbl_set.get_or_build(it2.first);
+        if (override_->raw_config_by_version.empty() || !only_nonexistent) {
           auto last_version = get_last_raw_config_locked(override_);
           auto new_raw_config = (last_version != nullptr) && (it2.second != AffectedDocumentStatus::TO_REMOVE_BUT_DEPENDENCY)
             ? last_version->clone()
             : std::make_shared<raw_config_t>();
 
           spdlog::debug(
-            "Updating affected raw config (document: '{}', path: '{}', version: {}, old_id: {}, new_id: {})",
+            "Updating affected raw config (document: '{}', labels: {}, version: {}, old_id: {}, new_id: {})",
             it.first,
-            it2.first,
+            it2.first.repr(),
             version,
             last_version == nullptr ? 0 : last_version->id,
             document->next_raw_config_id
@@ -194,7 +285,7 @@ bool touch_affected_documents(
 
           new_raw_config->id = document->next_raw_config_id++;
 
-          override_.raw_config_by_version[version] = std::move(new_raw_config);
+          override_->raw_config_by_version[version] = std::move(new_raw_config);
         }
       }
     }
@@ -338,6 +429,11 @@ Element override_with(
 
       return result;
     }
+    case VirtualNode::REF:
+      assert(false);
+      break;
+    case VirtualNode::UNDEFINED:
+      break;
   }
 
   spdlog::warn("Can't override {} with {}", a.repr(), b.repr());
@@ -349,17 +445,22 @@ VirtualNode get_virtual_node_type(
 ) {
   auto type = element.type();
   switch (type) {
+    case NodeType::DELETE: // Fallback
     case NodeType::UNDEFINED:
       return VirtualNode::UNDEFINED;
+    case NodeType::OVERRIDE_MAP: // Fallback
     case NodeType::MAP:
       return VirtualNode::MAP;
+    case NodeType::OVERRIDE_SEQUENCE: // Fallback
     case NodeType::SEQUENCE:
       return VirtualNode::SEQUENCE;
     case NodeType::REF:
       return VirtualNode::REF;
     case NodeType::FORMAT: // Fallback
     case NodeType::SREF: // Fallback
+    case NodeType::OVERRIDE_NONE: // Fallback
     case NodeType::NONE: // Fallback
+    case NodeType::OVERRIDE_STR: // Fallback
     case NodeType::STR: // Fallback
     case NodeType::BIN: // Fallback
     case NodeType::INT64: // Fallback
@@ -445,6 +546,8 @@ std::pair<bool, Element> apply_tags(
       }
       break;
     }
+    default:
+      break;
   }
 
   if (element.type() == NodeType::REF) {
@@ -475,8 +578,8 @@ Element apply_tag_format(
   auto slices = element.as_sequence();
   for (size_t i = 0, l = slices->size(); i < l; ++i) {
     auto v = apply_tags(pool, (*slices)[i], root, element_by_document_name);
-    if (auto r = v.second.try_as<std::string>(); r.first) {
-      ss << r.second;
+    if (auto r = v.second.try_as<std::string>(); r) {
+      ss << *r;
     } else {
       spdlog::error("The '{}' tag references must be scalars", TAG_FORMAT);
       return Element();
@@ -596,15 +699,14 @@ Element make_element(
       }
       spdlog::error("Unknown tag '{}' for a null value", node.Tag());
       return Element();
-
     case YAML::NodeType::Scalar:
       return make_element_from_scalar(pool, node, document, reference_to);
-
     case YAML::NodeType::Sequence:
       return make_element_from_sequence(pool, node, document, reference_to);
-
     case YAML::NodeType::Map:
       return make_element_from_map(pool, node, document, reference_to);
+    case YAML::NodeType::Undefined:
+      return Element();
   }
 
   return Element();
@@ -853,6 +955,95 @@ Element make_element_from_sequence(
 
 // Get logic
 
+bool grpc_payload_alloc(Element& element, void*& payload) {
+  proto::GetResponse r;
+
+  auto checksum = element.make_checksum();
+  r.set_checksum(checksum.data(), checksum.size());
+
+  api::config::fill_elements(element, &r, r.add_elements());
+
+  payload = static_cast<void*>(new std::string);
+  return r.SerializeToString(static_cast<std::string*>(payload));
+}
+
+void grpc_payload_dealloc(void* payload) {
+  delete static_cast<std::string*>(payload);
+}
+
+bool mhc_tokens_payload_alloc(Element& element, void*& payload) {
+  auto tokens = new auth::Tokens;
+  payload = static_cast<void*>(tokens);
+  return tokens->init(element);
+}
+
+void mhc_tokens_payload_dealloc(void* payload) {
+  delete static_cast<auth::Tokens*>(payload);
+}
+
+bool mhc_policy_payload_alloc(Element& element, void*& payload) {
+  auto policy = new auth::Policy;
+  payload = static_cast<void*>(policy);
+  return policy->init(element);
+}
+
+void mhc_policy_payload_dealloc(void* payload) {
+  delete static_cast<auth::Policy*>(payload);
+}
+
+std::shared_ptr<config_namespace_t> get_cn(
+  context_t* ctx,
+  const std::string& root_path
+) {
+  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+
+  ctx->mutex.ReaderLock();
+  auto result = get_cn_locked(ctx, root_path);
+  ctx->mutex.ReaderUnlock();
+
+  return result;
+}
+
+std::shared_ptr<config_namespace_t> get_or_build_cn(
+  context_t* ctx,
+  const std::string& root_path
+) {
+  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+
+  ctx->mutex.ReaderLock();
+  auto result = get_cn_locked(ctx, root_path);
+  ctx->mutex.ReaderUnlock();
+
+  if (result == nullptr) {
+    ctx->mutex.Lock();
+
+    auto inserted = ctx->cn_by_root_path.try_emplace(
+      root_path,
+      std::make_shared<config_namespace_t>()
+    );
+    result = inserted.first->second;
+
+    result->last_access_timestamp = jmutils::monotonic_now_sec();
+
+    if (root_path == ctx->mhc_root_path) {
+      {
+        auto& mc_payload_fun = result->mc_payload_fun_by_document["tokens"];
+        mc_payload_fun.alloc = &mhc_tokens_payload_alloc;
+        mc_payload_fun.dealloc = &mhc_tokens_payload_dealloc;
+      }
+      {
+        auto& mc_payload_fun = result->mc_payload_fun_by_document["policy"];
+        mc_payload_fun.alloc = &mhc_policy_payload_alloc;
+        mc_payload_fun.dealloc = &mhc_policy_payload_dealloc;
+      }
+    }
+
+    ctx->mutex.Unlock();
+  }
+
+  return result;
+}
+
 std::shared_ptr<document_t> get_document_locked(
   const config_namespace_t* cn,
   const std::string& name,
@@ -897,7 +1088,7 @@ bool try_insert_document_locked(
     document->oldest_version = cn->oldest_version;
     document->name = name;
 
-    get_or_guild_document_versions_locked(cn, name)->document_by_version[version] = document;
+    get_or_build_document_versions_locked(cn, name)->document_by_version[version] = document;
     cn->document_ids_in_use.insert(*document_id);
 
     return true;
@@ -918,7 +1109,11 @@ std::shared_ptr<document_t> try_get_or_build_document(
 
   if (document == nullptr) {
     cn->mutex.Lock();
-    document = try_get_or_build_document_locked(cn, name, version);
+    document = try_get_or_build_document_locked(
+      cn,
+      name,
+      version
+    );
     if (document != nullptr) document->mutex.Lock();
     cn->mutex.Unlock();
   }
@@ -933,20 +1128,28 @@ std::shared_ptr<document_t> try_migrate_document_locked(
 ) {
   auto new_document = std::make_shared<document_t>();
 
-  new_document->override_by_path.reserve(document->override_by_path.size());
-  for (auto& it: document->override_by_path) {
-    auto last_version = get_last_raw_config_locked(it.second);
-    if (last_version != nullptr) {
-      auto& new_override = new_document->override_by_path[it.first];
-      if (is_document_full_locked(new_document.get())) {
-        document->mutex.Unlock();
-        return nullptr;
-      }
+  bool ok = document->lbl_set.for_each(
+    [new_document=new_document.get(), version](
+      const auto& labels,
+      auto* override_
+    ) -> bool {
+      if (auto last_version = get_last_raw_config_locked(override_)) {
+        if (is_document_full_locked(new_document)) {
+          return false;
+        }
 
-      auto new_raw_config = last_version->clone();
-      new_raw_config->id = new_document->next_raw_config_id++;
-      new_override.raw_config_by_version[version] = std::move(new_raw_config);
+        auto new_raw_config = last_version->clone();
+        new_raw_config->id = new_document->next_raw_config_id++;
+        auto new_override = new_document->lbl_set.get_or_build(labels);
+        new_override->raw_config_by_version[version] = std::move(new_raw_config);
+      }
+      return true;
     }
+  );
+
+  if (!ok) {
+    document->mutex.Unlock();
+    return nullptr;
   }
 
   cn->mutex.Lock();
@@ -967,7 +1170,11 @@ std::shared_ptr<document_t> try_obtain_non_full_document(
   VersionId version,
   size_t required_size
 ) {
-  auto document = try_get_or_build_document(cn, name, version);
+  auto document = try_get_or_build_document(
+    cn,
+    name,
+    version
+  );
   if (document == nullptr) return nullptr;
 
   if (required_size + document->next_raw_config_id >= 0xffff) {
@@ -1010,6 +1217,7 @@ std::shared_ptr<merged_config_t> get_or_build_merged_config(
 
     if (result == nullptr) {
       result = std::make_shared<merged_config_t>();
+      result->payload_fun = document->mc_payload_fun;
       result->next = result;
 
       document->merged_config_by_overrides_key[overrides_key] = result;
@@ -1027,14 +1235,15 @@ std::shared_ptr<merged_config_t> get_merged_config(
   const std::string& overrides_key
 ) {
   std::shared_ptr<merged_config_t> result;
-  bool found;
+  bool found = false;
 
   document->mutex.ReaderLock();
   if (
     auto search = document->merged_config_by_overrides_key.find(overrides_key);
-    found = (search != document->merged_config_by_overrides_key.end())
+    search != document->merged_config_by_overrides_key.end()
   ) {
     result = search->second.lock();
+    found = true;
   }
   document->mutex.ReaderUnlock();
 
@@ -1075,59 +1284,72 @@ split_filename_result_t split_filename(
     stem.remove_prefix(pos+1);
   }
 
-  auto pos = stem.find('.');
-  if (pos == std::string::npos) {
-    result.name = stem;
-  } else {
-    result.name = std::string_view(stem.data(), pos);
-    stem.remove_prefix(pos+1);
-    result.flavor = stem;
-  }
+  auto pos = stem.rfind('.');
+  result.name = pos == std::string::npos
+    ? stem
+    : std::string_view(stem.data(), pos);
 
   result.ok = true;
   return result;
 }
 
-std::shared_ptr<config_namespace_t> get_cn(
-  context_t* ctx,
-  const std::string& root_path
+CheckMergedConfigResult check_merged_config(
+  merged_config_t* merged_config,
+  std::shared_ptr<GetConfigTask>& task,
+  bool has_exclusive_lock
 ) {
-  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+  switch (merged_config->status) {
+    case MergedConfigStatus::UNDEFINED:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->waiting.push_back(task);
+      merged_config->status = MergedConfigStatus::BUILDING;
+      return CheckMergedConfigResult::BUILD_CONFIG;
 
-  ctx->mutex.ReaderLock();
-  auto result = get_cn_locked(ctx, root_path);
-  ctx->mutex.ReaderUnlock();
+    case MergedConfigStatus::BUILDING: // Fallback
+    case MergedConfigStatus::OK_CONFIG_OPTIMIZING:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->waiting.push_back(std::move(task));
+      return CheckMergedConfigResult::IN_PROGRESS;
 
-  return result;
-}
+    case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED:
+      if (!has_exclusive_lock) {
+        return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
+      }
+      merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
+      merged_config->waiting.push_back(std::move(task));
+      return CheckMergedConfigResult::OPTIMIZE_CONFIG;
 
-std::shared_ptr<config_namespace_t> get_or_build_cn(
-  context_t* ctx,
-  const std::string& root_path
-) {
-  spdlog::debug("Obtaining the config namespace for the root path '{}'", root_path);
+    case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
+      spdlog::debug(
+        "The built document '{}' has been found",
+        task->document()
+      );
+      return CheckMergedConfigResult::OK;
 
-  ctx->mutex.ReaderLock();
-  auto result = get_cn_locked(ctx, root_path);
-  ctx->mutex.ReaderUnlock();
+    case MergedConfigStatus::REF_GRAPH_IS_NOT_DAG:
+      spdlog::debug(
+        "The built document '{}' has been found but it isn't a DAG",
+        task->document()
+      );
+      return CheckMergedConfigResult::REF_GRAPH_IS_NOT_DAG;
 
-  if (result == nullptr) {
-    ctx->mutex.Lock();
-
-    auto inserted = ctx->cn_by_root_path.try_emplace(
-      root_path,
-      std::make_shared<config_namespace_t>()
-    );
-    result = inserted.first->second;
-
-    ctx->mutex.Unlock();
+    case MergedConfigStatus::INVALID_VERSION:
+      spdlog::debug(
+        "The built document '{}' use a deleted version",
+        task->document()
+      );
+      return CheckMergedConfigResult::ERROR;
   }
 
-  return result;
+  return CheckMergedConfigResult::ERROR;
 }
 
 void delete_cn_locked(
-  config_namespace_t* cn
+  std::shared_ptr<config_namespace_t>& cn
 ) {
   spdlog::debug("Deleting the config namespace for the root path '{}'", cn->root_path);
 
@@ -1135,8 +1357,8 @@ void delete_cn_locked(
 
   for (auto& it : cn->document_versions_by_name) {
     it.second->watchers.consume(
-      [cn](auto&& watcher) {
-        watcher->unregister(cn);
+      [](auto&& watcher) {
+        watcher->unregister();
 
         auto output_message = watcher->make_output_message();
         output_message->set_status(api::stream::WatchStatus::REMOVED);
@@ -1145,12 +1367,16 @@ void delete_cn_locked(
     );
   }
 
-  for (size_t i = 0, l = cn->get_requests_waiting.size(); i < l; ++i) {
-    cn->get_requests_waiting[i]->set_namespace_id(cn->id);
-    cn->get_requests_waiting[i]->set_status(api::request::GetRequest::Status::ERROR);
-    cn->get_requests_waiting[i]->commit();
+  for (size_t i = 0, l = cn->get_config_tasks_waiting.size(); i < l; ++i) {
+    cn->get_config_tasks_waiting[i]->on_complete(
+      GetConfigTask::Status::ERROR,
+      cn,
+      0,
+      UNDEFINED_ELEMENT,
+      nullptr
+    );
   }
-  cn->get_requests_waiting.clear();
+  cn->get_config_tasks_waiting.clear();
 
   for (auto& request: cn->update_requests_waiting) {
     request->set_namespace_id(cn->id);

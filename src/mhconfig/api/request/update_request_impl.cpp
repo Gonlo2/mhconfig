@@ -7,19 +7,7 @@ namespace api
 namespace request
 {
 
-
-UpdateRequestImpl::UpdateRequestImpl()
-  : responder_(&ctx_)
-{
-  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::UpdateRequest>(&arena_);
-  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::UpdateResponse>(&arena_);
-}
-
 UpdateRequestImpl::~UpdateRequestImpl() {
-}
-
-const std::string UpdateRequestImpl::name() const {
-  return "UPDATE";
 }
 
 const std::string& UpdateRequestImpl::root_path() const {
@@ -57,46 +45,54 @@ bool UpdateRequestImpl::commit() {
   return finish();
 }
 
-void UpdateRequestImpl::clone_and_subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  return make_session<UpdateRequestImpl>()->subscribe(service, cq);
-}
-
 void UpdateRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  if (auto t = tag(RequestStatus::CREATE)) {
-    service->RequestUpdate(&ctx_, request_, &responder_, cq, cq, t);
+  if (auto t = make_tag(GrpcStatus::CREATE)) {
+    service->RequestUpdate(&server_ctx_, request_, &responder_, cq, cq, t);
   }
 }
 
-void UpdateRequestImpl::request(
-  context_t* ctx
+std::shared_ptr<PolicyCheck> UpdateRequestImpl::on_create(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
 ) {
+  make_session<UpdateRequestImpl>(ctx_)->subscribe(service, cq);
+  return nullptr;
+}
+
+std::shared_ptr<PolicyCheck> UpdateRequestImpl::parse_message() {
   relative_paths_ = to_vector(request_->relative_paths());
+  return shared_from_this();
+}
 
-  auto token = get_auth_token();
-  auto auth_result = token
-    ? ctx->acl.root_path_auth(*token, auth::Capability::UPDATE, *this)
-    : auth::AuthResult::UNAUTHENTICATED;
-
+void UpdateRequestImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
   if (check_auth(auth_result)) {
-    if (validate_request()) {
-      auto cn = get_or_build_cn(ctx, root_path());
-      cn->last_access_timestamp = jmutils::monotonic_now_sec();
-      process_update_request<worker::SetupCommand, worker::UpdateCommand>(
-        std::move(cn),
-        shared_from_this(),
-        ctx
-      );
-    } else {
-      set_status(Status::ERROR);
-      finish();
+    auth_result = policy->root_path_auth(
+      auth::Capability::UPDATE,
+      root_path()
+    );
+    if (check_auth(auth_result)) {
+      if (validate_request()) {
+        auto cn = get_or_build_cn(ctx_.get(), root_path());
+        process_update_request(
+          std::move(cn),
+          shared_from_this(),
+          ctx_.get()
+        );
+      } else {
+        finish_with_invalid_argument();
+      }
     }
   }
+}
+
+void UpdateRequestImpl::on_check_policy_error() {
+  finish_with_unknown();
 }
 
 bool UpdateRequestImpl::validate_request() {
@@ -116,7 +112,7 @@ bool UpdateRequestImpl::validate_request() {
 }
 
 bool UpdateRequestImpl::finish(const grpc::Status& status) {
-  if (auto t = tag(RequestStatus::PROCESS)) {
+  if (auto t = make_tag(GrpcStatus::WRITE)) {
     if (status.ok()) {
       responder_.Finish(*response_, status, t);
     } else {

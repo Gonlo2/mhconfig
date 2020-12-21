@@ -4,11 +4,11 @@
 #include <memory>
 #include <string>
 
-#include "mhconfig/command.h"
 #include "mhconfig/builder.h"
-#include "mhconfig/provider.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
+#include "mhconfig/worker.h"
 #include "mhconfig/worker/update_command.h"
-#include "mhconfig/api/stream/watch_stream_impl.h"
 
 namespace mhconfig
 {

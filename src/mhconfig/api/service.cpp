@@ -2,6 +2,8 @@
 
 namespace mhconfig
 {
+struct context_t;
+
 namespace api
 {
 
@@ -9,7 +11,7 @@ namespace api
 Service::Service(
   const std::string& server_address,
   size_t num_threads,
-  context_t* ctx
+  std::shared_ptr<context_t>& ctx
 ) :
   server_address_(server_address),
   num_threads_(num_threads),

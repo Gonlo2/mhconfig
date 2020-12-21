@@ -15,14 +15,16 @@ service MHConfig {
   rpc Trace(TraceRequest) returns (stream TraceResponse);
 }
 
+message Label {
+  string key = 1;
+  string value = 2;
+}
 
 message GetRequest {
   // the root path of the namespace to obtain the configuration.
   string root_path = 1;
-  // the list of overrides to apply from lower to higher priority.
-  repeated string overrides = 2;
-  // the list of flavors to apply from lower to higher priority.
-  repeated string flavors = 6;
+  // the list of labels to apply.
+  repeated Label labels = 2;
   // the version of the configuration to retrieve, it retrieve the latest
   // version with a zero value and the proper version otherwise.
   uint32 version = 3;
@@ -96,12 +98,10 @@ message WatchRequest {
   bool remove = 2;
   // the root path of the namespace to obtain the configuration.
   string root_path = 3;
-  // the list of overrides to apply from lower to higher priority.
-  repeated string overrides = 4;
-  // the list of flavors to apply from lower to higher priority.
-  repeated string flavors = 5;
+  // the list of labels to watch.
+  repeated Label labels = 4;
   // document to watch.
-  string document = 6;
+  string document = 5;
 }
 
 message WatchResponse {
@@ -127,6 +127,10 @@ message WatchResponse {
     // deleted and it's the client responsibility to re-register if it
     // wish to do so
     REMOVED = 22;
+    // the provided token don't have the permisions to watch the asked document.
+    PERMISSION_DENIED = 23;
+    // some of the provided arguments are invalid.
+    INVALID_ARGUMENT = 24;
   }
   Status status = 1;
   uint64 namespace_id = 2;
@@ -143,25 +147,20 @@ message WatchResponse {
 
 
 // The trace request parameters can be seen as a python conditional like
-//   (overrides is empty or overrides is a subset of A)
-//   and (flavors is empty or flavors is a subset of B)
-//   and (document is empty or document == C)
+//   (labels is empty or labels is a subset of A)
+//   and (document is empty or document == B)
 // where
-//   A is a override got/watched
-//   B is a flavor got/watched
-//   C is a document got/watched
+//   A is a label got/watched
+//   B is a document got/watched
 message TraceRequest {
   // the root path of the namespace where trace the configuration.
   string root_path = 1;
-  // the list of overrides to trace, if some document with one of them
+  // the list of labels to trace, if some document with one of them
   // is asked it will be returned
-  repeated string overrides = 2;
-  // the list of flavors to trace, if some document with one of them
-  // is asked it will be returned
-  repeated string flavors = 3;
+  repeated Label labels = 2;
   // the document to trace, in case it is not defined it will not be used
   // in the query
-  string document = 4;
+  string document = 3;
 }
 
 message TraceResponse {
@@ -175,11 +174,8 @@ message TraceResponse {
   Status status = 1;
   uint64 namespace_id = 2;
   uint32 version = 3;
-  repeated string overrides = 4;
-  repeated string flavors = 5;
-  string document = 6;
-  // The client ip/socket/etc used to connect to the server
-  string peer = 8;
+  repeated Label labels = 4;
+  string document = 5;
 }
 
 

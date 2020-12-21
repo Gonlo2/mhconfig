@@ -1,42 +1,60 @@
 #ifndef MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 #define MHCONFIG__API__STREAM__WATCH_STREAM_IMPL_H
 
-#include "mhconfig/api/request/get_request.h"
-#include "mhconfig/api/stream/stream.h"
-#include "mhconfig/api/stream/watch_stream.h"
-#include "mhconfig/api/stream/trace_stream.h"
-#include "mhconfig/api/config/common.h"
-#include "mhconfig/worker/setup_command.h"
-#include "mhconfig/worker/update_command.h"
-#include "mhconfig/command.h"
-#include "mhconfig/validator.h"
-#include "mhconfig/provider.h"
-#include "mhconfig/builder.h"
-
 #include <absl/container/flat_hash_map.h>
 #include <absl/synchronization/mutex.h>
-
+#include <bits/stdint-uintn.h>
+#include <google/protobuf/arena.h>
+#include <grpcpp/impl/codegen/async_stream_impl.h>
+#include <grpcpp/impl/codegen/byte_buffer.h>
+#include <grpcpp/impl/codegen/completion_queue.h>
 #include <grpcpp/impl/codegen/serialization_traits.h>
+#include <grpcpp/impl/codegen/slice.h>
+#include <stddef.h>
+#include <cstdint>
+#include <iosfwd>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
 
+#include "absl/container/flat_hash_set.h"
+#include "jmutils/container/label_set.h"
+#include "mhconfig/api/config/common.h"
+#include "mhconfig/api/request/get_request.h"
+#include "mhconfig/api/session.h"
+#include "mhconfig/api/stream/stream.h"
+#include "mhconfig/api/stream/trace_stream.h"
+#include "mhconfig/api/stream/watch_stream.h"
+#include "mhconfig/builder.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
+#include "mhconfig/validator.h"
+#include "mhconfig/worker/setup_command.h"
+#include "mhconfig/worker/update_command.h"
 #include "spdlog/spdlog.h"
 
 namespace mhconfig
 {
+//class Element;
+
 namespace api
 {
 namespace stream
 {
 
-class WatchStreamImpl;
 class WatchInputMessageImpl;
+class WatchStreamImpl;
 
-class WatchOutputMessageImpl : public WatchOutputMessage, public std::enable_shared_from_this<WatchOutputMessageImpl>
+class WatchOutputMessageImpl final
+  : public WatchOutputMessage,
+  public std::enable_shared_from_this<WatchOutputMessageImpl>
 {
 public:
   WatchOutputMessageImpl(
     std::weak_ptr<WatchStreamImpl>& stream
   );
-  virtual ~WatchOutputMessageImpl();
+  ~WatchOutputMessageImpl();
 
   void set_uid(uint32_t uid) override;
   void set_status(WatchStatus status) override;
@@ -66,113 +84,85 @@ private:
   grpc::Slice slice_;
 };
 
-class WatchInputMessageImpl : public WatchInputMessage
+class WatchInputMessageImpl final
+  : public WatchInputMessage,
+  public PolicyCheck,
+  public std::enable_shared_from_this<WatchInputMessageImpl>
 {
 public:
   WatchInputMessageImpl(
     std::unique_ptr<mhconfig::proto::WatchRequest>&& request,
     std::weak_ptr<WatchStreamImpl>&& stream
   );
-  virtual ~WatchInputMessageImpl();
+  ~WatchInputMessageImpl();
 
   uint32_t uid() const override;
   bool remove() const override;
   const std::string& root_path() const override;
-  const std::vector<std::string>& overrides() const override;
-  const std::vector<std::string>& flavors() const override;
+  const Labels& labels() const override;
   const std::string& document() const override;
 
-  bool unregister(config_namespace_t* cn) override;
-
-  std::string peer() const override;
+  std::optional<std::optional<uint64_t>> unregister() override;
 
   std::shared_ptr<WatchOutputMessage> make_output_message() override;
+
+  void on_check_policy(
+    auth::AuthResult auth_result,
+    auth::Policy* policy
+  ) override;
+
+  void on_check_policy_error() override;
 
 private:
   std::unique_ptr<mhconfig::proto::WatchRequest> request_;
   std::weak_ptr<WatchStreamImpl> stream_;
 
-  std::vector<std::string> overrides_;
-  std::vector<std::string> flavors_;
-};
+  Labels labels_;
 
-class WatchGetRequest : public ::mhconfig::api::request::GetRequest
-{
-public:
-  WatchGetRequest(
-    uint32_t version,
-    std::shared_ptr<WatchInputMessage> input_message,
-    std::shared_ptr<WatchOutputMessage> output_message
-  );
-  virtual ~WatchGetRequest();
+  bool check_auth(auth::AuthResult auth_result);
 
-  const std::string& root_path() const override;
-  uint32_t version() const override;
-  const std::vector<std::string>& overrides() const override;
-  const std::vector<std::string>& flavors() const override;
-  const std::string& document() const override;
-
-  void set_status(::mhconfig::api::request::GetRequest::Status status) override;
-  void set_namespace_id(uint64_t namespace_id) override;
-  void set_version(uint32_t version) override;
-  void set_element(const mhconfig::Element& element) override;
-  void set_checksum(const uint8_t* data, size_t len) override;
-
-  void set_preprocessed_payload(const char* data, size_t len) override;
-
-  bool commit() override;
-
-  std::string peer() const override;
-
-private:
-  uint32_t version_;
-  std::shared_ptr<WatchInputMessage> input_message_;
-  std::shared_ptr<WatchOutputMessage> output_message_;
 };
 
 class WatchStreamImpl final
   : public Stream<grpc::ServerAsyncReaderWriter<grpc::ByteBuffer, grpc::ByteBuffer>, WatchOutputMessageImpl>,
-    public std::enable_shared_from_this<WatchStreamImpl>
+  public PolicyCheck,
+  public std::enable_shared_from_this<WatchStreamImpl>
 {
 public:
-  WatchStreamImpl();
-  virtual ~WatchStreamImpl();
+  template <typename T>
+  WatchStreamImpl(
+    T&& request
+  ) : Stream(std::forward<T>(request)) {
+  };
+  ~WatchStreamImpl();
 
-  const std::string name() const override;
+  void register_(
+    std::shared_ptr<WatchInputMessage>&& msg
+  );
 
-  void clone_and_subscribe(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq
-  ) override;
+  std::optional<uint64_t> unregister(uint32_t uid);
+
   void subscribe(
     CustomService* service,
     grpc::ServerCompletionQueue* cq
   ) override;
 
-  bool unregister(
-    config_namespace_t* cn,
-    uint32_t uid
-  );
+  void on_check_policy(
+    auth::AuthResult auth_result,
+    auth::Policy* policy
+  ) override;
 
-  std::pair<bool, std::shared_ptr<config_namespace_t>> unregister(
-    context_t* ctx,
-    uint32_t uid
-  );
+  void on_check_policy_error() override;
 
 protected:
   friend class WatchOutputMessageImpl;
 
-  void on_create(
-    context_t* ctx
+  std::shared_ptr<PolicyCheck> on_create(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
   ) override;
-
-  void on_read(
-    context_t* ctx
-  ) override;
-
-  void on_destroy(
-    context_t* ctx
-  ) override;
+  std::shared_ptr<PolicyCheck> parse_message() override;
+  void on_destroy() override;
 
 private:
   grpc::ByteBuffer next_req_;
@@ -180,7 +170,7 @@ private:
   absl::Mutex mutex_;
 
   inline void prepare_next_request() {
-    if (auto t = tag(Status::READ)) {
+    if (auto t = make_tag(GrpcStatus::READ)) {
       next_req_.Clear();
       stream_.Read(&next_req_, t);
     }
@@ -190,6 +180,7 @@ private:
     config_namespace_t* cn,
     const WatchInputMessage* request
   );
+
 };
 
 

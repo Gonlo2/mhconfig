@@ -1,37 +1,46 @@
 #ifndef MHCONFIG__API__SERVICE_H
 #define MHCONFIG__API__SERVICE_H
 
-#include <memory>
-#include <iostream>
-#include <string>
-#include <chrono>
-
-#include "jmutils/parallelism/worker.h"
-
+#include <bits/exception.h>
+#include <bits/stdint-uintn.h>
+#include <google/protobuf/arena.h>
 #include <grpc/grpc.h>
+#include <grpcpp/impl/codegen/completion_queue.h>
+#include <grpcpp/impl/codegen/completion_queue_impl.h>
+#include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
-#include <grpcpp/security/server_credentials.h>
-#include <google/protobuf/arena.h>
-
-#include "mhconfig/command.h"
-#include "mhconfig/proto/mhconfig.grpc.pb.h"
-#include "mhconfig/metrics.h"
-
-#include "mhconfig/api/session.h"
-#include "mhconfig/api/request/get_request_impl.h"
-#include "mhconfig/api/request/update_request_impl.h"
-#include "mhconfig/api/request/run_gc_request_impl.h"
-#include "mhconfig/api/stream/watch_stream_impl.h"
-#include "mhconfig/api/stream/trace_stream_impl.h"
-
-#include <prometheus/summary.h>
 #include <prometheus/exposer.h>
 #include <prometheus/registry.h>
+#include <prometheus/summary.h>
+#include <spdlog/fmt/fmt.h>
+#include <spdlog/spdlog.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <chrono>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "jmutils/parallelism/worker.h"
+#include "jmutils/time.h"
+#include "mhconfig/api/request/get_request_impl.h"
+#include "mhconfig/api/request/run_gc_request_impl.h"
+#include "mhconfig/api/request/update_request_impl.h"
+#include "mhconfig/api/session.h"
+#include "mhconfig/api/stream/trace_stream_impl.h"
+#include "mhconfig/api/stream/watch_stream_impl.h"
+#include "mhconfig/context.h"
+#include "mhconfig/metrics.h"
+#include "mhconfig/proto/mhconfig.grpc.pb.h"
 
 namespace mhconfig
 {
+struct context_t;
+
 namespace api
 {
 
@@ -41,7 +50,7 @@ public:
   Service(
     const std::string& server_address,
     size_t num_threads,
-    context_t* ctx
+    std::shared_ptr<context_t>& ctx
   );
 
   ~Service();
@@ -56,13 +65,14 @@ public:
   void join();
 
 private:
-  class ServiceThread final : public jmutils::Worker<ServiceThread, std::pair<bool, void*>>
+  class ServiceThread final
+    : public jmutils::Worker<ServiceThread, std::pair<bool, void*>>
   {
   public:
     ServiceThread(
       CustomService* service,
       std::unique_ptr<grpc::ServerCompletionQueue>&& cq,
-      context_t* ctx
+      std::shared_ptr<context_t>& ctx
     ) : service_(service),
       cq_(std::move(cq)),
       ctx_(ctx)
@@ -77,25 +87,16 @@ private:
 
     CustomService* service_;
     std::unique_ptr<grpc::ServerCompletionQueue> cq_;
-    context_t* ctx_;
-    uint_fast32_t request_id_{0};
+    std::shared_ptr<context_t> ctx_;
+    uint32_t request_id_{0};
 
     void on_start() noexcept {
       for (size_t i = 0; i < 32; ++i) { //TODO configure the number of requests
-        auto get_request = make_session<request::GetRequestImpl>();
-        get_request->subscribe(service_, cq_.get());
-
-        auto update_request = make_session<request::UpdateRequestImpl>();
-        update_request->subscribe(service_, cq_.get());
-
-        auto run_gc_request = make_session<request::RunGCRequestImpl>();
-        run_gc_request->subscribe(service_, cq_.get());
-
-        auto watch_stream = make_session<stream::WatchStreamImpl>();
-        watch_stream->subscribe(service_, cq_.get());
-
-        auto trace_stream = make_session<stream::TraceStreamImpl>();
-        trace_stream->subscribe(service_, cq_.get());
+        make_session<request::GetRequestImpl>(ctx_)->subscribe(service_, cq_.get());
+        make_session<request::UpdateRequestImpl>(ctx_)->subscribe(service_, cq_.get());
+        make_session<request::RunGCRequestImpl>(ctx_)->subscribe(service_, cq_.get());
+        make_session<stream::WatchStreamImpl>(ctx_)->subscribe(service_, cq_.get());
+        make_session<stream::TraceStreamImpl>(ctx_)->subscribe(service_, cq_.get());
       }
     }
 
@@ -129,14 +130,14 @@ private:
             (void*) session,
             status
           );
-          auto _ = session->proceed(status, service_, cq_.get(), ctx_, request_id_);
+          auto _ = session->proceed(status, service_, cq_.get());
         } else {
           spdlog::trace(
             "Obtained the error gRPC event {} with the status {}",
             (void*) session,
             status
           );
-          auto _ = session->error(ctx_);
+          auto _ = session->error();
         }
         return true;
       } catch (const std::exception &e) {
@@ -169,7 +170,7 @@ private:
   std::vector<std::unique_ptr<ServiceThread>> threads_;
   std::unique_ptr<grpc::Server> server_;
   CustomService service_;
-  context_t* ctx_;
+  std::shared_ptr<context_t> ctx_;
 };
 
 } /* api */

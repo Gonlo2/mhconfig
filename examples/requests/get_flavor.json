@@ -1,7 +1,0 @@
-{
-  "root_path": "XXX",
-  "overrides": ["low-priority-override", "high-priority-override"],
-  "flavors": ["flavor"],
-  "document": "test",
-  "version": 0
-}

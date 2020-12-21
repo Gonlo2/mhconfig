@@ -7,10 +7,10 @@ from mhconfig.proto import mhconfig_pb2_grpc
 from pprint import pprint
 
 
-def main(address, n, document, root_path, overrides, flavors):
+def main(address, n, document, root_path, *labels):
     auth_token = os.environ.get('MHCONFIG_AUTH_TOKEN', '')
-    overrides = overrides.split(':') if overrides else []
-    flavors = flavors.split(':') if flavors else []
+    labels = tuple(sorted(tuple(x.split('/', 1)) for x in labels))
+    assert all(len(x) == 2 for x in labels)
 
     channel = grpc.insecure_channel(address)
     stub = mhconfig_pb2_grpc.MHConfigStub(channel)
@@ -20,12 +20,12 @@ def main(address, n, document, root_path, overrides, flavors):
 
     namespace_key = NamespaceKey(
         root_path=root_path,
-        overrides=tuple(overrides),
+        labels=labels,
     )
 
     namespace_client = NamespaceClient(client, namespace_key)
 
-    k = ConfigKey(document=document, flavors=tuple(flavors))
+    k = ConfigKey(document=document)
 
     #test_get(namespace_client, k, int(n))
     test_watch(namespace_client, k, int(n))
@@ -45,7 +45,7 @@ def test_get(client, config_key, n):
         r = client.get(config_key, v)
         #_, v, _ = r
         #session = client.new_session()
-        #config = session.get(document, flavors=flavors)
+        #config = session.get(document)
         pprint(r)
         time.sleep(1)
 

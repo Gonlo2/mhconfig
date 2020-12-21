@@ -1,6 +1,7 @@
 #ifndef MHCONFIG__API__REQUEST__UPDATE_REQUEST_H
 #define MHCONFIG__API__REQUEST__UPDATE_REQUEST_H
 
+#include <bits/stdint-uintn.h>
 #include <string>
 #include <vector>
 

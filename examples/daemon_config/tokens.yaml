@@ -1,0 +1,16 @@
+tokens:
+- value: root
+  expire_at: 0
+  labels:
+    kind: root
+- value: dev
+  expire_at: 0
+  labels:
+    kind: developer
+    env: dev
+- value: calendar-prod
+  expire_at: 0
+  labels:
+    kind: app
+    env: prod
+    app: calendar

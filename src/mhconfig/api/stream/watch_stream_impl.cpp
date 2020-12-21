@@ -2,6 +2,8 @@
 
 namespace mhconfig
 {
+class Element;
+
 namespace api
 {
 namespace stream
@@ -12,7 +14,7 @@ WatchOutputMessageImpl::WatchOutputMessageImpl(
 )
   : stream_(stream)
 {
-  proto_response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::WatchResponse>(&arena_);
+  proto_response_ = Arena::CreateMessage<mhconfig::proto::WatchResponse>(&arena_);
 }
 
 WatchOutputMessageImpl::~WatchOutputMessageImpl() {
@@ -44,6 +46,12 @@ void WatchOutputMessageImpl::set_status(WatchStatus status) {
       break;
     case WatchStatus::REMOVED:
       proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
+      break;
+    case WatchStatus::PERMISSION_DENIED:
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_PERMISSION_DENIED);
+      break;
+    case WatchStatus::INVALID_ARGUMENT:
+      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_ARGUMENT);
       break;
   }
 }
@@ -90,8 +98,7 @@ WatchInputMessageImpl::WatchInputMessageImpl(
 )
   : request_(std::move(request)),
     stream_(std::move(stream)),
-    overrides_(to_vector(request_->overrides())),
-    flavors_(to_vector(request_->flavors()))
+    labels_(to_labels(request_->labels()))
 {
 }
 
@@ -110,30 +117,21 @@ const std::string& WatchInputMessageImpl::root_path() const {
   return request_->root_path();
 }
 
-const std::vector<std::string>& WatchInputMessageImpl::overrides() const {
-  return overrides_;
-}
-
-const std::vector<std::string>& WatchInputMessageImpl::flavors() const {
-  return flavors_;
+const Labels& WatchInputMessageImpl::labels() const {
+  return labels_;
 }
 
 const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
 }
 
-bool WatchInputMessageImpl::unregister(config_namespace_t* cn) {
+std::optional<std::optional<uint64_t>> WatchInputMessageImpl::unregister() {
   if (auto stream = stream_.lock()) {
-    return stream->unregister(cn, uid());
+    return std::optional<std::optional<uint64_t>>(
+      stream->unregister(uid())
+    );
   }
-  return false;
-}
-
-std::string WatchInputMessageImpl::peer() const {
-  if (auto stream = stream_.lock()) {
-    return stream->session_peer();
-  }
-  return "";
+  return std::optional<uint64_t>();
 }
 
 std::shared_ptr<WatchOutputMessage> WatchInputMessageImpl::make_output_message() {
@@ -142,205 +140,157 @@ std::shared_ptr<WatchOutputMessage> WatchInputMessageImpl::make_output_message()
   return msg;
 }
 
-WatchGetRequest::WatchGetRequest(
-  uint32_t version,
-  std::shared_ptr<WatchInputMessage> input_message,
-  std::shared_ptr<WatchOutputMessage> output_message
-) : version_(version),
-  input_message_(input_message),
-  output_message_(output_message)
-{
-}
+void WatchInputMessageImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
+  if (check_auth(auth_result)) {
+    if (remove()) {
+      auth_result = policy->basic_auth(
+        auth::Capability::WATCH
+      );
+      if (check_auth(auth_result)) {
+        spdlog::debug(
+          "Removing watcher with uid {} of the stream {}",
+          uid(),
+          (void*) this
+        );
 
-WatchGetRequest::~WatchGetRequest() {
-}
+        auto msg = make_output_message();
+        if (auto namespace_id = unregister()) {
+          if (*namespace_id) {
+            msg->set_namespace_id(**namespace_id);
+            msg->set_status(WatchStatus::REMOVED);
+          } else {
+            msg->set_status(WatchStatus::UNKNOWN_UID);
+          }
+        } else {
+          msg->set_status(WatchStatus::ERROR);
+        }
+        msg->send();
+      }
+    } else {
+      auto auth_res = policy->document_auth(
+        auth::Capability::WATCH,
+        root_path(),
+        labels()
+      );
+      if (check_auth(auth_res)) {
+        bool ok = validator::are_valid_arguments(
+          root_path(),
+          labels(),
+          document()
+        );
 
-const std::string& WatchGetRequest::root_path() const {
-  return input_message_->root_path();
-}
-
-uint32_t WatchGetRequest::version() const {
-  return version_;
-}
-
-const std::vector<std::string>& WatchGetRequest::overrides() const {
-  return input_message_->overrides();
-}
-
-const std::vector<std::string>& WatchGetRequest::flavors() const {
-  return input_message_->flavors();
-}
-
-const std::string& WatchGetRequest::document() const {
-  return input_message_->document();
-}
-
-void WatchGetRequest::set_status(::mhconfig::api::request::GetRequest::Status status) {
-  switch (status) {
-    case ::mhconfig::api::request::GetRequest::Status::OK:
-      output_message_->set_status(WatchStatus::OK);
-      break;
-    case ::mhconfig::api::request::GetRequest::Status::ERROR:
-      output_message_->set_status(WatchStatus::ERROR);
-      break;
-    case ::mhconfig::api::request::GetRequest::Status::INVALID_VERSION:
-      output_message_->set_status(WatchStatus::INVALID_VERSION);
-      break;
-    case ::mhconfig::api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG:
-      output_message_->set_status(WatchStatus::REF_GRAPH_IS_NOT_DAG);
-      break;
+        if (ok) {
+          if (auto stream = stream_.lock()) {
+            stream->register_(shared_from_this());
+          } else {
+            auto msg = make_output_message();
+            msg->set_status(WatchStatus::ERROR);
+            msg->send();
+          }
+        } else {
+          auto msg = make_output_message();
+          msg->set_status(WatchStatus::INVALID_ARGUMENT);
+          msg->send();
+        }
+      }
+    }
   }
 }
 
-void WatchGetRequest::set_namespace_id(uint64_t namespace_id) {
-  output_message_->set_namespace_id(namespace_id);
+void WatchInputMessageImpl::on_check_policy_error() {
+  auto msg = make_output_message();
+  msg->set_status(WatchStatus::ERROR);
+  msg->send();
 }
 
-void WatchGetRequest::set_version(uint32_t version) {
-  output_message_->set_version(version);
-}
-
-void WatchGetRequest::set_element(const mhconfig::Element& element) {
-  output_message_->set_element(element);
-}
-
-void WatchGetRequest::set_checksum(const uint8_t* data, size_t len) {
-  output_message_->set_checksum(data, len);
-}
-
-void WatchGetRequest::set_preprocessed_payload(const char* data, size_t len) {
-  output_message_->set_preprocessed_payload(data, len);
-}
-
-bool WatchGetRequest::commit() {
-  return output_message_->commit();
-}
-
-std::string WatchGetRequest::peer() const {
-  return input_message_->peer();
-}
-
-WatchStreamImpl::WatchStreamImpl()
-  : Stream()
-{
+bool WatchInputMessageImpl::check_auth(auth::AuthResult auth_result) {
+  switch (auth_result) {
+    case auth::AuthResult::AUTHENTICATED:
+      return true;
+    case auth::AuthResult::EXPIRED_TOKEN:  // Fallback
+    case auth::AuthResult::UNAUTHENTICATED: {
+      if (auto stream = stream_.lock()) {
+        stream->finish_with_unauthenticated();
+      } else {
+        auto msg = make_output_message();
+        msg->set_status(WatchStatus::ERROR);
+        msg->send();
+      }
+      break;
+    }
+    case auth::AuthResult::PERMISSION_DENIED: {
+      auto msg = make_output_message();
+      msg->set_status(WatchStatus::PERMISSION_DENIED);
+      msg->send();
+      break;
+    }
+  }
+  return false;
 }
 
 WatchStreamImpl::~WatchStreamImpl() {
-}
-
-const std::string WatchStreamImpl::name() const {
-  return "WATCH";
-}
-
-void WatchStreamImpl::clone_and_subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  return make_session<WatchStreamImpl>()->subscribe(service, cq);
 }
 
 void WatchStreamImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  if (auto t = tag(Status::CREATE)) {
-    service->RequestWatch(&ctx_, &stream_, cq, cq, t);
+  if (auto t = make_tag(GrpcStatus::CREATE)) {
+    service->RequestWatch(&server_ctx_, &stream_, cq, cq, t);
   }
 }
 
-void WatchStreamImpl::on_create(
-  context_t* ctx
+std::shared_ptr<PolicyCheck> WatchStreamImpl::on_create(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
 ) {
-  auto token = get_auth_token();
-  auto auth_result = token
-    ? ctx->acl.basic_auth(*token, auth::Capability::WATCH)
-    : auth::AuthResult::UNAUTHENTICATED;
-
-  if (check_auth(auth_result)) {
-    prepare_next_request();
-  }
+  make_session<WatchStreamImpl>(ctx_)->subscribe(service, cq);
+  return shared_from_this();
 }
 
-void WatchStreamImpl::on_read(
-  context_t* ctx
-) {
+std::shared_ptr<PolicyCheck> WatchStreamImpl::parse_message() {
   auto req = std::make_unique<mhconfig::proto::WatchRequest>();
   auto status = grpc::SerializationTraits<mhconfig::proto::WatchRequest>::Deserialize(
     &next_req_,
     req.get()
   );
-  auto msg = std::make_shared<WatchInputMessageImpl>(std::move(req), shared_from_this());
-  if (status.ok()) {
-    auto token = get_auth_token();
-    if (msg->remove()) {
-      auto auth_result = token
-        ? ctx->acl.basic_auth(*token, auth::Capability::WATCH)
-        : auth::AuthResult::UNAUTHENTICATED;
+  if (!status.ok()) return nullptr;
 
-      if (check_auth(auth_result)) {
-        spdlog::debug(
-          "Removing watcher with uid {} of the stream {}",
-          msg->uid(),
-          (void*) this
-        );
+  prepare_next_request();
 
-        auto r = unregister(ctx, msg->uid());
-        auto out_msg = msg->make_output_message();
-        out_msg->set_namespace_id(r.second->id);
-        out_msg->set_status(r.first ? WatchStatus::REMOVED : WatchStatus::UNKNOWN_UID);
-        out_msg->send();
-      }
-    } else {
-      auto auth_result = token
-        ? ctx->acl.document_auth(*token, auth::Capability::WATCH, *msg)
-        : auth::AuthResult::UNAUTHENTICATED;
+  return std::make_shared<WatchInputMessageImpl>(
+    std::move(req),
+    shared_from_this()
+  );
+}
 
-      if (check_auth(auth_result)) {
-        bool ok = validator::are_valid_arguments(
-          msg->root_path(),
-          msg->overrides(),
-          msg->flavors(),
-          msg->document()
-        );
-
-        if (ok) {
-          spdlog::debug("Adding watcher with uid {} to the stream {}", msg->uid(), (void*) this);
-          mutex_.Lock();
-          auto inserted = watcher_by_id_.try_emplace(msg->uid(), msg);
-          mutex_.Unlock();
-          if (inserted.second) {
-            auto cn = get_or_build_cn(ctx, msg->root_path());
-            cn->last_access_timestamp = jmutils::monotonic_now_sec();
-            process_watch_request<worker::SetupCommand, worker::UpdateCommand, WatchGetRequest>(
-              std::move(cn),
-              std::move(msg),
-              ctx
-            );
-          } else {
-            auto out_msg = msg->make_output_message();
-            out_msg->set_status(WatchStatus::UID_IN_USE);
-            out_msg->send();
-          }
-        } else{
-          auto output_message = msg->make_output_message();
-          output_message->set_status(WatchStatus::ERROR);
-          output_message->send();
-        }
-      }
+void WatchStreamImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
+  spdlog::trace("Checking watch policy: {} {}", (uint32_t)auth_result, (void*) policy);
+  if (check_auth(auth_result)) {
+    auth_result = policy->basic_auth(
+      auth::Capability::WATCH
+    );
+    if (check_auth(auth_result)) {
+      prepare_next_request();
     }
-
-    prepare_next_request();
-  } else {
-    auto out_msg = msg->make_output_message();
-    out_msg->set_status(WatchStatus::ERROR);
-    out_msg->send(true); // We probably don't know the uid so we need to finish the stream u.u
   }
 }
 
-void WatchStreamImpl::on_destroy(
-  context_t* ctx
-) {
-  absl::flat_hash_map<std::string, std::vector<std::shared_ptr<WatchInputMessage>>> watchers_by_root_path;
+void WatchStreamImpl::on_check_policy_error() {
+  finish_with_unknown();
+}
+
+void WatchStreamImpl::on_destroy() {
+  absl::flat_hash_map<
+    std::string,
+    std::vector<std::shared_ptr<WatchInputMessage>>
+  > watchers_by_root_path;
 
   mutex_.Lock();
   for (auto& it : watcher_by_id_) {
@@ -350,7 +300,7 @@ void WatchStreamImpl::on_destroy(
   mutex_.Unlock();
 
   for (auto& it : watchers_by_root_path) {
-    if (auto cn = get_cn(ctx, it.first); cn != nullptr) {
+    if (auto cn = get_cn(ctx_.get(), it.first)) {
       for (size_t i = 0, l = it.second.size(); i < l; ++i) {
         on_removed_watcher(cn.get(), it.second[i].get());
       }
@@ -358,38 +308,43 @@ void WatchStreamImpl::on_destroy(
   }
 }
 
-bool WatchStreamImpl::unregister(
-  config_namespace_t* cn,
-  uint32_t uid
+void WatchStreamImpl::register_(
+  std::shared_ptr<WatchInputMessage>&& msg
 ) {
+  spdlog::debug(
+    "Adding watcher with uid {} to the stream {}",
+    msg->uid(),
+    (void*) this
+  );
   mutex_.Lock();
-  auto node = watcher_by_id_.extract(uid);
+  auto inserted = watcher_by_id_.try_emplace(msg->uid(), msg);
   mutex_.Unlock();
-
-  if (node && (cn != nullptr)) {
-    on_removed_watcher(cn, node.mapped().get());
+  if (inserted.second) {
+    auto cn = get_or_build_cn(ctx_.get(), msg->root_path());
+    process_watch_request(
+      std::move(cn),
+      std::move(msg),
+      ctx_.get()
+    );
+  } else {
+    auto out_msg = msg->make_output_message();
+    out_msg->set_status(WatchStatus::UID_IN_USE);
+    out_msg->send();
   }
-
-  return node.operator bool();
 }
 
-std::pair<bool, std::shared_ptr<config_namespace_t>> WatchStreamImpl::unregister(
-  context_t* ctx,
-  uint32_t uid
-) {
+std::optional<uint64_t> WatchStreamImpl::unregister(uint32_t uid) {
   mutex_.Lock();
   auto node = watcher_by_id_.extract(uid);
   mutex_.Unlock();
 
-  if (!node) {
-    return std::make_pair(false, nullptr);
+  if (node) {
+    if (auto cn = get_cn(ctx_.get(), node.mapped()->root_path())) {
+      on_removed_watcher(cn.get(), node.mapped().get());
+      return std::optional<uint64_t>(cn->id);
+    }
   }
-
-  auto cn = get_cn(ctx, node.mapped()->root_path());
-  if (cn != nullptr) {
-    on_removed_watcher(cn.get(), node.mapped().get());
-  }
-  return std::make_pair(true, cn);
+  return std::optional<uint64_t>();
 }
 
 void WatchStreamImpl::on_removed_watcher(

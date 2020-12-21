@@ -1,20 +1,22 @@
 #ifndef MHCONFIG__WORKER__BUILD_COMMAND_H
 #define MHCONFIG__WORKER__BUILD_COMMAND_H
 
+#include <absl/container/flat_hash_map.h>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include <absl/container/flat_hash_map.h>
-
-#include "mhconfig/api/config/common.h"
-#include "mhconfig/command.h"
-#include "mhconfig/api/request/get_request.h"
+#include "absl/container/flat_hash_set.h"
 #include "mhconfig/builder.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 
 namespace mhconfig
 {
 namespace worker
 {
+
+using api::request::GetRequest;
 
 class BuildCommand final : public WorkerCommand
 {
@@ -49,7 +51,7 @@ private:
     build_element_t* build_element,
     absl::flat_hash_set<std::string>& dfs_document_names,
     absl::flat_hash_set<std::string>& all_document_names,
-    std::string& overrides_key,
+    const Element& cfg,
     bool is_root
   );
 
@@ -64,11 +66,14 @@ private:
     absl::flat_hash_map<std::string, merged_config_t*>& merged_config_by_document_name
   );
 
+  std::optional<GetConfigTask::Status> get_error_status(
+    CheckDependenciesStatus status
+  );
+
   void build(
     context_t* ctx,
     build_element_t* build_element,
-    absl::flat_hash_map<std::string, Element>& element_by_document_name,
-    bool is_root
+    absl::flat_hash_map<std::string, Element>& element_by_document_name
   );
 };
 

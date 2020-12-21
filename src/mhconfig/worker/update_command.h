@@ -3,11 +3,15 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
-#include "mhconfig/command.h"
+#include "absl/container/flat_hash_map.h"
+#include "jmutils/container/label_set.h"
 #include "mhconfig/api/request/update_request.h"
-#include "mhconfig/api/stream/watch_stream_impl.h"
+#include "mhconfig/api/stream/watch_stream.h"
 #include "mhconfig/builder.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 #include "mhconfig/provider.h"
 #include "mhconfig/worker/setup_command.h"
 
@@ -15,6 +19,8 @@ namespace mhconfig
 {
 namespace worker
 {
+
+using jmutils::container::Labels;
 
 class UpdateCommand final : public WorkerCommand
 {
@@ -34,7 +40,7 @@ public:
 private:
   typedef absl::flat_hash_map<
     std::string,
-    absl::flat_hash_map<std::string, load_raw_config_result_t>
+    absl::flat_hash_map<Labels, load_raw_config_result_t>
   > files_to_update_t;
 
   std::shared_ptr<config_namespace_t> cn_;
@@ -67,7 +73,7 @@ private:
 
   void trigger_watchers(
     context_t* ctx,
-    const absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& dep_by_doc
+    const absl::flat_hash_map<std::string, absl::flat_hash_map<Labels, AffectedDocumentStatus>>& dep_by_doc
   );
 
 };

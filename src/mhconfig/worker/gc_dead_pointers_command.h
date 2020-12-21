@@ -4,7 +4,8 @@
 #include <memory>
 #include <string>
 
-#include "mhconfig/command.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 #include "mhconfig/gc.h"
 
 namespace mhconfig

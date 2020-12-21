@@ -1,0 +1,7 @@
+labels:
+# Allow only the app calendar config
+- key: app
+  value: calendar
+  capabilities: [GET, WATCH]
+- key: app
+  capabilities: []

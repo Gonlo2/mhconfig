@@ -1,0 +1,5 @@
+labels_metadata:
+  low:
+    weight: 1
+  high:
+    weight: 2

@@ -1,16 +1,17 @@
 #ifndef JMUTILS__STRUCTURES__QUEUE_H
 #define JMUTILS__STRUCTURES__QUEUE_H
 
+#include <bits/stdint-uintn.h>
 #include <stdlib.h>
-#include <memory>
-#include <deque>
-#include <thread>
-#include <mutex>
-#include <utility>
+#include <chrono>
 #include <condition_variable>
-
-#include <iostream>
+#include <deque>
 #include <exception>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <utility>
 
 namespace jmutils
 {

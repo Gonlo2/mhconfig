@@ -1,8 +1,12 @@
 #ifndef JMUTILS__COMMON_H
 #define JMUTILS__COMMON_H
 
-#include <random>
 #include <absl/synchronization/mutex.h>
+#include <bits/stdint-uintn.h>
+#include <stddef.h>
+#include <random>
+#include <string>
+#include <vector>
 
 namespace jmutils
 {

@@ -23,46 +23,30 @@ MHConfig::~MHConfig() {
 bool MHConfig::run() {
   if (running_) return false;
 
+  std::filesystem::path cp(config_path_);
+  auto ccp = std::filesystem::canonical(cp);
 
-  ctx_ = std::make_unique<context_t>();
-
-
+  ctx_ = std::make_shared<context_t>();
+  ctx_->mhc_root_path = ccp.string();
   ctx_->metrics.init(prometheus_address_);
-
-
-  if (!ctx_->acl.load(config_path_)) return false;
-
 
   workers_.reserve(num_threads_workers_);
   for (size_t i = 0; i < num_threads_workers_; ++i) {
-    auto worker = std::make_unique<mhconfig::Worker>(ctx_.get());
+    auto worker = std::make_unique<mhconfig::Worker>(ctx_);
     if (!worker->start()) return false;
     workers_.push_back(std::move(worker));
   }
 
-
   service_ = std::make_unique<api::Service>(
     server_address_,
     num_threads_api_,
-    ctx_.get()
+    ctx_
   );
   service_->start();
 
-
   if (!run_time_worker()) return false;
 
-
   running_ = true;
-  return true;
-}
-
-bool MHConfig::reload() {
-  if (!running_) return false;
-
-  if (!ctx_->acl.load(config_path_)) {
-    return false;
-  }
-
   return true;
 }
 

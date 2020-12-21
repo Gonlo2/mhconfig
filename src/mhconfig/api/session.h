@@ -1,18 +1,41 @@
 #ifndef MHCONFIG__API__SESSION_H
 #define MHCONFIG__API__SESSION_H
 
+#include <assert.h>
+#include <bits/stdint-uintn.h>
+#include <google/protobuf/repeated_field.h>
+#include <grpcpp/impl/codegen/completion_queue.h>
+#include <grpcpp/impl/codegen/server_context.h>
+#include <grpcpp/impl/codegen/status.h>
+#include <grpcpp/impl/codegen/status_code_enum.h>
+#include <grpcpp/impl/codegen/string_ref.h>
+#include <spdlog/spdlog.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <iostream>
-#include <string>
+#include <map>
 #include <memory>
+#include <new>
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/synchronization/mutex.h"
+#include "jmutils/container/label_set.h"
+#include "mhconfig/auth/common.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
+#include "mhconfig/provider.h"
 #include "mhconfig/proto/mhconfig.grpc.pb.h"
-#include "mhconfig/command.h"
 
 namespace mhconfig
 {
+
 namespace api
 {
+
+using google::protobuf::Arena;
 
 typedef mhconfig::proto::MHConfig::WithRawMethod_Get<
         mhconfig::proto::MHConfig::WithAsyncMethod_Update<
@@ -27,6 +50,18 @@ std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_re
   result.reserve(proto_repeated.size());
   result.insert(result.begin(), proto_repeated.cbegin(), proto_repeated.cend());
   return result;
+}
+
+template <typename T>
+jmutils::container::Labels to_labels(
+  const ::google::protobuf::RepeatedPtrField<T>& proto_repeated
+) {
+  std::vector<jmutils::container::label_t> labels;
+  labels.reserve(proto_repeated.size());
+  for (auto& it : proto_repeated) {
+    labels.emplace_back(it.key(), it.value());
+  }
+  return jmutils::container::make_labels(std::move(labels));
 }
 
 template <typename T>
@@ -50,139 +85,102 @@ inline std::shared_ptr<T> make_session(Args&&... args)
 class Session
 {
 public:
-  Session() {
+  template <typename T>
+  Session(
+    T&& ctx
+  ) : ctx_(std::forward<T>(ctx)) {
   }
 
-  virtual ~Session() {
-  }
+  virtual ~Session();
 
-  void init(std::shared_ptr<Session> this_shared) {
-    this_shared_ = std::move(this_shared);
-    if (auto t = unsafe_raw_tag(1)) ctx_.AsyncNotifyWhenDone(t);
-  }
+  virtual bool finish(const grpc::Status& status = grpc::Status::OK) = 0;
 
-  virtual const std::string name() const = 0;
-
-  //TODO move this functions to the protected sections and make the
-  //class Service friend of this
-  virtual void clone_and_subscribe(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq
-  ) = 0;
-  virtual void subscribe(
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq
-  ) = 0;
-
-  //TODO move this function to the private sections and make the
-  //class Service friend of this
-  std::shared_ptr<Session> proceed(
-    uint8_t status,
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq,
-    context_t* ctx,
-    uint_fast32_t& sequential_id
-  );
-
-  //TODO move this function to the private sections and make the
-  //class Service friend of this
-  std::shared_ptr<Session> error(
-    context_t* ctx
-  );
-
-  std::string session_peer() const {
-    return ctx_.peer();
-  }
-
-protected:
-  CustomService* service_;
-  grpc::ServerCompletionQueue* cq_;
+  bool finish_with_unauthenticated();
+  bool finish_with_unknown();
+  bool finish_with_invalid_argument();
 
 private:
   std::shared_ptr<Session> this_shared_{nullptr};
   uint32_t cq_refcount_{0};
   bool closed_{false};
 
-  inline std::shared_ptr<Session> decrement_cq_refcount(
-    context_t* ctx
-  ) {
+  inline std::shared_ptr<Session> decrement_cq_refcount() {
     std::shared_ptr<Session> tmp{nullptr};
     if (--cq_refcount_ == 0) {
       closed_ = true;
       tmp.swap(this_shared_);
       spdlog::trace("Destroying the gRPC event {}", (void*) this);
-      on_destroy(ctx);
+      on_destroy();
     }
     return tmp;
   }
 
-  virtual bool finish(const grpc::Status& status = grpc::Status::OK) = 0;
+  std::shared_ptr<Session> proceed(
+    uint8_t status,
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  );
 
 protected:
-  grpc::ServerContext ctx_;
-  absl::Mutex mutex_;
+  template <typename T, typename... Args>
+  friend std::shared_ptr<T> make_session(Args&&... args);
 
-  inline void* raw_tag(uint8_t status) {
+  friend class Service;
+
+  enum class GrpcStatus {
+    CREATE = 0,
+    READ = 1,
+    WRITE = 2,
+    CLOSE = 7,
+  };
+
+  absl::Mutex mutex_;
+  std::shared_ptr<context_t> ctx_;
+  grpc::ServerContext server_ctx_;
+
+  void init(std::shared_ptr<Session> this_shared) {
+    this_shared_ = std::move(this_shared);
+    if (auto t = make_tag_locked(GrpcStatus::CLOSE)) {
+      server_ctx_.AsyncNotifyWhenDone(t);
+    }
+  }
+
+  virtual void subscribe(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) = 0;
+  virtual std::shared_ptr<PolicyCheck> on_create(
+    CustomService* service,
+    grpc::ServerCompletionQueue* cq
+  ) = 0;
+  virtual void on_write() = 0;
+  virtual std::shared_ptr<PolicyCheck> parse_message() = 0;
+
+  void do_policy_check(
+    std::string&& token,
+    std::shared_ptr<PolicyCheck>&& policy_check
+  );
+
+  virtual void on_destroy() {};
+
+  std::shared_ptr<Session> error();
+
+  inline void* make_tag(GrpcStatus status) {
     mutex_.Lock();
-    void* t = unsafe_raw_tag(status);
+    void* t = make_tag_locked(status);
     mutex_.Unlock();
     return t;
   }
 
-  inline void* unsafe_raw_tag(uint8_t status) {
+  inline void* make_tag_locked(GrpcStatus status) {
     if (closed_) return nullptr;
     ++cq_refcount_;
-    return (void*) (((uintptr_t) this_shared_.get()) | status);
+    return (void*) (((uintptr_t) this_shared_.get()) | static_cast<uint8_t>(status));
   }
 
-  std::optional<std::string> get_auth_token() {
-    auto search = ctx_.client_metadata().find("mhconfig-auth-token");
-    if (search == ctx_.client_metadata().end()) {
-      return std::optional<std::string>();
-    }
-    return std::optional<std::string>(
-      std::string(search->second.data(), search->second.size())
-    );
-  }
+  std::optional<std::string> get_auth_token();
 
-  virtual void on_proceed(
-    uint8_t status,
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq,
-    context_t* ctx,
-    uint_fast32_t& sequential_id
-  ) = 0;
-
-  virtual void on_destroy(
-    context_t* ctx
-  ) {
-  };
-
-  bool check_auth(auth::AuthResult auth_result) {
-    switch (auth_result) {
-      case auth::AuthResult::AUTHENTICATED:
-        return true;
-      case auth::AuthResult::EXPIRED_TOKEN:  // Fallback
-      case auth::AuthResult::UNAUTHENTICATED:
-        finish(
-          grpc::Status(
-            grpc::StatusCode::UNAUTHENTICATED,
-            "The auth token hasn't been provided or is incorrect"
-          )
-        );
-        break;
-      case auth::AuthResult::PERMISSION_DENIED:
-        finish(
-          grpc::Status(
-            grpc::StatusCode::PERMISSION_DENIED,
-            "The auth token don't have permissions to do this operation"
-          )
-        );
-        break;
-    }
-    return false;
-  }
-
+  bool check_auth(auth::AuthResult auth_result);
 };
 
 } /* api */

@@ -12,7 +12,7 @@ TraceOutputMessageImpl::TraceOutputMessageImpl(
 )
   : stream_(std::move(stream))
 {
-  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::TraceResponse>(&arena_);
+  response_ = Arena::CreateMessage<mhconfig::proto::TraceResponse>(&arena_);
 }
 
 void TraceOutputMessageImpl::set_status(Status status) {
@@ -43,26 +43,17 @@ void TraceOutputMessageImpl::set_version(uint32_t version) {
   response_->set_version(version);
 }
 
-void TraceOutputMessageImpl::set_overrides(const std::vector<std::string>& overrides) {
-  response_->clear_overrides();
-  for (const auto& s : overrides) {
-    response_->add_overrides(s);
-  }
-}
-
-void TraceOutputMessageImpl::set_flavors(const std::vector<std::string>& flavors) {
-  response_->clear_flavors();
-  for (const auto& s : flavors) {
-    response_->add_flavors(s);
+void TraceOutputMessageImpl::set_labels(const Labels& labels) {
+  response_->clear_labels();
+  for (const auto& l : labels) {
+    auto ll = response_->add_labels();
+    ll->set_key(l.first);
+    ll->set_value(l.second);
   }
 }
 
 void TraceOutputMessageImpl::set_document(const std::string& document) {
   response_->set_document(document);
-}
-
-void TraceOutputMessageImpl::set_peer(const std::string& peer) {
-  response_->set_peer(peer);
 }
 
 bool TraceOutputMessageImpl::send(bool finish) {
@@ -72,87 +63,73 @@ bool TraceOutputMessageImpl::send(bool finish) {
   return false;
 }
 
-
-TraceStreamImpl::TraceStreamImpl()
-  : Stream()
-{
-  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::TraceRequest>(&arena_);
-}
-
 const std::string& TraceStreamImpl::root_path() const {
   return request_->root_path();
 }
 
-const std::vector<std::string>& TraceStreamImpl::overrides() const {
-  return overrides_;
-}
-
-const std::vector<std::string>& TraceStreamImpl::flavors() const {
-  return flavors_;
+const Labels& TraceStreamImpl::labels() const {
+  return labels_;
 }
 
 const std::string& TraceStreamImpl::document() const {
   return request_->document();
 }
 
-const std::string TraceStreamImpl::name() const {
-  return "TRACE";
-}
-
-void TraceStreamImpl::clone_and_subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  make_session<TraceStreamImpl>()->subscribe(service, cq);
-}
-
 void TraceStreamImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  if (auto t = tag(Status::CREATE)) {
-    service->RequestTrace(&ctx_, request_, &stream_, cq, cq, t);
+  if (auto t = make_tag(GrpcStatus::CREATE)) {
+    service->RequestTrace(&server_ctx_, request_, &stream_, cq, cq, t);
   }
 }
 
-void TraceStreamImpl::on_create(
-  context_t* ctx
+std::shared_ptr<PolicyCheck> TraceStreamImpl::on_create(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
 ) {
-  overrides_ = to_vector(request_->overrides());
-  flavors_ = to_vector(request_->flavors());
+  make_session<TraceStreamImpl>(ctx_)->subscribe(service, cq);
+  return nullptr;
+}
 
-  auto token = get_auth_token();
-  auto auth_result = token
-    ? ctx->acl.document_auth(*token, auth::Capability::TRACE, *this)
-    : auth::AuthResult::UNAUTHENTICATED;
+std::shared_ptr<PolicyCheck> TraceStreamImpl::parse_message() {
+  labels_ = to_labels(request_->labels());
+  return shared_from_this();
+}
 
+void TraceStreamImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
   if (check_auth(auth_result)) {
-    bool ok = validator::are_valid_arguments(
+    auth_result = policy->document_auth(
+      auth::Capability::TRACE,
       root_path(),
-      overrides(),
-      flavors(),
-      document()
+      labels()
     );
-
-    if (ok) {
-      auto cn = get_or_build_cn(ctx, root_path());
-      cn->last_access_timestamp = jmutils::monotonic_now_sec();
-      process_trace_request<worker::SetupCommand>(
-        std::move(cn),
-        shared_from_this(),
-        ctx
+    if (check_auth(auth_result)) {
+      bool ok = validator::are_valid_arguments(
+        root_path(),
+        labels(),
+        document()
       );
-    } else {
-      auto output_message = make_output_message();
-      output_message->set_status(TraceOutputMessage::Status::ERROR);
-      output_message->send(true);
+
+      if (ok) {
+        auto cn = get_or_build_cn(ctx_.get(), root_path());
+        process_trace_request(
+          std::move(cn),
+          shared_from_this(),
+          ctx_.get()
+        );
+      } else {
+        finish_with_invalid_argument();
+      }
     }
   }
 }
 
-void TraceStreamImpl::on_read(
-  context_t* ctx
-) {
+void TraceStreamImpl::on_check_policy_error() {
+  finish_with_unknown();
 }
 
 std::shared_ptr<TraceOutputMessage> TraceStreamImpl::make_output_message() {

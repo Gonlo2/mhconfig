@@ -1,12 +1,13 @@
 #ifndef MHCONFIG__VALIDATOR_H
 #define MHCONFIG__VALIDATOR_H
 
-#include <vector>
-#include <string>
+#include <stddef.h>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
-#include <absl/container/flat_hash_set.h>
-
+#include "jmutils/container/label_set.h"
 #include "spdlog/spdlog.h"
 
 namespace mhconfig
@@ -14,10 +15,11 @@ namespace mhconfig
 namespace validator
 {
 
+using jmutils::container::Labels;
+
 bool are_valid_arguments(
   const std::string& root_path,
-  const std::vector<std::string>& overrides,
-  const std::vector<std::string>& flavors,
+  const Labels& labels,
   const std::string& document
 );
 
@@ -41,14 +43,7 @@ inline bool is_a_valid_document_name(const std::string& document) {
 }
 
 inline bool is_a_valid_path(const std::string& path) {
-  return true;
-}
-
-inline bool is_a_valid_flavor(const std::string& flavor) {
-  for (size_t i = 0, l = flavor.size(); i < l; ++i) {
-    if (flavor[i] == '/') return false;
-  }
-  return true;
+  return true; //TODO
 }
 
 } /* validator */

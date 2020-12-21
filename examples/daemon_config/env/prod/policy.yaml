@@ -1,0 +1,19 @@
+capabilities: [GET, WATCH]
+root_paths:
+- path: /mnt/data/mhconfig/+
+  capabilities: [GET, WATCH]
+labels:
+# Allow only the prod secrets
+- key: secrets
+  value: prod
+  capabilities: [GET, WATCH]
+- key: secrets
+  capabilities: []
+# Allow only the prod environments
+- key: env
+  value: prod
+  capabilities: [GET, WATCH]
+- key: env
+  capabilities: []
+# Allow all the config by default
+- capabilities: [GET, WATCH]

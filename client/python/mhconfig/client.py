@@ -11,9 +11,9 @@ import grpc
 from frozendict import frozendict
 from mhconfig.proto import mhconfig_pb2
 
-NamespaceKey = namedtuple('NamespaceKey', ['root_path', 'overrides'])
+NamespaceKey = namedtuple('NamespaceKey', ['root_path', 'labels'])
 VersionKey = namedtuple('VersionKey', ['namespace_id', 'version'])
-ConfigKey = namedtuple('ConfigKey', ['document', 'flavors'])
+ConfigKey = namedtuple('ConfigKey', ['document'])
 
 SpecificConfigKey = namedtuple('SpecificConfigKey', ['version_key', 'config_key'])
 
@@ -436,9 +436,8 @@ class Client:
                     yield mhconfig_pb2.WatchRequest(
                         uid=command.uid,
                         root_path=command.namespace_key.root_path,
-                        overrides=command.namespace_key.overrides,
+                        labels=command.namespace_key.labels,
                         document=command.config_key.document,
-                        flavors=command.config_key.flavors,
                     )
             except Exception:
                 traceback.print_exc()
@@ -499,9 +498,8 @@ class Client:
 
             request = mhconfig_pb2.GetRequest(
                 root_path=namespace_key.root_path,
-                overrides=namespace_key.overrides,
+                labels=namespace_key.labels,
                 document=config_key.document,
-                flavors=config_key.flavors or tuple(),
                 version=0 if version_key is None else version_key.version,
             )
             r = self._stub.Get(request, metadata=self._metadata)

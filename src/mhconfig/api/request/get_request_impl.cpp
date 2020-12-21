@@ -8,18 +8,7 @@ namespace request
 {
 
 
-GetRequestImpl::GetRequestImpl()
-  : responder_(&ctx_)
-{
-  request_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::GetRequest>(&arena_);
-  response_ = google::protobuf::Arena::CreateMessage<mhconfig::proto::GetResponse>(&arena_);
-}
-
 GetRequestImpl::~GetRequestImpl() {
-}
-
-const std::string GetRequestImpl::name() const {
-  return "GET";
 }
 
 const std::string& GetRequestImpl::root_path() const {
@@ -30,20 +19,12 @@ uint32_t GetRequestImpl::version() const {
   return request_->version();
 }
 
-const std::vector<std::string>& GetRequestImpl::overrides() const {
-  return overrides_;
-}
-
-const std::vector<std::string>& GetRequestImpl::flavors() const {
-  return flavors_;
+const Labels& GetRequestImpl::labels() const {
+  return labels_;
 }
 
 const std::string& GetRequestImpl::document() const {
   return request_->document();
-}
-
-std::string GetRequestImpl::peer() const {
-  return session_peer();
 }
 
 void GetRequestImpl::set_status(Status status) {
@@ -88,67 +69,70 @@ bool GetRequestImpl::commit() {
   return finish();
 }
 
-void GetRequestImpl::clone_and_subscribe(
-  CustomService* service,
-  grpc::ServerCompletionQueue* cq
-) {
-  make_session<GetRequestImpl>()->subscribe(service, cq);
-}
-
 void GetRequestImpl::subscribe(
   CustomService* service,
   grpc::ServerCompletionQueue* cq
 ) {
-  if (auto t = tag(RequestStatus::CREATE)) {
-    service->RequestGet(&ctx_, &raw_request_, &responder_, cq, cq, t);
+  if (auto t = make_tag(GrpcStatus::CREATE)) {
+    service->RequestGet(&server_ctx_, &raw_request_, &responder_, cq, cq, t);
   }
 }
 
-void GetRequestImpl::request(
-  context_t* ctx
+std::shared_ptr<PolicyCheck> GetRequestImpl::on_create(
+  CustomService* service,
+  grpc::ServerCompletionQueue* cq
 ) {
+  make_session<GetRequestImpl>(ctx_)->subscribe(service, cq);
+  return nullptr;
+}
+
+std::shared_ptr<PolicyCheck> GetRequestImpl::parse_message() {
   auto status = grpc::SerializationTraits<mhconfig::proto::GetRequest>::Deserialize(
     &raw_request_,
     request_
   );
-  if (status.ok()) {
-    overrides_ = to_vector(request_->overrides());
-    flavors_ = to_vector(request_->flavors());
+  if (!status.ok()) return nullptr;
 
-    auto token = get_auth_token();
-    auto auth_result = token
-      ? ctx->acl.document_auth(*token, auth::Capability::GET, *this)
-      : auth::AuthResult::UNAUTHENTICATED;
+  labels_ = to_labels(request_->labels());
+  return shared_from_this();
+}
 
+void GetRequestImpl::on_check_policy(
+  auth::AuthResult auth_result,
+  auth::Policy* policy
+) {
+  if (check_auth(auth_result)) {
+    auth_result = policy->document_auth(
+      auth::Capability::GET,
+      root_path(),
+      labels()
+    );
     if (check_auth(auth_result)) {
       bool ok = validator::are_valid_arguments(
         root_path(),
-        overrides(),
-        flavors(),
+        labels(),
         document()
       );
-
       if (ok) {
-        auto cn = get_or_build_cn(ctx, root_path());
-        cn->last_access_timestamp = jmutils::monotonic_now_sec();
-        process_get_request<worker::SetupCommand>(
+        auto cn = get_or_build_cn(ctx_.get(), root_path());
+        process_get_config_task(
           std::move(cn),
-          shared_from_this(),
-          ctx
+          std::make_shared<ApiGetConfigTask>(shared_from_this()),
+          ctx_.get()
         );
       } else {
-        set_status(Status::ERROR);
-        finish();
+        finish_with_invalid_argument();
       }
     }
-  } else {
-    set_status(Status::ERROR);
-    finish();
   }
 }
 
+void GetRequestImpl::on_check_policy_error() {
+  finish_with_unknown();
+}
+
 bool GetRequestImpl::finish(const grpc::Status& status) {
-  if (auto t = tag(RequestStatus::PROCESS)) {
+  if (auto t = make_tag(GrpcStatus::WRITE)) {
     if (status.ok()) {
       bool ok = response_->SerializeToOstream(&preprocessed_payload_);
       if (ok) {

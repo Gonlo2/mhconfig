@@ -1,12 +1,15 @@
 #ifndef MHCONFIG__METRICS__H
 #define MHCONFIG__METRICS__H
 
-#include "spdlog/spdlog.h"
-
-#include <prometheus/summary.h>
-#include <prometheus/gauge.h>
 #include <prometheus/exposer.h>
+#include <prometheus/gauge.h>
 #include <prometheus/registry.h>
+#include <prometheus/summary.h>
+#include <map>
+#include <memory>
+#include <string>
+
+#include "spdlog/spdlog.h"
 
 namespace mhconfig
 {
@@ -52,7 +55,6 @@ private:
 
   prometheus::Family<prometheus::Summary>* family_api_duration_summary_{nullptr};
   prometheus::Family<prometheus::Summary>* family_worker_duration_summary_{nullptr};
-  prometheus::Family<prometheus::Summary>* family_serialization_duration_summary_{nullptr};
   prometheus::Family<prometheus::Summary>* family_optimized_merged_config_used_bytes_summary_{nullptr};
 
   prometheus::Family<prometheus::Gauge>* family_string_pool_num_strings_gauge_{nullptr};

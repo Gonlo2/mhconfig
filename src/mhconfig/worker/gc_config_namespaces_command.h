@@ -1,10 +1,12 @@
 #ifndef MHCONFIG__WORKER__GC_CONFIG_NAMESPACES_COMMAND_H
 #define MHCONFIG__WORKER__GC_CONFIG_NAMESPACES_COMMAND_H
 
+#include <bits/stdint-uintn.h>
 #include <memory>
 #include <string>
 
-#include "mhconfig/command.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 #include "mhconfig/gc.h"
 
 namespace mhconfig

@@ -1,0 +1,19 @@
+capabilities: [GET, WATCH, TRACE]
+root_paths:
+- path: /mnt/data/mhconfig/+
+  capabilities: [GET, WATCH, TRACE]
+labels:
+# Allow only the dev secrets
+- key: secrets
+  value: dev
+  capabilities: [GET, WATCH, TRACE]
+- key: secrets
+  capabilities: []
+# Allow only the dev environments
+- key: env
+  value: dev
+  capabilities: [GET, WATCH, TRACE]
+- key: env
+  capabilities: []
+# Allow all the config by default
+- capabilities: [GET, WATCH, TRACE]

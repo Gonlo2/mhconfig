@@ -16,6 +16,30 @@ from mhconfig.proto import mhconfig_pb2, mhconfig_pb2_grpc
 logger = logging.getLogger(__name__)
 
 
+def to_grpc_label(label: Tuple[str, str]) -> mhconfig_pb2.Label:
+    return mhconfig_pb2.Label(
+        key=label[0],
+        value=label[1],
+    )
+
+
+def to_py_labels(labels: List[mhconfig_pb2.Label]) -> List[Tuple[str, str]]:
+    return [to_py_label(x) for x in labels]
+
+
+def to_py_label(label: mhconfig_pb2.Label) -> Tuple[str, str]:
+    return (label.key, label.value)
+
+
+def are_same_labels(
+    a: List[Tuple[str, str]],
+    b: List[Tuple[str, str]],
+) -> bool:
+    if len(a) != len(b):
+        return False
+    return dict(a) == dict(b)
+
+
 class IterableQueue:
     def __init__(self):
         self._q = Queue()
@@ -108,8 +132,11 @@ class Test:
     ):
         self._stub = stub
 
-    def overrides(self) -> List[str]:
+    def labels(self) -> List[Tuple[str, str]]:
         raise NotImplementedError
+
+    def grpc_labels(self) -> List[mhconfig_pb2.Label]:
+        return [to_grpc_label(x) for x in self.labels()]
 
     def prepare(self):
         raise NotImplementedError
@@ -125,14 +152,12 @@ class Test:
             self,
             document: str,
             version: Optional[int] = None,
-            flavors: Optional[List[str]] = None
     ):
         request = mhconfig_pb2.GetRequest(
             root_path=self._root_path,
-            overrides=self.overrides(),
+            labels=self.grpc_labels(),
             document=document,
             version=version or 0,
-            flavors=flavors or [],
         )
         response = self._stub.Get(request, metadata=self._metadata)
 
@@ -166,33 +191,30 @@ class Test:
             self,
             uid: int,
             document: str,
-            flavors: Optional[List[str]] = None
     ):
         return mhconfig_pb2.WatchRequest(
             uid=uid,
             root_path=self._root_path,
-            overrides=self.overrides(),
+            labels=self.grpc_labels(),
             document=document,
-            flavors=flavors or [],
         )
 
     def _trace_stream(
             self,
             document: str,
-            overrides: Optional[List[str]] = None,
-            flavors: Optional[List[str]] = None
+            labels: Optional[List[Tuple[str, str]]] = None,
     ):
+        labels = labels or self.labels()
         request = mhconfig_pb2.TraceRequest(
             root_path=self._root_path,
-            overrides=overrides or self.overrides(),
+            labels=[to_grpc_label(x) for x in labels],
             document=document,
-            flavors=flavors or [],
         )
         return self._stub.Trace(request, metadata=self._metadata)
 
 class GetTest(Test):
-    def overrides(self) -> List[str]:
-        return ["low-priority", "high-priority"]
+    def labels(self) -> List[Tuple[str, str]]:
+        return [("low", "priority"), ("high", "priority")]
 
     def prepare(self):
         self._copy_config("base")
@@ -208,8 +230,8 @@ class GetTest(Test):
 
 
 class UpdateTest(Test):
-    def overrides(self) -> List[str]:
-        return ["low-priority", "high-priority"]
+    def labels(self) -> List[Tuple[str, str]]:
+        return [("low", "priority"), ("high", "priority")]
 
     def prepare(self):
         self._copy_config("base")
@@ -239,8 +261,8 @@ class UpdateTest(Test):
         assert r4.value == _CONFIG_UPDATE_RESULT
 
 class WatchTest(Test):
-    def overrides(self) -> List[str]:
-        return ["low-priority", "high-priority"]
+    def labels(self) -> List[Tuple[str, str]]:
+        return [("low", "priority"), ("high", "priority")]
 
     def prepare(self):
         self._copy_config("base")
@@ -284,8 +306,7 @@ class TraceGetTest(GetTest):
         assert r.status == mhconfig_pb2.TraceResponse.Status.RETURNED_ELEMENTS
         assert r.namespace_id == namespace_id
         assert r.version == 1
-        assert r.overrides == self.overrides()
-        assert len(r.flavors) == 0
+        assert are_same_labels(to_py_labels(r.labels), self.labels())
         assert r.document == "test"
 
 
@@ -301,10 +322,8 @@ class TraceWatchTest(WatchTest):
 
         for r in sorted_responses:
             assert r.namespace_id == namespace_id
-            assert r.overrides == self.overrides()
-            assert len(r.flavors) == 0
+            assert are_same_labels(to_py_labels(r.labels), self.labels())
             assert r.document == "test"
-            assert r.peer == sorted_responses[0].peer
 
         assert sorted_responses[0].status == mhconfig_pb2.TraceResponse.Status.ADDED_WATCHER
 
@@ -333,8 +352,8 @@ class TraceWatchTest(WatchTest):
 
 
 class StressTest(Test):
-    def overrides(self) -> List[str]:
-        return ["low-priority", "high-priority"]
+    def labels(self) -> List[Tuple[str, str]]:
+        return [("low", "priority"), ("high", "priority")]
 
     def prepare(self):
         self._copy_config("base")
@@ -344,7 +363,7 @@ class StressTest(Test):
         assert r.status == mhconfig_pb2.UpdateResponse.Status.OK
         assert r.version == 1
 
-        for i in range(1000):
+        for i in range(100000):
             r1 = self._get_request("other")
             assert r1.namespace_id == r.namespace_id
             assert r1.status == mhconfig_pb2.GetResponse.Status.OK

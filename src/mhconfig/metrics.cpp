@@ -50,6 +50,8 @@ void Metrics::add(
   std::map<std::string, std::string>&& labels,
   double value
 ) {
+  if (exposer_ == nullptr) return;
+
   switch (id) {
     case Id::API_DURATION_NANOSECONDS:
       family_api_duration_summary_->Add(labels, quantiles_)

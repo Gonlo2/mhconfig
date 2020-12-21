@@ -1,13 +1,20 @@
 #ifndef MHCONFIG__GC_H
 #define MHCONFIG__GC_H
 
-#include "mhconfig/config_namespace.h"
-#include "mhconfig/command.h"
-#include "mhconfig/builder.h"
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
+#include <memory>
+
 #include "jmutils/common.h"
+#include "jmutils/container/label_set.h"
+#include "mhconfig/builder.h"
+#include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 
 namespace mhconfig
 {
+
+using jmutils::container::Labels;
 
 void gc_cn(
   context_t* ctx,

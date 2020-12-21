@@ -1,4 +1,6 @@
 {
   "root_path": "XXX",
-  "overrides": ["high-priority-override"]
+  "labels": [
+    {"key": "high", "value": "priority"}
+  ]
 }

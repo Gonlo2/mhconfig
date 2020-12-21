@@ -28,7 +28,7 @@ bool UpdateCommand::execute(
       cn_->mutex.Unlock();
       remove_cn(ctx, cn_->root_path, cn_->id);
       cn_->mutex.Lock();
-      delete_cn_locked(cn_.get());
+      delete_cn_locked(cn_);
     }
     bool is_deleted = cn_->status == ConfigNamespaceStatus::DELETED;
     cn_->mutex.Unlock();
@@ -47,7 +47,7 @@ bool UpdateCommand::execute(
   cn_->mutex.Unlock();
 
   for (size_t i = 0, l = watch_requests_waiting.size(); i < l; ++i) {
-    process_watch_request<worker::SetupCommand, UpdateCommand, api::stream::WatchGetRequest>(
+    process_watch_request(
       decltype(cn_)(cn_),
       std::move(watch_requests_waiting[i]),
       ctx
@@ -95,14 +95,14 @@ bool UpdateCommand::process(
 
     absl::flat_hash_map<
       std::string,
-      absl::flat_hash_map<std::string, AffectedDocumentStatus>
+      absl::flat_hash_map<Labels, AffectedDocumentStatus>
     > dep_by_doc;
 
     if (ok) {
       absl::flat_hash_map<
-        std::string,
+        Labels,
         absl::flat_hash_map<std::string, AffectedDocumentStatus>
-      > dep_by_path;
+      > dep_by_label;
 
       spdlog::debug("Updating the ids of the affected documents");
       // If some config will be removed and that document use a reference to another
@@ -113,11 +113,11 @@ bool UpdateCommand::process(
             ? AffectedDocumentStatus::TO_REMOVE
             : AffectedDocumentStatus::TO_ADD;
 
-          dep_by_path[it2.first][it.first] = status;
+          dep_by_label[it2.first][it.first] = status;
         }
       }
 
-      dep_by_doc = get_dep_by_doc(cn_.get(), dep_by_path);
+      dep_by_doc = get_dep_by_doc(cn_.get(), dep_by_label);
 
       ok = touch_affected_documents(cn_.get(), cn_->current_version, dep_by_doc, false);
     }
@@ -144,7 +144,7 @@ bool UpdateCommand::process(
       trigger_watchers(ctx, dep_by_doc);
     } else {
       remove_cn(ctx, cn_->root_path, cn_->id);
-      delete_cn(cn_.get());
+      delete_cn(cn_);
     }
   }
 
@@ -165,25 +165,27 @@ bool UpdateCommand::index_request_files(
     return index_files(
       cn_->pool.get(),
       request->root_path(),
-      [&files_to_update](const auto& path, auto&& result) {
+      [&files_to_update](auto&& labels, auto&& result) {
         if (result.status != LoadRawConfigStatus::OK) {
           return false;
         }
-        files_to_update[result.document][path] = std::move(result);
+        files_to_update[result.document][labels] = std::move(result);
         return true;
       }
     );
   }
 
   std::filesystem::path root_path(request->root_path());
-  std::string override_path;
   for (const auto& x : request->relative_paths()) {
     std::filesystem::path relative_file_path(x);
     auto path = root_path / relative_file_path;
     auto result = index_file(cn_->pool.get(), root_path, path);
     if ((result.status == LoadRawConfigStatus::OK) || (result.status == LoadRawConfigStatus::FILE_DONT_EXISTS)) {
-      make_override_path(result.override_, result.flavor, override_path);
-      files_to_update[result.document][override_path] = std::move(result);
+      auto labels = get_path_labels(relative_file_path.parent_path());
+      if (!labels) {
+        return false;
+      }
+      files_to_update[result.document][*labels] = std::move(result);
     } else {
       return false;
     }
@@ -203,28 +205,35 @@ UpdateCommand::files_to_update_t UpdateCommand::obtain_missing_files(
     it.second->mutex.ReaderLock();
     if (!it.second->document_by_version.empty()) {
       auto document = std::prev(it.second->document_by_version.end())->second.get();
-      auto document_changes = files_to_update[document->name];
+      auto& document_changes = files_to_update[document->name];
 
       document->mutex.ReaderLock();
-      for (const auto& it2: document->override_by_path) {
-        if (
-          (get_last_raw_config_locked(it2.second) != nullptr)
-          && (document_changes.count(it2.first) == 0)
-        ) {
-          spdlog::debug("Adding the override path '{}' to remove", it2.first);
+      document->lbl_set.for_each(
+        [&document_changes, &doc_name=it.first, &result](
+          const auto& labels,
+          auto* override_
+        ) -> bool {
+          if (
+            (get_last_raw_config_locked(override_) != nullptr)
+            && (document_changes.count(labels) == 0)
+          ) {
+            spdlog::debug(
+              "Adding the labels {} of the document '{}' to remove",
+              labels.repr(),
+              doc_name
+            );
 
-          auto split_result = split_override_path(it2.first);
+            load_raw_config_result_t item;
+            item.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
+            item.document = doc_name;
+            item.raw_config = nullptr;
 
-          load_raw_config_result_t item;
-          item.status = LoadRawConfigStatus::FILE_DONT_EXISTS;
-          item.override_ = split_result.override_;
-          item.document = it.first;
-          item.flavor = split_result.flavor;
-          item.raw_config = nullptr;
+            result[doc_name][labels] = std::move(item);
+          }
 
-          result[it.first][it2.first] = std::move(item);
+          return true;
         }
-      }
+      );
       document->mutex.ReaderUnlock();
 
       if (document_changes.empty()) {
@@ -246,7 +255,7 @@ void UpdateCommand::filter_existing_documents(
   files_to_update_t& files_to_update
 ) {
   std::vector<std::string> documents_to_remove;
-  std::vector<std::string> paths_to_remove;
+  std::vector<Labels> labels_to_remove;
 
   cn_->mutex.ReaderLock();
   for (auto& document_it: files_to_update) {
@@ -258,33 +267,30 @@ void UpdateCommand::filter_existing_documents(
     if (document == nullptr) continue;
     cn_->mutex.ReaderUnlock();
 
-    paths_to_remove.clear();
+    labels_to_remove.clear();
 
     document->mutex.ReaderLock();
     for (const auto& it : document_it.second) {
       if (it.second.status == LoadRawConfigStatus::OK) {
-        auto new_checksum = it.second.raw_config->checksum;
-        with_raw_config_locked(
-          document.get(),
-          it.first,
-          cn_->current_version,
-          [&paths_to_remove, new_checksum](const auto& path, const auto& raw_config) {
-            if (raw_config->has_content && (raw_config->checksum == new_checksum)) {
-              paths_to_remove.push_back(path);
-            }
-          }
-        );
+        auto rc = get_raw_config_locked(document.get(), it.first, cn_->current_version);
+        if (
+            (rc != nullptr)
+            && rc->has_content
+            && (rc->checksum == it.second.raw_config->checksum)
+        ) {
+          labels_to_remove.push_back(it.first);
+        }
       }
     }
     document->mutex.ReaderUnlock();
 
-    for (size_t i = 0, l = paths_to_remove.size(); i < l; ++i) {
+    for (size_t i = 0, l = labels_to_remove.size(); i < l; ++i) {
       spdlog::debug(
-        "Filtering the existing raw config (document: '{}', path: '{}')",
+        "Filtering the existing raw config (document: '{}', labels: {})",
         document_it.first,
-        paths_to_remove[i]
+        labels_to_remove[i].repr()
       );
-      document_it.second.erase(paths_to_remove[i]);
+      document_it.second.erase(labels_to_remove[i]);
     }
 
     if (document_it.second.empty()) {
@@ -326,18 +332,12 @@ bool UpdateCommand::update_reference_counters(
         }
       }
 
-      with_raw_config_locked(
-        document.get(),
-        it.first,
-        cn_->current_version,
-        [&delta_tmp, &it](const auto&, const auto& raw_config) {
-          if (raw_config->has_content) {
-            for (const auto& reference_to : raw_config->reference_to) {
-              --delta_tmp[reference_to][it.second.document].v;
-            }
-          }
+      auto rc = get_raw_config_locked(document.get(), it.first, cn_->current_version);
+      if ((rc != nullptr) && rc->has_content) {
+        for (const auto& reference_to : rc->reference_to) {
+          --delta_tmp[reference_to][it.second.document].v;
         }
-      );
+      }
     }
     document->mutex.ReaderUnlock();
 
@@ -362,7 +362,7 @@ bool UpdateCommand::update_reference_counters(
   if (!delta.empty()) {
     cn_->mutex.Lock();
     for (auto& document_it: delta) {
-      auto dv = get_or_guild_document_versions_locked(cn_.get(), document_it.first);
+      auto dv = get_or_build_document_versions_locked(cn_.get(), document_it.first);
       for (const auto& it : document_it.second) {
         auto& counter = dv->referenced_by[it.first];
         spdlog::debug(
@@ -395,27 +395,27 @@ bool UpdateCommand::update_documents(
     if (document == nullptr) return false;
 
     for (const auto& it : document_it.second) {
-      auto& override_ = document->override_by_path[it.first];
+      auto* override_ = document->lbl_set.get_or_build(it.first);
 
       if (it.second.status == LoadRawConfigStatus::FILE_DONT_EXISTS) {
         spdlog::debug(
-          "Removing raw config if possible (document: '{}', path: '{}')",
+          "Removing raw config if possible (document: '{}', labels: {})",
           document_it.first,
-          it.first
+          it.first.repr()
         );
 
-        override_.raw_config_by_version.emplace(cn_->current_version+1, nullptr);
+        override_->raw_config_by_version.emplace(cn_->current_version+1, nullptr);
       } else {
         spdlog::debug(
-          "Updating raw config (document: '{}', path: '{}', id: {})",
+          "Updating raw config (document: '{}', labels: {}, id: {})",
           document_it.first,
-          it.first,
+          it.first.repr(),
           document->next_raw_config_id
         );
 
         it.second.raw_config->id = document->next_raw_config_id++;
 
-        override_.raw_config_by_version[cn_->current_version+1] = std::move(it.second.raw_config);
+        override_->raw_config_by_version[cn_->current_version+1] = std::move(it.second.raw_config);
       }
     }
     document->mutex.Unlock();
@@ -426,7 +426,7 @@ bool UpdateCommand::update_documents(
 
 void UpdateCommand::trigger_watchers(
   context_t* ctx,
-  const absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, AffectedDocumentStatus>>& dep_by_doc
+  const absl::flat_hash_map<std::string, absl::flat_hash_map<Labels, AffectedDocumentStatus>>& dep_by_doc
 ) {
   std::vector<std::shared_ptr<api::stream::WatchInputMessage>> watchers;
 
@@ -438,15 +438,11 @@ void UpdateCommand::trigger_watchers(
     ) {
       search->second->watchers.for_each(
         [&deps=it.second, &watchers](auto&& watcher) {
-          bool without_watcher = for_each_document_override_path(
-            watcher->flavors(),
-            watcher->overrides(),
-            [&deps](const auto& override_path) {
-              return !deps.contains(override_path);
+          for (const auto& it : deps) {
+            if (watcher->labels().contains(it.first)) {
+              watchers.push_back(std::move(watcher));
+              break;
             }
-          );
-          if (!without_watcher) {
-            watchers.push_back(std::move(watcher));
           }
         }
       );
@@ -460,14 +456,16 @@ void UpdateCommand::trigger_watchers(
       watchers[i]->document()
     );
 
-    auto output_message = watchers[i]->make_output_message();
+    auto msg = watchers[i]->make_output_message();
 
-    process_get_request<worker::SetupCommand>(
+    process_get_config_task(
       decltype(cn_)(cn_),
-      std::make_shared<api::stream::WatchGetRequest>(
-        cn_->current_version,
-        std::move(watchers[i]),
-        std::move(output_message)
+      std::make_shared<ApiGetConfigTask>(
+        std::make_shared<api::stream::WatchGetRequest>(
+          cn_->current_version,
+          std::move(watchers[i]),
+          std::move(msg)
+        )
       ),
       ctx
     );

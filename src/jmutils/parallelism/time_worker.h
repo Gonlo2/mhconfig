@@ -1,6 +1,7 @@
 #ifndef JMUTILS__PARALLELISM__TIME_WORKER_H
 #define JMUTILS__PARALLELISM__TIME_WORKER_H
 
+#include "jmutils/container/queue.h"
 #include "jmutils/parallelism/worker.h"
 #include "jmutils/time.h"
 

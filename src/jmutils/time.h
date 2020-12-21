@@ -1,6 +1,7 @@
 #ifndef JMUTILS__TIME_H
 #define JMUTILS__TIME_H
 
+#include <bits/stdint-uintn.h>
 #include <chrono>
 
 namespace jmutils

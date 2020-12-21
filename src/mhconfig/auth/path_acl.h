@@ -1,12 +1,11 @@
-#ifndef MHCONFIG__AUTH__PATH_CONTAINER_H
-#define MHCONFIG__AUTH__PATH_CONTAINER_H
+#ifndef MHCONFIG__AUTH__PATH_ACL_H
+#define MHCONFIG__AUTH__PATH_ACL_H
 
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include <absl/container/flat_hash_map.h>
-#include <absl/synchronization/mutex.h>
 
 #include "mhconfig/auth/common.h"
 #include "jmutils/common.h"
@@ -17,13 +16,13 @@ namespace auth
 {
 
 template <typename T>
-class PathContainer
+class PathAcl
 {
 public:
-  PathContainer() {
+  PathAcl() {
   }
 
-  virtual ~PathContainer() {
+  virtual ~PathAcl() {
   }
 
   bool init(

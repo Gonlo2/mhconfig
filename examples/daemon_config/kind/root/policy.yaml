@@ -1,0 +1,7 @@
+capabilities: [GET, WATCH, UPDATE, RUN_GC, TRACE]
+root_paths:
+- path: /mnt/data/mhconfig/+
+  capabilities: [GET, WATCH, UPDATE, RUN_GC, TRACE]
+labels:
+# Allow all the config by default
+- capabilities: [GET, WATCH, UPDATE, RUN_GC, TRACE]

@@ -1,24 +1,31 @@
 #ifndef MHCONFIG__ELEMENT_H
 #define MHCONFIG__ELEMENT_H
 
-#include <vector>
-#include <utility>
+#include <absl/container/flat_hash_map.h>
+#include <assert.h>
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
+#include <boost/algorithm/string.hpp>
+#include <fmt/format.h>
+#include <openssl/sha.h>
+#include <stddef.h>
+#include <array>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <variant>
+#include <vector>
 
-#include <openssl/sha.h>
-#include "yaml-cpp/yaml.h"
-#include "spdlog/spdlog.h"
-#include "jmutils/string/pool.h"
-#include "jmutils/cow.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/hash/hash.h"
 #include "jmutils/common.h"
-#include <fmt/format.h>
-#include <boost/algorithm/string.hpp>
-
-#include <absl/container/flat_hash_map.h>
+#include "jmutils/cow.h"
+#include "jmutils/string/pool.h"
+#include "spdlog/spdlog.h"
+#include "yaml-cpp/yaml.h"
 
 namespace mhconfig {
   enum class NodeType : uint8_t {
@@ -110,7 +117,7 @@ namespace mhconfig {
   namespace conversion
   {
     template <typename T>
-    std::pair<bool, T> as(NodeType type, const data_t& data);
+    std::optional<T> as(NodeType type, const data_t& data);
   } /* conversion */
 
   std::string to_string(NodeType type);
@@ -152,22 +159,20 @@ namespace mhconfig {
     template <typename T>
     const T as() const {
       assert(is_scalar());
-      std::pair<bool, T> r = conversion::as<T>(type_, data_);
-      assert(r.first);
-      return r.second;
+      auto r = conversion::as<T>(type_, data_);
+      assert(r);
+      return *r;
     }
 
     template <typename T>
     const T as(T default_value) const {
       if (!is_scalar()) return default_value;
-      std::pair<bool, T> r = conversion::as<T>(type_, data_);
-      if (!r.first) return default_value;
-      return r.second;
+      auto r = conversion::as<T>(type_, data_);
+      return r ? *r : default_value;
     }
 
     template <typename T>
-    const std::pair<bool, T> try_as() const {
-      if (!is_scalar()) return std::make_pair(true, T());
+    const std::optional<T> try_as() const {
       return conversion::as<T>(type_, data_);
     }
 
@@ -177,6 +182,7 @@ namespace mhconfig {
     Sequence* as_sequence_mut();
     Map* as_map_mut();
 
+    Element get(const std::string& key) const;
     Element get(const Literal& key) const;
     Element get(size_t index) const;
 
@@ -196,6 +202,8 @@ namespace mhconfig {
 
     std::array<uint8_t, 32> make_checksum() const;
 
+    std::optional<std::string> to_yaml() const;
+
   private:
     NodeType type_;
     data_t data_;
@@ -210,6 +218,8 @@ namespace mhconfig {
     void swap(Element&& o) noexcept;
 
     void add_fingerprint(std::string& output) const;
+
+    bool to_yaml_base(YAML::Emitter& out) const;
   };
 
   //TODO Check this

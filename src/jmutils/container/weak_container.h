@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <absl/synchronization/mutex.h>
+#include "jmutils/common.h"
 
 namespace jmutils
 {

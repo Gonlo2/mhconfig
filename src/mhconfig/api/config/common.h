@@ -64,10 +64,9 @@ uint32_t fill_elements(
 
     case NodeType::STR: // Fallback
     case NodeType::OVERRIDE_STR: {
-      auto r = root.try_as<std::string>();
-      if (r.first) {
+      if (auto r = root.try_as<std::string>(); r) {
         add_value_type(output, ValueElement::STR);
-        output->set_value_str(r.second);
+        output->set_value_str(*r);
       } else {
         add_value_type(output, ValueElement::UNDEFINED);
       }
@@ -75,10 +74,9 @@ uint32_t fill_elements(
     }
 
     case NodeType::BIN: {
-      auto r = root.try_as<std::string>();
-      if (r.first) {
+      if (auto r = root.try_as<std::string>(); r) {
         add_value_type(output, ValueElement::BIN);
-        output->set_value_bin(r.second);
+        output->set_value_bin(*r);
       } else {
         add_value_type(output, ValueElement::UNDEFINED);
       }
@@ -86,10 +84,9 @@ uint32_t fill_elements(
     }
 
     case NodeType::INT64: {
-      auto r = root.try_as<int64_t>();
-      if (r.first) {
+      if (auto r = root.try_as<int64_t>(); r) {
         add_value_type(output, ValueElement::INT64);
-        output->set_value_int(r.second);
+        output->set_value_int(*r);
       } else {
         add_value_type(output, ValueElement::UNDEFINED);
       }
@@ -97,10 +94,9 @@ uint32_t fill_elements(
     }
 
     case NodeType::DOUBLE: {
-      auto r = root.try_as<double>();
-      if (r.first) {
+      if (auto r = root.try_as<double>(); r) {
         add_value_type(output, ValueElement::DOUBLE);
-        output->set_value_double(r.second);
+        output->set_value_double(*r);
       } else {
         add_value_type(output, ValueElement::UNDEFINED);
       }
@@ -108,10 +104,9 @@ uint32_t fill_elements(
     }
 
     case NodeType::BOOL: {
-      auto r = root.try_as<bool>();
-      if (r.first) {
+      if (auto r = root.try_as<bool>(); r) {
         add_value_type(output, ValueElement::BOOL);
-        output->set_value_bool(r.second);
+        output->set_value_bool(*r);
       } else {
         add_value_type(output, ValueElement::UNDEFINED);
       }
@@ -162,6 +157,7 @@ uint32_t fill_elements(
       return parent_sibling_offset;
     }
 
+    case NodeType::DELETE: // Fallback
     case NodeType::FORMAT: // Fallback
     case NodeType::SREF: // Fallback
     case NodeType::REF:

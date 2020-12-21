@@ -1,9 +1,12 @@
 #ifndef MHCONFIG__API__REQUEST__GET_REQUEST_H
 #define MHCONFIG__API__REQUEST__GET_REQUEST_H
 
+#include <bits/stdint-uintn.h>
+#include <stddef.h>
 #include <string>
 #include <vector>
 
+#include "jmutils/container/label_set.h"
 #include "mhconfig/api/commitable.h"
 #include "mhconfig/element.h"
 
@@ -13,6 +16,8 @@ namespace api
 {
 namespace request
 {
+
+using jmutils::container::Labels;
 
 class GetRequest : public Commitable
 {
@@ -29,8 +34,7 @@ public:
 
   virtual const std::string& root_path() const = 0;
   virtual uint32_t version() const = 0;
-  virtual const std::vector<std::string>& overrides() const = 0;
-  virtual const std::vector<std::string>& flavors() const = 0;
+  virtual const Labels& labels() const = 0;
   virtual const std::string& document() const = 0;
 
   virtual void set_status(Status status) = 0;
@@ -40,8 +44,6 @@ public:
   virtual void set_checksum(const uint8_t* data, size_t len) = 0;
 
   virtual void set_preprocessed_payload(const char* data, size_t len) = 0;
-
-  virtual std::string peer() const = 0;
 };
 
 } /* request */

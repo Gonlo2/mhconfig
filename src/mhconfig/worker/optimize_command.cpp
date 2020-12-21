@@ -6,9 +6,11 @@ namespace worker
 {
 
 OptimizeCommand::OptimizeCommand(
+  std::shared_ptr<config_namespace_t>&& cn,
   std::shared_ptr<merged_config_t>&& merged_config
 )
-  : merged_config_(std::move(merged_config))
+  : cn_(std::move(cn)),
+  merged_config_(std::move(merged_config))
 {
 }
 
@@ -26,52 +28,21 @@ bool OptimizeCommand::force_take_metric() const {
 bool OptimizeCommand::execute(
   context_t* context
 ) {
-  proto::GetResponse get_response;
-  auto checksum = merged_config_->value.make_checksum();
-  get_response.set_checksum(checksum.data(), checksum.size());
-  api::config::fill_elements(
-    merged_config_->value,
-    &get_response,
-    get_response.add_elements()
-  );
-
-  std::string buffer;
-  bool ok = get_response.SerializeToString(&buffer);
-  if (ok) {
-    context->metrics.add(
-      Metrics::Id::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
-      {},
-      buffer.size()
-    );
-  }
-
-  std::vector<std::shared_ptr<api::request::GetRequest>> waiting;
+  std::vector<std::shared_ptr<GetConfigTask>> waiting;
 
   merged_config_->mutex.Lock();
-  if (ok) {
-    merged_config_->status = MergedConfigStatus::OK_CONFIG_OPTIMIZED;
-    std::swap(merged_config_->preprocesed_value, buffer);
-  } else {
-    merged_config_->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
-  }
+  auto status = alloc_payload_locked(merged_config_.get());
   std::swap(merged_config_->waiting, waiting);
   merged_config_->mutex.Unlock();
 
-  if (ok) {
-    for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-      waiting[i]->set_preprocessed_payload(
-        merged_config_->preprocesed_value.data(),
-        merged_config_->preprocesed_value.size()
-      );
-      waiting[i]->commit();
-    }
-  } else {
-    spdlog::warn("Can't optimize the config of the document");
-    for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-      waiting[i]->set_checksum(checksum.data(), checksum.size());
-      waiting[i]->set_element(merged_config_->value);
-      waiting[i]->commit();
-    }
+  for (size_t i = 0, l = waiting.size(); i < l; ++i) {
+    waiting[i]->on_complete(
+      status,
+      cn_,
+      0,
+      merged_config_->value,
+      merged_config_->payload
+    );
   }
 
   return true;

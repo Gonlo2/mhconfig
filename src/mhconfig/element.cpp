@@ -175,6 +175,12 @@ namespace mhconfig {
       : nullptr;
   }
 
+  Element Element::get(const std::string& key) const {
+    jmutils::string::InternalString internal_string;
+    auto k = jmutils::string::make_string(key, &internal_string);
+    return get(k);
+  }
+
   Element Element::get(const Literal& key) const {
     auto map = as_map();
     if (map == nullptr) {
@@ -420,6 +426,105 @@ namespace mhconfig {
     }
   }
 
+  std::optional<std::string> Element::to_yaml() const {
+    YAML::Emitter out;
+    out.SetIndent(2);
+
+    out << YAML::BeginDoc;
+    bool ok = to_yaml_base(out);
+    out << YAML::EndDoc;
+
+    return ok && out.good()
+      ? std::optional<std::string>(out.c_str())
+      : std::optional<std::string>();
+  }
+
+  bool Element::to_yaml_base(YAML::Emitter& out) const {
+    switch (type_) {
+      case NodeType::OVERRIDE_MAP: // Fallback
+      case NodeType::OVERRIDE_SEQUENCE: // Fallback
+      case NodeType::OVERRIDE_NONE: // Fallback
+      case NodeType::OVERRIDE_STR:
+        out << YAML::LocalTag("override");
+        break;
+      case NodeType::FORMAT:
+        out << YAML::LocalTag("format");
+        break;
+      case NodeType::SREF:
+        out << YAML::LocalTag("sref");
+        break;
+      case NodeType::REF:
+        out << YAML::LocalTag("ref");
+        break;
+      default:
+        break;
+    }
+
+    switch (type_) {
+      case NodeType::OVERRIDE_MAP: // Fallback
+      case NodeType::MAP: {
+        out << YAML::BeginMap;
+        for (const auto& it : *as_map()) {
+          out << YAML::Key << it.first.str();
+          out << YAML::Value;
+          if (!it.second.to_yaml_base(out)) return false;
+        }
+        out << YAML::EndMap;
+        return true;
+      }
+      case NodeType::SREF: // Fallback
+      case NodeType::REF: // Fallback
+      case NodeType::OVERRIDE_SEQUENCE: // Fallback
+      case NodeType::SEQUENCE: {
+        out << YAML::BeginSeq;
+        for (const auto& e : *as_sequence()) {
+          if (!e.to_yaml_base(out)) return false;
+        }
+        out << YAML::EndSeq;
+        return true;
+      }
+      case NodeType::OVERRIDE_NONE: // Fallback
+      case NodeType::NONE: {
+        out << YAML::Null;
+        return true;
+      }
+      case NodeType::FORMAT: // Fallback
+      case NodeType::OVERRIDE_STR: // Fallback
+      case NodeType::STR: {
+        out << YAML::DoubleQuoted << data_.literal.str();
+        return true;
+      }
+      case NodeType::BIN: {
+        auto x = data_.literal.str();
+        out << YAML::Binary((const unsigned char*)x.data(), x.size());
+        return true;
+      }
+      case NodeType::INT64: {
+        out << data_.int64_value;
+        return true;
+      }
+      case NodeType::DOUBLE: {
+        out << data_.double_value;
+        return true;
+      }
+      case NodeType::BOOL: {
+        out << data_.bool_value;
+        return true;
+      }
+      case NodeType::UNDEFINED: {
+        out << YAML::LocalTag("undefined");
+        out << YAML::Null;
+        return true;
+      }
+      case NodeType::DELETE: {
+        out << YAML::LocalTag("delete");
+        out << YAML::Null;
+        return true;
+      }
+    }
+    return false;
+  }
+
   void Element::init_data(NodeType type) noexcept {
     type_ = type;
     switch (get_internal_data_type(type_)) {
@@ -512,48 +617,48 @@ namespace mhconfig {
   namespace conversion
   {
     template <>
-    std::pair<bool, jmutils::string::String> as<jmutils::string::String>(NodeType type, const data_t& data) {
+    std::optional<jmutils::string::String> as<jmutils::string::String>(NodeType type, const data_t& data) {
       return get_internal_data_type(type) == InternalDataType::LITERAL
-        ? std::make_pair(true, data.literal)
-        : std::make_pair(false, jmutils::string::String());
+        ? std::optional<jmutils::string::String>(data.literal)
+        : std::optional<jmutils::string::String>();
     }
 
     template <>
-    std::pair<bool, std::string> as<std::string>(NodeType type, const data_t& data) {
+    std::optional<std::string> as<std::string>(NodeType type, const data_t& data) {
       switch (get_internal_data_type(type)) {
         case InternalDataType::LITERAL:
-          return std::make_pair(true, data.literal.str());
+          return std::optional<std::string>(data.literal.str());
         case InternalDataType::BOOL:
-          return std::make_pair(true, data.bool_value ? "true" : "false");
+          return std::optional<std::string>(data.bool_value ? "true" : "false");
         case InternalDataType::INT64:
-          return std::make_pair(true, std::to_string(data.int64_value));
+          return std::optional<std::string>(std::to_string(data.int64_value));
         case InternalDataType::DOUBLE:
-          return std::make_pair(true, std::to_string(data.double_value));
+          return std::optional<std::string>(std::to_string(data.double_value));
         default:
           break;
       }
-      return std::make_pair(false, "");
+      return std::optional<std::string>();
     }
 
     template <>
-    std::pair<bool, bool> as<bool>(NodeType type, const data_t& data) {
+    std::optional<bool> as<bool>(NodeType type, const data_t& data) {
       return get_internal_data_type(type) == InternalDataType::BOOL
-        ? std::make_pair(true, data.bool_value)
-        : std::make_pair(false, false);
+        ? std::optional<bool>(data.bool_value)
+        : std::optional<bool>();
     }
 
     template <>
-    std::pair<bool, int64_t> as<int64_t>(NodeType type, const data_t& data) {
+    std::optional<int64_t> as<int64_t>(NodeType type, const data_t& data) {
       return get_internal_data_type(type) == InternalDataType::INT64
-        ? std::make_pair(true, data.int64_value)
-        : std::make_pair(false, 0l);
+        ? std::optional<int64_t>(data.int64_value)
+        : std::optional<int64_t>();
     }
 
     template <>
-    std::pair<bool, double> as<double>(NodeType type, const data_t& data) {
+    std::optional<double> as<double>(NodeType type, const data_t& data) {
       return get_internal_data_type(type) == InternalDataType::DOUBLE
-        ? std::make_pair(true, data.double_value)
-        : std::make_pair(false, 0.0);
+        ? std::optional<double>(data.double_value)
+        : std::optional<double>();
     }
 
   } /* conversion */

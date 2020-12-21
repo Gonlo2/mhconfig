@@ -1,6 +1,9 @@
 {
   "root_path": "XXX",
-  "overrides": ["low-priority-override", "high-priority-override"],
+  "labels": [
+    {"key": "high", "value": "priority"},
+    {"key": "low", "value": "priority"}
+  ],
   "document": "_text.name.ext",
   "version": 0
 }

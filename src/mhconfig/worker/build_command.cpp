@@ -47,17 +47,25 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies() {
   absl::flat_hash_set<std::string> all_document_names;
   all_document_names.insert(pending_build_->element->document->name);
 
-  // TODO Create a small class of 16 bytes to store the overrides key
-  std::string overrides_key;
-  size_t num_flavors = pending_build_->request->flavors().size();
-  size_t num_overrides = pending_build_->request->overrides().size();
-  overrides_key.reserve((num_flavors+1) * num_overrides * sizeof(RawConfigId));
+  cn_->mutex.ReaderLock();
+  auto cfg_document = get_document_locked(
+    cn_.get(),
+    "mhconfig",
+    pending_build_->version
+  );
+  cn_->mutex.ReaderUnlock();
+
+  if (cfg_document == nullptr) {
+    return CheckDependenciesStatus::INVALID_VERSION;
+  }
+
+  auto cfg = get_element(cfg_document.get(), Labels(), pending_build_->version);
 
   return check_dependencies_rec(
     pending_build_->element.get(),
     dfs_document_names,
     all_document_names,
-    overrides_key,
+    cfg,
     true
   );
 }
@@ -66,27 +74,24 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
   build_element_t* build_element,
   absl::flat_hash_set<std::string>& dfs_document_names,
   absl::flat_hash_set<std::string>& all_document_names,
-  std::string& overrides_key,
+  const Element& cfg,
   bool is_root
 ) {
+  std::string overrides_key;
   absl::flat_hash_set<std::string> reference_to;
 
-  overrides_key.clear();
   bool is_a_valid_version = for_each_document_override(
+    cfg,
     build_element->document.get(),
-    pending_build_->request->flavors(),
-    pending_build_->request->overrides(),
+    pending_build_->task->labels(),
     pending_build_->version,
-    [&overrides_key, &reference_to, build_element=build_element](
-      const auto&,
-      auto& raw_config
-    ) {
+    [&overrides_key, &reference_to, build_element](auto&& raw_config) {
       jmutils::push_uint16(overrides_key, raw_config->id);
       if (raw_config->has_content) {
-        build_element->raw_configs_to_merge.push_back(raw_config);
         for (size_t i = 0, l = raw_config->reference_to.size(); i < l; ++i) {
           reference_to.insert(raw_config->reference_to[i]);
         }
+        build_element->raw_configs_to_merge.push_back(std::move(raw_config));
       }
     }
   );
@@ -131,6 +136,8 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
     case MergedConfigStatus::BUILDING:
       pending_build_->num_pending.fetch_add(1, std::memory_order_relaxed);
       merged_config->to_build.push_back(pending_build_);
+      // The root merged config has the building status but
+      // in reality is like a undefined one
       if (is_root) {
         merged_config->reference_to = reference_to;
         build_element->to_build = true;
@@ -172,7 +179,7 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
         child.get(),
         dfs_document_names,
         all_document_names,
-        overrides_key,
+        cfg,
         false
       );
       build_element->children.push_back(std::move(child));
@@ -197,7 +204,7 @@ void BuildCommand::decrease_pending_elements(
     );
     if (check_dependencies_status == CheckDependenciesStatus::OK) {
       absl::flat_hash_map<std::string, Element> element_by_document_name;
-      build(ctx, pending_build->element.get(), element_by_document_name, true);
+      build(ctx, pending_build->element.get(), element_by_document_name);
     }
   }
 }
@@ -224,7 +231,7 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
 
   if (build_element->to_build) {
     std::vector<std::shared_ptr<pending_build_t>> to_build;
-    std::vector<std::shared_ptr<api::request::GetRequest>> waiting;
+    std::vector<std::shared_ptr<GetConfigTask>> waiting;
 
     merged_config->mutex.Lock();
 
@@ -249,20 +256,9 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
 
     merged_config->mutex.Unlock();
 
-    if (result == CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG) {
+    if (auto r = get_error_status(result); r) {
       for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->set_status(api::request::GetRequest::Status::REF_GRAPH_IS_NOT_DAG);
-        waiting[i]->commit();
-      }
-    } else if (result == CheckDependenciesStatus::MISSING_DEPENDENCY) {
-      for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->set_status(api::request::GetRequest::Status::INVALID_VERSION);
-        waiting[i]->commit();
-      }
-    } else if (result == CheckDependenciesStatus::INVALID_VERSION) {
-      for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->set_status(api::request::GetRequest::Status::INVALID_VERSION);
-        waiting[i]->commit();
+        waiting[i]->on_complete(*r, cn_, 0, UNDEFINED_ELEMENT, nullptr);
       }
     }
 
@@ -284,14 +280,34 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
   return result;
 }
 
+std::optional<GetConfigTask::Status> BuildCommand::get_error_status(
+  CheckDependenciesStatus status
+) {
+  switch (status) {
+    case CheckDependenciesStatus::OK:
+      return std::optional<GetConfigTask::Status>();
+    case CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG:
+      return std::optional<GetConfigTask::Status>(
+        GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG
+      );
+    case CheckDependenciesStatus::MISSING_DEPENDENCY: // Fallback
+    case CheckDependenciesStatus::INVALID_VERSION:
+      return std::optional<GetConfigTask::Status>(
+        GetConfigTask::Status::INVALID_VERSION
+      );
+  }
+  return std::optional<GetConfigTask::Status>(
+    GetConfigTask::Status::ERROR
+  );
+}
+
 void BuildCommand::build(
   context_t* ctx,
   build_element_t* build_element,
-  absl::flat_hash_map<std::string, Element>& element_by_document_name,
-  bool is_root
+  absl::flat_hash_map<std::string, Element>& element_by_document_name
 ) {
   for (size_t i = 0, l = build_element->children.size(); i < l; ++i) {
-    build(ctx, build_element->children[i].get(), element_by_document_name, false);
+    build(ctx, build_element->children[i].get(), element_by_document_name);
   }
 
   if (build_element->to_build) {
@@ -326,65 +342,34 @@ void BuildCommand::build(
 
     config.freeze();
 
-    std::string preprocesed_value;
-    std::array<uint8_t, 32> checksum;
-
-    bool optimized = false;
-    if (is_root) {
-      proto::GetResponse get_response;
-      checksum = config.make_checksum();
-      get_response.set_checksum(checksum.data(), checksum.size());
-      api::config::fill_elements(
-        config,
-        &get_response,
-        get_response.add_elements()
-      );
-
-      if (get_response.SerializeToString(&preprocesed_value)) {
-        ctx->metrics.add(
-          Metrics::Id::OPTIMIZED_MERGED_CONFIG_USED_BYTES,
-          {},
-          preprocesed_value.size()
-        );
-        optimized = true;
-      } else {
-        spdlog::warn(
-          "Can't optimize the config of the document '{}' with id {}",
-          build_element->document->name,
-          build_element->document->id
-        );
-      }
-    }
-
     std::vector<std::shared_ptr<pending_build_t>> to_build;
-    std::vector<std::shared_ptr<api::request::GetRequest>> waiting;
+    std::vector<std::shared_ptr<GetConfigTask>> waiting;
 
     auto merged_config = build_element->merged_config.get();
 
     merged_config->mutex.Lock();
-    merged_config->status = optimized
-      ? MergedConfigStatus::OK_CONFIG_OPTIMIZED
-      : MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
+
     merged_config->value = config;
-    std::swap(merged_config->preprocesed_value, preprocesed_value);
+
+    auto status = GetConfigTask::Status::OK;
+    if (!merged_config->waiting.empty()) {
+      status = alloc_payload_locked(merged_config);
+    } else {
+      merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
+    }
+
     std::swap(merged_config->to_build, to_build);
     std::swap(merged_config->waiting, waiting);
     merged_config->mutex.Unlock();
 
-    if (optimized) {
-      for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->set_preprocessed_payload(
-          merged_config->preprocesed_value.data(),
-          merged_config->preprocesed_value.size()
-        );
-        waiting[i]->commit();
-      }
-    } else {
-      for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->set_checksum(checksum.data(), checksum.size());
-        waiting[i]->set_element(merged_config->value);
-        waiting[i]->commit();
-      }
+    for (size_t i = 0, l = waiting.size(); i < l; ++i) {
+      waiting[i]->on_complete(
+        status,
+        cn_,
+        pending_build_->version,
+        merged_config->value,
+        merged_config->payload
+      );
     }
 
     for (size_t i = 0, l = to_build.size(); i < l; ++i) {

@@ -1,19 +1,21 @@
 #ifndef MHCONFIG__API__STREAM__STREAM_H
 #define MHCONFIG__API__STREAM__STREAM_H
 
-#include <memory>
+#include <absl/synchronization/mutex.h>
+#include <grpcpp/impl/codegen/call_op_set.h>
+#include <grpcpp/impl/codegen/status.h>
+#include <chrono>
+#include <deque>
 #include <iostream>
+#include <memory>
+#include <queue>
 #include <string>
 #include <thread>
-#include <chrono>
-#include <queue>
+#include <utility>
 
-#include <absl/synchronization/mutex.h>
-
+#include "jmutils/time.h"
 #include "mhconfig/api/session.h"
 #include "mhconfig/metrics.h"
-#include "jmutils/time.h"
-
 #include "spdlog/spdlog.h"
 
 namespace mhconfig
@@ -27,42 +29,15 @@ template <typename GrpcStream, typename OutMsg>
 class Stream : public Session
 {
 public:
-  Stream()
-    : Session(),
-    stream_(&ctx_)
+  template <typename T>
+  Stream(
+    T&& ctx
+  ) : Session(std::forward<T>(ctx)),
+    stream_(&server_ctx_)
   {
   }
 
   virtual ~Stream() {
-  }
-
-  //TODO move this function to the private sections and make the
-  //class Service friend of this
-  void on_proceed(
-    uint8_t status,
-    CustomService* service,
-    grpc::ServerCompletionQueue* cq,
-    context_t* ctx,
-    uint_fast32_t& sequential_id
-  ) override {
-    switch (static_cast<Status>(status)) {
-      case Status::CREATE:
-        clone_and_subscribe(service, cq);
-        //TODO add request metrics
-        on_create(ctx);
-        break;
-      case Status::READ:
-        on_read(ctx);
-        break;
-      case Status::WRITE:
-        mutex_.Lock();
-        sending_a_message_ = false;
-        send_message_if_neccesary();
-        mutex_.Unlock();
-        break;
-      case Status::FINISH:
-        break;
-    }
   }
 
   bool finish(const grpc::Status& status) override {
@@ -78,34 +53,19 @@ public:
   }
 
 protected:
-  enum class Status {
-    CREATE = 0,
-    FINISH = 1,
-    READ = 2,
-    WRITE = 3,
-  };
-
   GrpcStream stream_;
 
-  inline void* tag(Status status) {
-    return raw_tag(static_cast<uint8_t>(status));
+  void on_write() override {
+    mutex_.Lock();
+    sending_a_message_ = false;
+    send_message_if_neccesary();
+    mutex_.Unlock();
   }
 
-  inline void* unsafe_tag(Status status) {
-    return unsafe_raw_tag(static_cast<uint8_t>(status));
-  }
-
-  //TODO Use this with CRTP
-  virtual void on_create(
-    context_t* ctx
-  ) = 0;
-
-  //TODO Use this with CRTP
-  virtual void on_read(
-    context_t* ctx
-  ) = 0;
-
-  bool send(std::shared_ptr<OutMsg> message, bool finish) {
+  bool send(
+    std::shared_ptr<OutMsg> message,
+    bool finish
+  ) {
     mutex_.Lock();
     bool ok = !going_to_finish_;
     if (ok) {
@@ -126,7 +86,7 @@ private:
   void send_message_if_neccesary() {
     if (!sending_a_message_) {
       if (!messages_to_send_.empty()) {
-        if (auto t = unsafe_tag(Status::WRITE)) {
+        if (auto t = make_tag_locked(GrpcStatus::WRITE)) {
           spdlog::trace("Sending a message in the stream {}", (void*) this);
           auto message = messages_to_send_.front();
           messages_to_send_.pop_front();
@@ -145,7 +105,7 @@ private:
           sending_a_message_ = true;
         }
       } else if (going_to_finish_) {
-        if (auto t = unsafe_tag(Status::WRITE)) {
+        if (auto t = make_tag_locked(GrpcStatus::WRITE)) {
           stream_.Finish(finish_status_, t);
           going_to_finish_ = false;
         }

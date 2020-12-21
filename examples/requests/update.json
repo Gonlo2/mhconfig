@@ -1,7 +1,7 @@
 {
   "root_path": "XXX",
   "relative_paths": [
-    "low-priority-override/other.yaml",
-    "low-priority-override/test.yaml"
+    "low=priority/other.yaml",
+    "low=priority/test.yaml"
   ]
 }

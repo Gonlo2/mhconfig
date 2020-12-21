@@ -1,9 +1,12 @@
 #ifndef MHCONFIG__OPTIMIZE_COMMAND_H
 #define MHCONFIG__OPTIMIZE_COMMAND_H
 
-#include "mhconfig/api/config/common.h"
-#include "mhconfig/command.h"
+#include <memory>
+#include <string>
+
+#include "mhconfig/builder.h"
 #include "mhconfig/config_namespace.h"
+#include "mhconfig/context.h"
 
 namespace mhconfig
 {
@@ -14,6 +17,7 @@ class OptimizeCommand : public WorkerCommand
 {
 public:
   OptimizeCommand(
+    std::shared_ptr<config_namespace_t>&& cn,
     std::shared_ptr<merged_config_t>&& merged_config
   );
   virtual ~OptimizeCommand();
@@ -27,6 +31,7 @@ public:
   ) override;
 
 private:
+  std::shared_ptr<config_namespace_t> cn_;
   std::shared_ptr<merged_config_t> merged_config_;
 };
 

@@ -28,7 +28,8 @@ void gc_cn(
       || (it.second->status == ConfigNamespaceStatus::OK_UPDATING);
 
     if (check) {
-      if (check = (it.second->last_access_timestamp <= timelimit_s)) {
+      check = it.second->last_access_timestamp <= timelimit_s;
+      if (check) {
         for (auto& it2 : it.second->document_versions_by_name) {
           if (!it2.second->watchers.empty()) {
             check = false;
@@ -45,7 +46,8 @@ void gc_cn(
         || (it.second->status == ConfigNamespaceStatus::OK_UPDATING);
 
       if (remove) {
-        if (remove = (it.second->last_access_timestamp <= timelimit_s)) {
+        remove = it.second->last_access_timestamp <= timelimit_s;
+        if (remove) {
           for (auto& it2 : it.second->document_versions_by_name) {
             if (!it2.second->watchers.empty()) {
               remove = false;
@@ -62,7 +64,7 @@ void gc_cn(
           it.second->id
         );
 
-        delete_cn_locked(it.second.get());
+        delete_cn_locked(it.second);
         to_remove.push_back(it.second);
       }
       it.second->mutex.Unlock();
@@ -82,8 +84,7 @@ void gc_cn(
 void gc_cn_dead_pointers(
   config_namespace_t* cn
 ) {
-  cn->traces_by_override.remove_expired();
-  cn->traces_by_flavor.remove_expired();
+  cn->traces_by_label.remove_expired();
   cn->traces_by_document.remove_expired();
   cn->to_trace_always.remove_expired();
 
@@ -246,59 +247,63 @@ bool gc_document_raw_config_versions(
     return false;
   }
 
-  std::vector<std::string> to_check;
+  std::vector<Labels> to_check;
 
   document->mutex.ReaderLock();
-  for (const auto& it : document->override_by_path) {
-    auto it2 = it.second.raw_config_by_version.begin();
-    size_t size = it.second.raw_config_by_version.size();
+  document->lbl_set.for_each(
+    [&to_check, oldest_version](const auto& labels, auto* override_) -> bool {
+      auto it = override_->raw_config_by_version.begin();
+      size_t size = override_->raw_config_by_version.size();
 
-    bool clean_versions = (size == 0)
-      || ((size == 1) && (it2->first < oldest_version) && (it2->second == nullptr))
-      || ((size > 1) && (it2->first < oldest_version));
+      bool clean_versions = (size == 0)
+        || ((size == 1) && (it->first < oldest_version) && (it->second == nullptr))
+        || ((size > 1) && (it->first < oldest_version));
 
-    if (clean_versions) {
-      to_check.push_back(it.first);
+      if (clean_versions) {
+        to_check.push_back(labels);
+      }
+
+      return true;
     }
-  }
-  bool empty = document->override_by_path.empty();
+  );
+  bool empty = document->lbl_set.empty();
   document->mutex.ReaderUnlock();
 
   if (!to_check.empty()) {
     document->mutex.Lock();
     for (size_t i = 0, l = to_check.size(); i < l; ++i) {
-      auto search = document->override_by_path.find(to_check[i]);
-      if (search != document->override_by_path.end()) {
-        if (!search->second.raw_config_by_version.empty()) {
-          auto it2 = search->second.raw_config_by_version.upper_bound(oldest_version);
-          if (it2 != search->second.raw_config_by_version.begin()) --it2;
+      auto* override_ = document->lbl_set.get(to_check[i]);
+      if (override_ != nullptr) {
+        if (!override_->raw_config_by_version.empty()) {
+          auto it2 = override_->raw_config_by_version.upper_bound(oldest_version);
+          if (it2 != override_->raw_config_by_version.begin()) --it2;
           if (it2->second == nullptr) ++it2;
 
           spdlog::trace(
-            "Removed raw_config versions [{}, {}) (document: '{}', override_path: '{}')",
-            search->second.raw_config_by_version.begin()->first,
-            (it2 == search->second.raw_config_by_version.end()) ? 0xffff : it2->first,
+            "Removed raw_config versions [{}, {}) (document: '{}', labels: {})",
+            override_->raw_config_by_version.begin()->first,
+            (it2 == override_->raw_config_by_version.end()) ? 0xffff : it2->first,
             document->name,
-            to_check[i]
+            to_check[i].repr()
           );
 
-          search->second.raw_config_by_version.erase(
-            search->second.raw_config_by_version.begin(),
+          override_->raw_config_by_version.erase(
+            override_->raw_config_by_version.begin(),
             it2
           );
         }
-        if (search->second.raw_config_by_version.empty()) {
+        if (override_->raw_config_by_version.empty()) {
           spdlog::trace(
-            "Removed override path '{}' in the document '{}'",
-            to_check[i],
+            "Removed labels {} in the document '{}'",
+            to_check[i].repr(),
             document->name
           );
 
-          document->override_by_path.erase(search);
+          document->lbl_set.remove(to_check[i]);
         }
       }
     }
-    empty = document->override_by_path.empty();
+    empty = document->lbl_set.empty();
     document->mutex.Unlock();
   }
 

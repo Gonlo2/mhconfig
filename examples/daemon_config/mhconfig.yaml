@@ -1,0 +1,7 @@
+labels_metadata:
+  app:
+    weight: 0
+  env:
+    weight: 10
+  kind:
+    weight: 20

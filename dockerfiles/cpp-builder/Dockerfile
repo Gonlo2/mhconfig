@@ -1,4 +1,4 @@
-FROM gcc:9.3
+FROM debian:10.7
 MAINTAINER Juan Manuel Fdez
 
 ### base ###
@@ -6,7 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   cmake \
   automake \
   curl \
-  g++ \
+  libcurl4 \
+  libcurl4-openssl-dev \
+  clang \
+  libclang-dev \
   libboost-all-dev \
   libssl-dev \
   libtool \
