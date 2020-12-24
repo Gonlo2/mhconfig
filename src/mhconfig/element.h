@@ -26,6 +26,7 @@
 #include "jmutils/string/pool.h"
 #include "spdlog/spdlog.h"
 #include "yaml-cpp/yaml.h"
+#include <fmt/format.h>
 
 namespace mhconfig {
   enum class NodeType : uint8_t {
@@ -196,8 +197,6 @@ namespace mhconfig {
 
     Element clone_without_virtual() const;
 
-    std::string repr() const;
-
     void freeze();
 
     std::array<uint8_t, 32> make_checksum() const;
@@ -225,5 +224,42 @@ namespace mhconfig {
   //TODO Check this
   const static Element UNDEFINED_ELEMENT;
 }
+
+
+template <> struct fmt::formatter<mhconfig::Element>: formatter<string_view> {
+  template <typename FormatContext>
+  auto format(const mhconfig::Element& element, FormatContext& ctx) {
+    auto oit = format_to(
+      ctx.out(),
+      "Element(type: {}",
+      to_string(element.type())
+    );
+
+    switch (get_internal_data_type(element.type())) {
+      case mhconfig::InternalDataType::EMPTY:
+        break;
+      case mhconfig::InternalDataType::MAP:
+        oit = format_to(oit, ", size: {}", element.as_map()->size());
+        break;
+      case mhconfig::InternalDataType::SEQUENCE:
+        oit = format_to(oit, ", size: {}", element.as_sequence()->size());
+        break;
+      case mhconfig::InternalDataType::LITERAL:
+        oit = format_to(oit, ", literal: '{}'", element.as<std::string>());
+        break;
+      case mhconfig::InternalDataType::INT64:
+        oit = format_to(oit, ", int64: {}", element.as<int64_t>());
+        break;
+      case mhconfig::InternalDataType::DOUBLE:
+        oit = format_to(oit, ", double: {}", element.as<double>());
+        break;
+      case mhconfig::InternalDataType::BOOL:
+        oit = format_to(oit, ", bool: {}", element.as<bool>());
+        break;
+    }
+
+    return format_to(oit, ")");
+  }
+};
 
 #endif

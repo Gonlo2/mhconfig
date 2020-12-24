@@ -12,22 +12,5 @@ Labels make_labels(
   return Labels(labels);
 }
 
-std::string Labels::repr() const {
-  std::stringstream ss;
-  ss << "(";
-  auto it = labels_.cbegin();
-  if (it != labels_.cend()) {
-    ss << "'" << it->first << "': '" << it->second << "'";
-    ++it;
-  }
-  while (it != labels_.cend()) {
-    ss << ", '" << it->first << "': '" << it->second << "'";
-    ++it;
-  }
-  ss << ")";
-  return ss.str();
-}
-
-
 } /* container */
 } /* jmutils */

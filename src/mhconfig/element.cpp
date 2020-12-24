@@ -184,7 +184,7 @@ namespace mhconfig {
   Element Element::get(const Literal& key) const {
     auto map = as_map();
     if (map == nullptr) {
-      spdlog::debug("The element {} isn't a map", repr());
+      spdlog::debug("The element {} isn't a map", *this);
       return Element();
     }
 
@@ -195,7 +195,7 @@ namespace mhconfig {
   Element Element::get(size_t index) const {
     auto seq = as_sequence();
     if (seq == nullptr) {
-      spdlog::debug("The element {} isn't a sequence", repr());
+      spdlog::debug("The element {} isn't a sequence", *this);
       return Element();
     }
 
@@ -299,40 +299,6 @@ namespace mhconfig {
         return Element(data_.bool_value);
     }
     assert(false);
-  }
-
-  std::string Element::repr() const {
-    std::stringstream ss;
-
-    ss << "Element(";
-    ss << "type: " << to_string(type());
-
-    switch (get_internal_data_type(type_)) {
-      case InternalDataType::EMPTY:
-        break;
-      case InternalDataType::MAP:
-        ss << ", size: " << as_map()->size();
-        break;
-      case InternalDataType::SEQUENCE:
-        ss << ", size: " << as_sequence()->size();
-        break;
-      case InternalDataType::LITERAL:
-        ss << ", literal: '" << data_.literal.str() << "'";
-        break;
-      case InternalDataType::INT64:
-        ss << ", int64: " << data_.int64_value;
-        break;
-      case InternalDataType::DOUBLE:
-        ss << ", double: " << data_.double_value;
-        break;
-      case InternalDataType::BOOL:
-        ss << ", bool: " << data_.bool_value;
-        break;
-    }
-
-    ss << ")";
-
-    return ss.str();
   }
 
   void Element::freeze() {

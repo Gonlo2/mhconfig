@@ -277,7 +277,7 @@ bool touch_affected_documents(
           spdlog::debug(
             "Updating affected raw config (document: '{}', labels: {}, version: {}, old_id: {}, new_id: {})",
             it.first,
-            it2.first.repr(),
+            it2.first,
             version,
             last_version == nullptr ? 0 : last_version->id,
             document->next_raw_config_id
@@ -357,12 +357,7 @@ Element override_with(
     case VirtualNode::LITERAL: {
       VirtualNode type = get_virtual_node_type(a);
       if (type != VirtualNode::LITERAL) {
-        spdlog::warn(
-          "Can't override {} with {} without the '{}' tag",
-          a.repr(),
-          b.repr(),
-          TAG_OVERRIDE
-        );
+        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
         return a;
       }
 
@@ -371,12 +366,7 @@ Element override_with(
 
     case VirtualNode::MAP: {
       if (!a.is_map()) {
-        spdlog::warn(
-          "Can't override {} with {} without the '{}' tag",
-          a.repr(),
-          b.repr(),
-          TAG_OVERRIDE
-        );
+        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
         return a;
       }
 
@@ -409,12 +399,7 @@ Element override_with(
 
     case VirtualNode::SEQUENCE: {
       if (!a.is_sequence()) {
-        spdlog::warn(
-          "Can't override {} with {} without the '{}' tag",
-          a.repr(),
-          b.repr(),
-          TAG_OVERRIDE
-        );
+        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
         return a;
       }
 
@@ -436,7 +421,7 @@ Element override_with(
       break;
   }
 
-  spdlog::warn("Can't override {} with {}", a.repr(), b.repr());
+  spdlog::warn("Can't override {} with {}", a, b);
   return a;
 }
 

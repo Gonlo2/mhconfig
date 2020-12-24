@@ -219,7 +219,7 @@ UpdateCommand::files_to_update_t UpdateCommand::obtain_missing_files(
           ) {
             spdlog::debug(
               "Adding the labels {} of the document '{}' to remove",
-              labels.repr(),
+              labels,
               doc_name
             );
 
@@ -288,7 +288,7 @@ void UpdateCommand::filter_existing_documents(
       spdlog::debug(
         "Filtering the existing raw config (document: '{}', labels: {})",
         document_it.first,
-        labels_to_remove[i].repr()
+        labels_to_remove[i]
       );
       document_it.second.erase(labels_to_remove[i]);
     }
@@ -401,7 +401,7 @@ bool UpdateCommand::update_documents(
         spdlog::debug(
           "Removing raw config if possible (document: '{}', labels: {})",
           document_it.first,
-          it.first.repr()
+          it.first
         );
 
         override_->raw_config_by_version.emplace(cn_->current_version+1, nullptr);
@@ -409,7 +409,7 @@ bool UpdateCommand::update_documents(
         spdlog::debug(
           "Updating raw config (document: '{}', labels: {}, id: {})",
           document_it.first,
-          it.first.repr(),
+          it.first,
           document->next_raw_config_id
         );
 

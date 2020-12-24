@@ -164,7 +164,7 @@ public:
     }
 
     if (!has_labels_capability(capability, labels)) {
-      spdlog::trace("Without labels capability for {}", labels.repr());
+      spdlog::trace("Without labels capability for {}", labels);
       return AuthResult::PERMISSION_DENIED;
     }
 

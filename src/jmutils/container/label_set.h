@@ -18,6 +18,8 @@
 #include "jmutils/container/weak_container.h"
 #include "spdlog/spdlog.h"
 
+#include <fmt/format.h>
+
 namespace jmutils
 {
 namespace container
@@ -78,8 +80,6 @@ public:
   friend H AbslHashValue(H h, const Labels& labels) {
     return H::combine(std::move(h), labels.hash_);
   }
-
-  std::string repr() const;
 
 private:
   size_t hash_{0};
@@ -186,7 +186,7 @@ public:
 
           spdlog::trace(
             "The entry with labels {} has depth {}",
-            node->entry->labels.repr(),
+            node->entry->labels,
             node->depth
           );
 
@@ -396,5 +396,24 @@ private:
 
 } /* container */
 } /* jmutils */
+
+
+template <> struct fmt::formatter<jmutils::container::Labels>: formatter<string_view> {
+  template <typename FormatContext>
+  auto format(const jmutils::container::Labels& labels, FormatContext& ctx) {
+    auto oit = format_to(ctx.out(), "(");
+    auto it = labels.cbegin();
+    if (it != labels.cend()) {
+      oit = format_to(oit, "'{}': '{}'", it->first, it->second);
+      ++it;
+    }
+    while (it != labels.cend()) {
+      oit = format_to(oit, ", '{}': '{}'", it->first, it->second);
+      ++it;
+    }
+    return format_to(oit, ")");
+  }
+};
+
 
 #endif

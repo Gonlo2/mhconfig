@@ -284,7 +284,7 @@ bool gc_document_raw_config_versions(
             override_->raw_config_by_version.begin()->first,
             (it2 == override_->raw_config_by_version.end()) ? 0xffff : it2->first,
             document->name,
-            to_check[i].repr()
+            to_check[i]
           );
 
           override_->raw_config_by_version.erase(
@@ -295,7 +295,7 @@ bool gc_document_raw_config_versions(
         if (override_->raw_config_by_version.empty()) {
           spdlog::trace(
             "Removed labels {} in the document '{}'",
-            to_check[i].repr(),
+            to_check[i],
             document->name
           );
 

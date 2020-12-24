@@ -427,7 +427,7 @@ bool for_each_document_override(
 
     spdlog::debug(
       "Obtaining overrides subset of the labels {} for the document '{}'",
-      labels.repr(),
+      labels,
       document->name
     );
     auto labels_metadata = config.get("labels_metadata");
@@ -437,7 +437,7 @@ bool for_each_document_override(
         spdlog::trace(
           "Obtained unordered override {} with labels {}",
           (void*)override_,
-          labels.repr()
+          labels
         );
         std::vector<uint32_t> weights;
         for (const auto& label : labels) {
