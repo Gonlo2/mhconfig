@@ -12,9 +12,11 @@
 #include <vector>
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
 #include <absl/hash/hash.h>
 
 #include "jmutils/container/weak_container.h"
+#include "spdlog/spdlog.h"
 
 namespace jmutils
 {
@@ -55,6 +57,10 @@ public:
 
   const_iterator cend() const {
     return labels_.cend();
+  }
+
+  const label_t& back() const {
+    return labels_.back();
   }
 
   bool contains(const Labels& subset) const {
@@ -115,30 +121,25 @@ inline bool operator==(const Labels& lhs, const Labels& rhs) {
 template <typename T>
 class LabelSet
 {
-private:
-  struct entry_t {
-    Labels labels;
-    T value;
-  };
-
-  using entry_ptr_t = std::shared_ptr<entry_t>;
-
-  absl::flat_hash_map<label_t, std::unique_ptr<jmutils::container::WeakContainer<entry_t>>> entries_by_label_;
-  absl::flat_hash_map<Labels, entry_ptr_t> entry_by_labels_;
-
 public:
+  LabelSet() {
+    root_ = std::make_unique<node_t>();
+  }
+
   T* get(
     const Labels& labels
   ) const {
-    auto search = entry_by_labels_.find(labels);
-    return search == entry_by_labels_.end() ? nullptr : &search->second->value;
+    auto search = node_by_labels_.find(labels);
+    return search == node_by_labels_.end()
+      ? nullptr
+      : &search->second->entry->value;
   }
 
   T* get_or_build(
     const Labels& labels
   ) {
-    auto entry = get_or_build_entry(labels);
-    return &entry->value;
+    auto node = get_or_build_node(labels);
+    return &node->entry->value;
   }
 
   template <typename V>
@@ -146,18 +147,18 @@ public:
     const Labels& labels,
     V&& value
   ) {
-    auto entry = get_or_build_entry(labels);
-    entry->value = std::move(value);
+    auto entry = get_or_build_node(labels);
+    entry->entry->value = std::move(value);
   }
 
   template <typename L>
   bool for_each(
     L lambda
   ) {
-    for (auto& it : entry_by_labels_) {
+    for (auto& it : node_by_labels_) {
       bool ok = lambda(
-        static_cast<const Labels&>(it.second->labels),
-        static_cast<T*>(&(it.second->value))
+        static_cast<const Labels&>(it.second->entry->labels),
+        static_cast<T*>(&(it.second->entry->value))
       );
       if (!ok) return false;
     }
@@ -169,73 +170,226 @@ public:
     const Labels& labels,
     L lambda
   ) {
-    absl::flat_hash_map<entry_ptr_t, size_t> count_by_entry_ptr;
+    std::vector<absl::flat_hash_map<node_t*, ll_head_t>> nodes_by_depth;
+    absl::flat_hash_set<label_t> labels_set;
 
-    if (auto s = entry_by_labels_.find(Labels()); s != entry_by_labels_.end()) {
-      count_by_entry_ptr[s->second] = 0;
-    }
+    nodes_by_depth.resize(1);
 
     for (const auto& label : labels) {
-      auto search = entries_by_label_.find(label);
-      if (search != entries_by_label_.end()) {
-        search->second->for_each(
-          [&count_by_entry_ptr](auto&& ptr) {
-            count_by_entry_ptr[ptr] += 1;
+      labels_set.insert(label);
+      auto search = nodes_by_last_label_.find(label);
+      if (search != nodes_by_last_label_.end()) {
+        for (node_t* node: search->second) {
+          if (node->depth > nodes_by_depth.size()) {
+            nodes_by_depth.resize(node->depth);
           }
-        );
+
+          spdlog::trace(
+            "The entry with labels {} has depth {}",
+            node->entry->labels.repr(),
+            node->depth
+          );
+
+          auto& ll_head = nodes_by_depth[node->depth-1][node];
+          ll_head.first = std::make_unique<ll_node_t>();
+          ll_head.first->entry = node->entry.get();
+          ll_head.last = ll_head.first.get();
+        }
       }
     }
 
-    for (auto& it : count_by_entry_ptr) {
-      if (it.first->labels.size() == it.second) {
+    for (ssize_t i = nodes_by_depth.size()-1; i >= 1; --i) {
+      for (auto& it : nodes_by_depth[i]) {
+        node_t* parent = it.first->parent;
+        spdlog::trace(
+          "Checking label '{}/{}'",
+          parent->label.first,
+          parent->label.second
+        );
+        if (labels_set.contains(parent->label)) {
+          spdlog::trace(
+            "The label '{}/{}' exists in the depth {}",
+            parent->label.first,
+            parent->label.second,
+            i
+          );
+          auto& ll_head = nodes_by_depth[i-1][parent];
+          if (ll_head.first == nullptr) {
+            ll_head = std::move(it.second);
+          } else {
+            ll_head.last->next = std::move(it.second.first);
+            ll_head.last = it.second.last;
+          }
+        }
+      }
+    }
+
+    if (root_->entry != nullptr) {
+      bool ok = lambda(
+        static_cast<const Labels&>(root_->entry->labels),
+        static_cast<T*>(&(root_->entry->value))
+      );
+      if (!ok) return false;
+    }
+
+    for (auto& it : nodes_by_depth[0]) {
+      auto ll_node = it.second.first.get();
+      while (ll_node != nullptr) {
         bool ok = lambda(
-          static_cast<const Labels&>(it.first->labels),
-          static_cast<T*>(&(it.first->value))
+          static_cast<const Labels&>(ll_node->entry->labels),
+          static_cast<T*>(&(ll_node->entry->value))
         );
         if (!ok) return false;
+        ll_node = ll_node->next.get();
       }
     }
 
     return true;
   }
 
-  void remove(
+  bool remove(
     const Labels& labels
   ) {
-    entry_by_labels_.erase(labels);
-  }
-
-  bool empty() const {
-    return entry_by_labels_.empty();
-  }
-
-private:
-  entry_t* get_or_build_entry(
-    const Labels& labels
-  ) {
-    if (auto search = entry_by_labels_.find(labels); search != entry_by_labels_.end()) {
-      return search->second.get();
+    node_t* node;
+    if (auto search = node_by_labels_.extract(labels)) {
+      node = search.mapped();
+    } else {
+      return false;
     }
 
-    auto entry = std::make_shared<entry_t>();
-    entry->labels = labels;
+    node->entry = nullptr;
 
-    for (const auto& label : labels) {
-      auto search = entries_by_label_.find(label);
-      if (search != entries_by_label_.end()) {
-        search->second->add(entry);
+    if (!labels.empty()) {
+      if (
+        auto search = nodes_by_last_label_.find(labels.back());
+        search != nodes_by_last_label_.end()
+      ) {
+        for (size_t i = 0, l = search->second.size(); i < l; ++i) {
+          if (search->second[i] == node) {
+            jmutils::swap_delete(search->second, i);
+            break;
+          }
+        }
+        if (search->second.empty()) {
+          nodes_by_last_label_.erase(search);
+        }
       } else {
-        auto entries = std::make_unique<jmutils::container::WeakContainer<entry_t>>();
-        entries->add(entry);
-        auto r = entries_by_label_.emplace(label, std::move(entries));
-        assert(r.second);
+        assert(false);
+      }
+      while (node->parent != nullptr) {
+        if (node->first_child != nullptr) break;
+        auto child = extract_child(node->parent, node);
+        assert(child != nullptr);
+        node = child->parent;
       }
     }
 
-    auto r = entry_by_labels_.emplace(labels, std::move(entry));
-    assert(r.second);
+    return true;
+  }
 
-    return r.first->second.get();
+  bool empty() const {
+    return node_by_labels_.empty();
+  }
+
+private:
+  struct entry_t {
+    Labels labels;
+    T value;
+  };
+
+  struct node_t {
+    label_t label;
+    uint16_t depth{0};
+    node_t* parent{nullptr};
+    std::unique_ptr<node_t> first_child{nullptr};
+    std::unique_ptr<node_t> next_sibling{nullptr};
+    std::unique_ptr<entry_t> entry{nullptr};
+  };
+
+  struct ll_node_t {
+    entry_t* entry{nullptr};
+    std::unique_ptr<ll_node_t> next{nullptr};
+  };
+
+  struct ll_head_t {
+    std::unique_ptr<ll_node_t> first{nullptr};
+    ll_node_t* last{nullptr};
+  };
+
+  std::unique_ptr<node_t> root_;
+  absl::flat_hash_map<label_t, std::vector<node_t*>> nodes_by_last_label_;
+  absl::flat_hash_map<Labels, node_t*> node_by_labels_;
+
+  node_t* get_or_build_node(
+    const Labels& labels
+  ) {
+    if (
+      auto search = node_by_labels_.find(labels);
+      search != node_by_labels_.end()
+    ) {
+      return search->second;
+    }
+
+    auto node = root_.get();
+    for (const auto& label : labels) {
+      if (auto search = get_sibling(label, node->first_child.get())) {
+        node = search;
+      } else {
+        auto child = std::make_unique<node_t>();
+        child->label = label;
+        child->depth = node->depth+1;
+        child->parent = node;
+        child->next_sibling = std::move(node->first_child);
+        node->first_child = std::move(child);
+        node = node->first_child.get();
+      }
+    }
+
+    node->entry = std::make_unique<entry_t>();
+    node->entry->labels = labels;
+
+    node_by_labels_[labels] = node;
+
+    if (!labels.empty()) {
+      nodes_by_last_label_[labels.back()].push_back(node);
+    }
+
+    return node;
+  }
+
+  node_t* get_sibling(
+    const label_t& label,
+    node_t* node
+  ) {
+    while ((node != nullptr) && (node->label != label)) {
+      node = node->next_sibling.get();
+    }
+    return node;
+  }
+
+  std::unique_ptr<node_t> extract_child(
+    node_t* parent,
+    node_t* child
+  ) {
+    if (parent->first_child == nullptr) {
+      return nullptr;
+    }
+
+    if (parent->first_child.get() == child) {
+      auto result = std::move(parent->first_child);
+      parent->first_child = std::move(result->next_sibling);
+      return result;
+    }
+
+    auto node = parent->first_child.get();
+    while ((node->next_sibling != nullptr) && (node->next_sibling.get() != child)) {
+      node = node->next_sibling.get();
+    }
+    if (node->next_sibling.get() != child) return nullptr;
+
+    auto result = std::move(node->next_sibling);
+    node->next_sibling = std::move(result->next_sibling);
+    return result;
   }
 
 };
