@@ -7,10 +7,14 @@
 #include "spdlog/cfg/env.h"
 
 void prepare_logger() {
-  spdlog::cfg::load_env_levels();
-
   auto logger = spdlog::create<spdlog::sinks::stderr_color_sink_mt>("console");
   spdlog::set_default_logger(logger);
+
+  spdlog::cfg::load_env_levels();
+
+  if(const char* env = std::getenv("SPDLOG_PATTERN")) {
+    spdlog::set_pattern(env);
+  }
 }
 
 int run_mhconfig_server(int argc, char *argv[]) {
