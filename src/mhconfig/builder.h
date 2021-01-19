@@ -334,8 +334,8 @@ Element make_element_from_sequence(
 
 // Get logic
 
-bool grpc_payload_alloc(Element& element, void*& payload);
-void grpc_payload_dealloc(void* payload);
+bool dummy_payload_alloc(Element& element, void*& payload);
+void dummy_payload_dealloc(void* payload);
 
 bool mhc_tokens_payload_alloc(Element& element, void*& payload);
 void mhc_tokens_payload_dealloc(void* payload);
@@ -540,8 +540,8 @@ inline std::shared_ptr<document_t> try_get_or_build_document_locked(
       document->mc_payload_fun = search->second;
     } else {
       //TODO Add some custom default allocator
-      document->mc_payload_fun.alloc = grpc_payload_alloc;
-      document->mc_payload_fun.dealloc = grpc_payload_dealloc;
+      document->mc_payload_fun.alloc = dummy_payload_alloc;
+      document->mc_payload_fun.dealloc = dummy_payload_dealloc;
     }
 
     if (!try_insert_document_locked(cn, name, version, document)) {

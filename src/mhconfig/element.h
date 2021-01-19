@@ -223,6 +223,7 @@ namespace mhconfig {
 
   //TODO Check this
   const static Element UNDEFINED_ELEMENT;
+  const static std::array<uint8_t, 32> UNDEFINED_ELEMENT_CHECKSUM{UNDEFINED_ELEMENT.make_checksum()};
 }
 
 

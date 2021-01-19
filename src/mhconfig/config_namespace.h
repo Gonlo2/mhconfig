@@ -95,6 +95,7 @@ public:
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
+    const std::array<uint8_t, 32>& checksum,
     void* payload
   ) = 0;
 };
@@ -153,6 +154,7 @@ struct merged_config_t {
   uint64_t creation_timestamp : 56;
   uint64_t last_access_timestamp;
   Element value;
+  std::array<uint8_t, 32> checksum;
 
   void* payload;
   merged_config_payload_fun_t payload_fun;
@@ -169,6 +171,7 @@ struct merged_config_t {
     : status(MergedConfigStatus::UNDEFINED),
     creation_timestamp(0),
     last_access_timestamp(0),
+    checksum(UNDEFINED_ELEMENT_CHECKSUM),
     payload(nullptr)
   {}
 

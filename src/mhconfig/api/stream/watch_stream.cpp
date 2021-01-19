@@ -69,10 +69,6 @@ void WatchGetRequest::set_checksum(const uint8_t* data, size_t len) {
   output_message_->set_checksum(data, len);
 }
 
-void WatchGetRequest::set_preprocessed_payload(const char* data, size_t len) {
-  output_message_->set_preprocessed_payload(data, len);
-}
-
 bool WatchGetRequest::commit() {
   return output_message_->commit();
 }

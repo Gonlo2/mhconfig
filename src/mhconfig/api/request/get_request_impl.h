@@ -64,8 +64,6 @@ public:
   void set_element(const mhconfig::Element& element) override;
   void set_checksum(const uint8_t* data, size_t len) override;
 
-  void set_preprocessed_payload(const char* data, size_t len) override;
-
   bool commit() override;
   bool finish(const grpc::Status& status = grpc::Status::OK) override;
 
@@ -83,14 +81,10 @@ public:
 
 protected:
   google::protobuf::Arena arena_;
-  grpc::ServerAsyncResponseWriter<grpc::ByteBuffer> responder_;
-
-  grpc::ByteBuffer raw_request_;
+  grpc::ServerAsyncResponseWriter<mhconfig::proto::GetResponse> responder_;
 
   mhconfig::proto::GetRequest* request_;
   mhconfig::proto::GetResponse* response_;
-
-  std::stringstream preprocessed_payload_;
 
   Labels labels_;
   Element element_;

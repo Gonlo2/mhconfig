@@ -940,20 +940,11 @@ Element make_element_from_sequence(
 
 // Get logic
 
-bool grpc_payload_alloc(Element& element, void*& payload) {
-  proto::GetResponse r;
-
-  auto checksum = element.make_checksum();
-  r.set_checksum(checksum.data(), checksum.size());
-
-  api::config::fill_elements(element, &r, r.add_elements());
-
-  payload = static_cast<void*>(new std::string);
-  return r.SerializeToString(static_cast<std::string*>(payload));
+bool dummy_payload_alloc(Element& element, void*& payload) {
+  return true;
 }
 
-void grpc_payload_dealloc(void* payload) {
-  delete static_cast<std::string*>(payload);
+void dummy_payload_dealloc(void* payload) {
 }
 
 bool mhc_tokens_payload_alloc(Element& element, void*& payload) {
@@ -1027,6 +1018,23 @@ std::shared_ptr<config_namespace_t> get_or_build_cn(
   }
 
   return result;
+}
+
+GetConfigTask::Status alloc_payload_locked(
+  merged_config_t* merged_config
+) {
+  merged_config->payload = nullptr;
+  if (merged_config->payload_fun.alloc(merged_config->value, merged_config->payload)) {
+    merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZED;
+    return GetConfigTask::Status::OK;
+  }
+  spdlog::error("Some error take place allocating the payload");
+  if (merged_config->payload != nullptr) {
+    merged_config->payload_fun.dealloc(merged_config->payload);
+    merged_config->payload = nullptr;
+  }
+  merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
+  return GetConfigTask::Status::ERROR;
 }
 
 std::shared_ptr<document_t> get_document_locked(
@@ -1358,6 +1366,7 @@ void delete_cn_locked(
       cn,
       0,
       UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
       nullptr
     );
   }

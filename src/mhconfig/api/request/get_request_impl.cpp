@@ -53,15 +53,12 @@ void GetRequestImpl::set_version(uint32_t version) {
 }
 
 void GetRequestImpl::set_element(const mhconfig::Element& element) {
+  response_->clear_elements();
   config::fill_elements(element, response_, response_->add_elements());
 }
 
 void GetRequestImpl::set_checksum(const uint8_t* data, size_t len) {
   response_->set_checksum(data, len);
-}
-
-void GetRequestImpl::set_preprocessed_payload(const char* data, size_t len) {
-  preprocessed_payload_.write(data, len);
 }
 
 
@@ -74,7 +71,7 @@ void GetRequestImpl::subscribe(
   grpc::ServerCompletionQueue* cq
 ) {
   if (auto t = make_tag(GrpcStatus::CREATE)) {
-    service->RequestGet(&server_ctx_, &raw_request_, &responder_, cq, cq, t);
+    service->RequestGet(&server_ctx_, request_, &responder_, cq, cq, t);
   }
 }
 
@@ -87,12 +84,6 @@ std::shared_ptr<PolicyCheck> GetRequestImpl::on_create(
 }
 
 std::shared_ptr<PolicyCheck> GetRequestImpl::parse_message() {
-  auto status = grpc::SerializationTraits<mhconfig::proto::GetRequest>::Deserialize(
-    &raw_request_,
-    request_
-  );
-  if (!status.ok()) return nullptr;
-
   labels_ = to_labels(request_->labels());
   return shared_from_this();
 }
@@ -134,26 +125,12 @@ void GetRequestImpl::on_check_policy_error() {
 bool GetRequestImpl::finish(const grpc::Status& status) {
   if (auto t = make_tag(GrpcStatus::WRITE)) {
     if (status.ok()) {
-      bool ok = response_->SerializeToOstream(&preprocessed_payload_);
-      if (ok) {
-        grpc::Slice slice(preprocessed_payload_.str());
-        grpc::ByteBuffer raw_response(&slice, 1);
-
-        responder_.Finish(raw_response, status, t);
-      } else {
-        grpc::Status serialization_error_status(
-          grpc::StatusCode::CANCELLED,
-          "Some problem takes place serializing the message"
-        );
-        responder_.FinishWithError(serialization_error_status, t);
-      }
+      responder_.Finish(*response_, status, t);
     } else {
       responder_.FinishWithError(status, t);
     }
-
     return true;
   }
-
   return false;
 }
 

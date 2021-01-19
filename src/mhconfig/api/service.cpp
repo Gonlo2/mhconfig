@@ -2,8 +2,6 @@
 
 namespace mhconfig
 {
-struct context_t;
-
 namespace api
 {
 

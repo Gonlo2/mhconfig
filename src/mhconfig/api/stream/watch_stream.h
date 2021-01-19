@@ -52,8 +52,6 @@ public:
   virtual void set_version(uint32_t version) = 0;
   virtual void set_element(const mhconfig::Element& element) = 0;
   virtual void set_checksum(const uint8_t* data, size_t len) = 0;
-
-  virtual void set_preprocessed_payload(const char* data, size_t len) = 0;
 };
 
 class WatchInputMessage
@@ -96,8 +94,6 @@ public:
   void set_version(uint32_t version) override;
   void set_element(const mhconfig::Element& element) override;
   void set_checksum(const uint8_t* data, size_t len) override;
-
-  void set_preprocessed_payload(const char* data, size_t len) override;
 
   bool commit() override;
 

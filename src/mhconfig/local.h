@@ -50,6 +50,7 @@ public:
     std::shared_ptr<mhconfig::config_namespace_t>& cn,
     mhconfig::VersionId version,
     const mhconfig::Element& element,
+    const std::array<uint8_t, 32>& checksum,
     void* payload
   ) override {
     switch (status) {

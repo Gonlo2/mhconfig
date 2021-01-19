@@ -63,23 +63,19 @@ public:
   void set_element(const mhconfig::Element& element) override;
   void set_checksum(const uint8_t* data, size_t len) override;
 
-  void set_preprocessed_payload(const char* data, size_t len) override;
-
   bool send(bool finish = false) override;
 
 protected:
-  friend class Stream<grpc::ServerAsyncReaderWriter<grpc::ByteBuffer, grpc::ByteBuffer>, WatchOutputMessageImpl>;
+  friend class Stream<grpc::ServerAsyncReaderWriter<mhconfig::proto::WatchResponse, mhconfig::proto::WatchRequest>, WatchOutputMessageImpl>;
 
-  inline const grpc::ByteBuffer& response() {
-    return response_;
+  inline const mhconfig::proto::WatchResponse& response() {
+    return *response_;
   }
 
 private:
   google::protobuf::Arena arena_;
-  mhconfig::proto::WatchResponse* proto_response_;
-  grpc::ByteBuffer response_;
+  mhconfig::proto::WatchResponse* response_;
   std::weak_ptr<WatchStreamImpl> stream_;
-  std::stringstream preprocessed_payload_;
 
   grpc::Slice slice_;
 };
@@ -124,7 +120,7 @@ private:
 };
 
 class WatchStreamImpl final
-  : public Stream<grpc::ServerAsyncReaderWriter<grpc::ByteBuffer, grpc::ByteBuffer>, WatchOutputMessageImpl>,
+  : public Stream<grpc::ServerAsyncReaderWriter<mhconfig::proto::WatchResponse, mhconfig::proto::WatchRequest>, WatchOutputMessageImpl>,
   public PolicyCheck,
   public std::enable_shared_from_this<WatchStreamImpl>
 {
@@ -165,14 +161,14 @@ protected:
   void on_destroy() override;
 
 private:
-  grpc::ByteBuffer next_req_;
+  std::unique_ptr<mhconfig::proto::WatchRequest> next_req_;
   absl::flat_hash_map<uint32_t, std::shared_ptr<WatchInputMessage>> watcher_by_id_;
   absl::Mutex mutex_;
 
   inline void prepare_next_request() {
     if (auto t = make_tag(GrpcStatus::READ)) {
-      next_req_.Clear();
-      stream_.Read(&next_req_, t);
+      next_req_ = std::make_unique<mhconfig::proto::WatchRequest>();
+      stream_.Read(next_req_.get(), t);
     }
   }
 

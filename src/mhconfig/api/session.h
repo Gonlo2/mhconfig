@@ -37,12 +37,7 @@ namespace api
 
 using google::protobuf::Arena;
 
-typedef mhconfig::proto::MHConfig::WithRawMethod_Get<
-        mhconfig::proto::MHConfig::WithAsyncMethod_Update<
-        mhconfig::proto::MHConfig::WithAsyncMethod_RunGC<
-        mhconfig::proto::MHConfig::WithRawMethod_Watch<
-        mhconfig::proto::MHConfig::WithAsyncMethod_Trace<
-          mhconfig::proto::MHConfig::Service>>>>> CustomService;
+using CustomService = mhconfig::proto::MHConfig::AsyncService;
 
 template <typename T>
 std::vector<T> to_vector(const ::google::protobuf::RepeatedPtrField<T>& proto_repeated) {

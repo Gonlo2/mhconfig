@@ -14,79 +14,68 @@ WatchOutputMessageImpl::WatchOutputMessageImpl(
 )
   : stream_(stream)
 {
-  proto_response_ = Arena::CreateMessage<mhconfig::proto::WatchResponse>(&arena_);
+  response_ = Arena::CreateMessage<mhconfig::proto::WatchResponse>(&arena_);
 }
 
 WatchOutputMessageImpl::~WatchOutputMessageImpl() {
 }
 
 void WatchOutputMessageImpl::set_uid(uint32_t uid) {
-  proto_response_->set_uid(uid);
+  response_->set_uid(uid);
 }
 
 void WatchOutputMessageImpl::set_status(WatchStatus status) {
   switch (status) {
     case WatchStatus::OK:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
       break;
     case WatchStatus::ERROR:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
       break;
     case WatchStatus::INVALID_VERSION:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
       break;
     case WatchStatus::REF_GRAPH_IS_NOT_DAG:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
       break;
     case WatchStatus::UID_IN_USE:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
       break;
     case WatchStatus::UNKNOWN_UID:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
       break;
     case WatchStatus::REMOVED:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
       break;
     case WatchStatus::PERMISSION_DENIED:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_PERMISSION_DENIED);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_PERMISSION_DENIED);
       break;
     case WatchStatus::INVALID_ARGUMENT:
-      proto_response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_ARGUMENT);
+      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_ARGUMENT);
       break;
   }
 }
 
 void WatchOutputMessageImpl::set_namespace_id(uint64_t namespace_id) {
-  proto_response_->set_namespace_id(namespace_id);
+  response_->set_namespace_id(namespace_id);
 }
 
 void WatchOutputMessageImpl::set_version(uint32_t version) {
-  proto_response_->set_version(version);
+  response_->set_version(version);
 }
 
 void WatchOutputMessageImpl::set_element(const mhconfig::Element& element) {
-  mhconfig::api::config::fill_elements(
-    element,
-    proto_response_,
-    proto_response_->add_elements()
-  );
+  response_->clear_elements();
+  mhconfig::api::config::fill_elements(element, response_, response_->add_elements());
 }
 
 void WatchOutputMessageImpl::set_checksum(const uint8_t* data, size_t len) {
-  proto_response_->set_checksum(data, len);
-}
-
-void WatchOutputMessageImpl::set_preprocessed_payload(const char* data, size_t len) {
-  preprocessed_payload_.write(data, len);
+  response_->set_checksum(data, len);
 }
 
 bool WatchOutputMessageImpl::send(bool finish) {
   if (auto stream = stream_.lock()) {
-    if (proto_response_->SerializeToOstream(&preprocessed_payload_)) {
-      slice_ = grpc::Slice(preprocessed_payload_.str());
-      response_ = grpc::ByteBuffer(&slice_, 1);
-      return stream->send(shared_from_this(), finish);
-    }
+    return stream->send(shared_from_this(), finish);
   }
   return false;
 }
@@ -252,19 +241,14 @@ std::shared_ptr<PolicyCheck> WatchStreamImpl::on_create(
 }
 
 std::shared_ptr<PolicyCheck> WatchStreamImpl::parse_message() {
-  auto req = std::make_unique<mhconfig::proto::WatchRequest>();
-  auto status = grpc::SerializationTraits<mhconfig::proto::WatchRequest>::Deserialize(
-    &next_req_,
-    req.get()
+  auto msg = std::make_shared<WatchInputMessageImpl>(
+    std::move(next_req_),
+    shared_from_this()
   );
-  if (!status.ok()) return nullptr;
 
   prepare_next_request();
 
-  return std::make_shared<WatchInputMessageImpl>(
-    std::move(req),
-    shared_from_this()
-  );
+  return msg;
 }
 
 void WatchStreamImpl::on_check_policy(

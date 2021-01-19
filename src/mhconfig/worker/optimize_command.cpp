@@ -30,7 +30,10 @@ bool OptimizeCommand::execute(
 ) {
   std::vector<std::shared_ptr<GetConfigTask>> waiting;
 
+  auto checksum = merged_config_->value.make_checksum();
+
   merged_config_->mutex.Lock();
+  merged_config_->checksum = std::move(checksum);
   auto status = alloc_payload_locked(merged_config_.get());
   std::swap(merged_config_->waiting, waiting);
   merged_config_->mutex.Unlock();
@@ -41,6 +44,7 @@ bool OptimizeCommand::execute(
       cn_,
       0,
       merged_config_->value,
+      merged_config_->checksum,
       merged_config_->payload
     );
   }

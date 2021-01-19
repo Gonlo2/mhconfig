@@ -52,6 +52,7 @@ void ApiGetConfigTask::on_complete(
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
+  const std::array<uint8_t, 32>& checksum,
   void* payload
 ) {
   if (cn != nullptr) {
@@ -59,10 +60,8 @@ void ApiGetConfigTask::on_complete(
   }
   request_->set_version(version);
   request_->set_status(to_api_status(status));
-  if (status == Status::OK) {
-    auto p = static_cast<std::string*>(payload);
-    request_->set_preprocessed_payload(p->data(), p->size());
-  }
+  request_->set_element(element);
+  request_->set_checksum(checksum.data(), checksum.size());
   request_->commit();
 }
 
@@ -118,6 +117,7 @@ void AuthPolicyGetConfigTask::on_complete(
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
+  const std::array<uint8_t, 32>& checksum,
   void* payload
 ) {
   if (status == Status::OK) {
@@ -164,6 +164,7 @@ void AuthTokenGetConfigTask::on_complete(
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
+  const std::array<uint8_t, 32>& checksum,
   void* payload
 ) {
   if (status == Status::OK) {
@@ -298,13 +299,27 @@ bool process_get_config_task(
 
   if (error) {
     spdlog::debug("Some error take place with the config namespace '{}'", cn->root_path);
-    task->on_complete(GetConfigTask::Status::ERROR, cn, version, UNDEFINED_ELEMENT, nullptr);
+    task->on_complete(
+      GetConfigTask::Status::ERROR,
+      cn,
+      version,
+      UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
+      nullptr
+    );
     return false;
   }
 
   if (version == 0) {
     spdlog::error("The asked version {} don't exists", task->version());
-    task->on_complete(GetConfigTask::Status::INVALID_VERSION, cn, version, UNDEFINED_ELEMENT, nullptr);
+    task->on_complete(
+      GetConfigTask::Status::INVALID_VERSION,
+      cn,
+      version,
+      UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
+      nullptr
+    );
     return true;
   }
 
@@ -314,7 +329,14 @@ bool process_get_config_task(
       task->document(),
       version
     );
-    task->on_complete(GetConfigTask::Status::DONT_EXISTS, cn, version, UNDEFINED_ELEMENT, nullptr);
+    task->on_complete(
+      GetConfigTask::Status::DONT_EXISTS,
+      cn,
+      version,
+      UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
+      nullptr
+    );
     return true;
   }
 
@@ -323,7 +345,14 @@ bool process_get_config_task(
       "The mhconfig document with the version {} don't exists",
       version
     );
-    task->on_complete(GetConfigTask::Status::DONT_EXISTS, cn, version, UNDEFINED_ELEMENT, nullptr);
+    task->on_complete(
+      GetConfigTask::Status::DONT_EXISTS,
+      cn,
+      version,
+      UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
+      nullptr
+    );
     return true;
   }
 
@@ -342,7 +371,14 @@ bool process_get_config_task(
   );
   if (!is_a_valid_version) {
     spdlog::error("The asked version {} don't exists", task->version());
-    task->on_complete(GetConfigTask::Status::INVALID_VERSION, cn, version, UNDEFINED_ELEMENT, nullptr);
+    task->on_complete(
+      GetConfigTask::Status::INVALID_VERSION,
+      cn,
+      version,
+      UNDEFINED_ELEMENT,
+      UNDEFINED_ELEMENT_CHECKSUM,
+      nullptr
+    );
     return true;
   }
 
@@ -390,6 +426,7 @@ bool process_get_config_task(
         cn,
         version,
         merged_config->value,
+        merged_config->checksum,
         merged_config->payload
       );
       return true;
@@ -398,7 +435,8 @@ bool process_get_config_task(
         GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG,
         cn,
         version,
-        merged_config->value,
+        UNDEFINED_ELEMENT,
+        UNDEFINED_ELEMENT_CHECKSUM,
         merged_config->payload
       );
       return true;
@@ -409,6 +447,7 @@ bool process_get_config_task(
         cn,
         version,
         UNDEFINED_ELEMENT,
+        UNDEFINED_ELEMENT_CHECKSUM,
         nullptr
       );
       return false;
@@ -468,6 +507,7 @@ bool process_get_config_task(
         cn,
         version,
         merged_config->value,
+        merged_config->checksum,
         merged_config->payload
       );
       return true;
@@ -476,7 +516,8 @@ bool process_get_config_task(
         GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG,
         cn,
         version,
-        merged_config->value,
+        UNDEFINED_ELEMENT,
+        UNDEFINED_ELEMENT_CHECKSUM,
         merged_config->payload
       );
       return true;
@@ -490,6 +531,7 @@ bool process_get_config_task(
     cn,
     version,
     UNDEFINED_ELEMENT,
+    UNDEFINED_ELEMENT_CHECKSUM,
     nullptr
   );
   return false;

@@ -47,6 +47,7 @@ public:
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
+    const std::array<uint8_t, 32>& checksum,
     void* payload
   ) override;
 
@@ -108,6 +109,7 @@ public:
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
+    const std::array<uint8_t, 32>& checksum,
     void* payload
   ) override;
 
@@ -139,6 +141,7 @@ public:
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
+    const std::array<uint8_t, 32>& checksum,
     void* payload
   ) override;
 

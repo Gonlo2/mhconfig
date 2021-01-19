@@ -258,7 +258,14 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
 
     if (auto r = get_error_status(result); r) {
       for (size_t i = 0, l = waiting.size(); i < l; ++i) {
-        waiting[i]->on_complete(*r, cn_, 0, UNDEFINED_ELEMENT, nullptr);
+        waiting[i]->on_complete(
+          *r,
+          cn_,
+          0,
+          UNDEFINED_ELEMENT,
+          UNDEFINED_ELEMENT_CHECKSUM,
+          nullptr
+        );
       }
     }
 
@@ -353,6 +360,7 @@ void BuildCommand::build(
 
     auto status = GetConfigTask::Status::OK;
     if (!merged_config->waiting.empty()) {
+      merged_config->checksum = config.make_checksum();
       status = alloc_payload_locked(merged_config);
     } else {
       merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
@@ -368,6 +376,7 @@ void BuildCommand::build(
         cn_,
         pending_build_->version,
         merged_config->value,
+        merged_config->checksum,
         merged_config->payload
       );
     }
