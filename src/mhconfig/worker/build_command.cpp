@@ -25,14 +25,14 @@ bool BuildCommand::force_take_metric() const {
 bool BuildCommand::execute(
   context_t* ctx
 ) {
-  if (auto r = check_dependencies(); r != CheckDependenciesStatus::OK) {
+  if (auto r = check_step_1(); r != CheckStatus::OK) {
     auto merged_config = pending_build_->element->merged_config.get();
     merged_config->mutex.Lock();
-    if (r == CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG) {
+    if (r == CheckStatus::REF_GRAPH_IS_NOT_DAG) {
       merged_config->status = MergedConfigStatus::REF_GRAPH_IS_NOT_DAG;
-    } else if (r == CheckDependenciesStatus::MISSING_DEPENDENCY) {
+    } else if (r == CheckStatus::MISSING_DEPENDENCY) {
       merged_config->status = MergedConfigStatus::INVALID_VERSION;
-    } else if (r == CheckDependenciesStatus::INVALID_VERSION) {
+    } else if (r == CheckStatus::INVALID_VERSION) {
       merged_config->status = MergedConfigStatus::INVALID_VERSION;
     }
     merged_config->mutex.Unlock();
@@ -42,7 +42,7 @@ bool BuildCommand::execute(
   return true;
 }
 
-BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies() {
+BuildCommand::CheckStatus BuildCommand::check_step_1() {
   absl::flat_hash_set<std::string> dfs_document_names;
   absl::flat_hash_set<std::string> all_document_names;
   all_document_names.insert(pending_build_->element->document->name);
@@ -56,12 +56,12 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies() {
   cn_->mutex.ReaderUnlock();
 
   if (cfg_document == nullptr) {
-    return CheckDependenciesStatus::INVALID_VERSION;
+    return CheckStatus::INVALID_VERSION;
   }
 
   auto cfg = get_element(cfg_document.get(), Labels(), pending_build_->version);
 
-  return check_dependencies_rec(
+  return check_step_1_rec(
     pending_build_->element.get(),
     dfs_document_names,
     all_document_names,
@@ -70,7 +70,7 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies() {
   );
 }
 
-BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
+BuildCommand::CheckStatus BuildCommand::check_step_1_rec(
   build_element_t* build_element,
   absl::flat_hash_set<std::string>& dfs_document_names,
   absl::flat_hash_set<std::string>& all_document_names,
@@ -96,7 +96,7 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
     }
   );
   if (!is_a_valid_version) {
-    return CheckDependenciesStatus::INVALID_VERSION;
+    return CheckStatus::INVALID_VERSION;
   }
 
   build_element->merged_config = get_or_build_merged_config(
@@ -116,13 +116,13 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
     case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
       build_element->config = merged_config->value;
       merged_config->mutex.ReaderUnlock();
-      return CheckDependenciesStatus::OK;
+      return CheckStatus::OK;
     case MergedConfigStatus::REF_GRAPH_IS_NOT_DAG:
       merged_config->mutex.ReaderUnlock();
-      return CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG;
+      return CheckStatus::REF_GRAPH_IS_NOT_DAG;
     case MergedConfigStatus::INVALID_VERSION:
       merged_config->mutex.ReaderUnlock();
-      return CheckDependenciesStatus::INVALID_VERSION;
+      return CheckStatus::INVALID_VERSION;
   }
   merged_config->mutex.ReaderUnlock();
 
@@ -144,19 +144,19 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
         break;
       }
       merged_config->mutex.Unlock();
-      return CheckDependenciesStatus::OK;
+      return CheckStatus::OK;
     case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED: // Fallback
     case MergedConfigStatus::OK_CONFIG_OPTIMIZING: // Fallback
     case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
       build_element->config = merged_config->value;
       merged_config->mutex.Unlock();
-      return CheckDependenciesStatus::OK;
+      return CheckStatus::OK;
     case MergedConfigStatus::REF_GRAPH_IS_NOT_DAG:
       merged_config->mutex.Unlock();
-      return CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG;
+      return CheckStatus::REF_GRAPH_IS_NOT_DAG;
     case MergedConfigStatus::INVALID_VERSION:
       merged_config->mutex.Unlock();
-      return CheckDependenciesStatus::INVALID_VERSION;
+      return CheckStatus::INVALID_VERSION;
   }
   merged_config->mutex.Unlock();
 
@@ -164,7 +164,7 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
   for (const auto& name: reference_to) {
     if (dfs_document_names.count(name)) {
       spdlog::error("The config dependencies defined with the '!ref' tag has a cycle");
-      return CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG;
+      return CheckStatus::REF_GRAPH_IS_NOT_DAG;
     }
 
     if (auto inserted = all_document_names.insert(name); inserted.second) {
@@ -172,10 +172,10 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
 
       child->document = get_document(cn_.get(), name, pending_build_->version);
       if (child->document == nullptr) {
-        return CheckDependenciesStatus::MISSING_DEPENDENCY;
+        return CheckStatus::MISSING_DEPENDENCY;
       }
 
-      auto r = check_dependencies_rec(
+      auto r = check_step_1_rec(
         child.get(),
         dfs_document_names,
         all_document_names,
@@ -183,12 +183,12 @@ BuildCommand::CheckDependenciesStatus BuildCommand::check_dependencies_rec(
         false
       );
       build_element->children.push_back(std::move(child));
-      if (r != CheckDependenciesStatus::OK) return r;
+      if (r != CheckStatus::OK) return r;
     }
   }
   dfs_document_names.erase(build_element->document->name);
 
-  return CheckDependenciesStatus::OK;
+  return CheckStatus::OK;
 }
 
 void BuildCommand::decrease_pending_elements(
@@ -197,19 +197,19 @@ void BuildCommand::decrease_pending_elements(
 ) {
   if (pending_build->num_pending.fetch_sub(1, std::memory_order_acq_rel) == 1) {
     absl::flat_hash_map<std::string, merged_config_t*> merged_config_by_document_name;
-    auto check_dependencies_status = finish_build_elements_rec(
+    auto check_dependencies_status = check_step_2(
       ctx,
       pending_build->element.get(),
       merged_config_by_document_name
     );
-    if (check_dependencies_status == CheckDependenciesStatus::OK) {
+    if (check_dependencies_status == CheckStatus::OK) {
       absl::flat_hash_map<std::string, Element> element_by_document_name;
       build(ctx, pending_build->element.get(), element_by_document_name);
     }
   }
 }
 
-BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
+BuildCommand::CheckStatus BuildCommand::check_step_2(
   context_t* ctx,
   build_element_t* build_element,
   absl::flat_hash_map<std::string, merged_config_t*>& merged_config_by_document_name
@@ -217,14 +217,14 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
   auto merged_config = build_element->merged_config.get();
   merged_config_by_document_name[build_element->document->name] = merged_config;
 
-  CheckDependenciesStatus result = CheckDependenciesStatus::OK;
+  CheckStatus result = CheckStatus::OK;
   for (size_t i = 0, l = build_element->children.size(); i < l; ++i) {
-    auto check_dependencies_status = finish_build_elements_rec(
+    auto check_dependencies_status = check_step_2(
       ctx,
       build_element->children[i].get(),
       merged_config_by_document_name
     );
-    if (result == CheckDependenciesStatus::OK) {
+    if (result == CheckStatus::OK) {
       result = check_dependencies_status;
     }
   }
@@ -235,18 +235,25 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
 
     merged_config->mutex.Lock();
 
-    if (result == CheckDependenciesStatus::OK) {
+    if (result == CheckStatus::OK) {
       auto reference_to = merged_config->reference_to;
       for (const auto& name: reference_to) {
-        auto& x = merged_config_by_document_name[name]->reference_to;
+        auto search = merged_config_by_document_name.find(name);
+        if (search == merged_config_by_document_name.end()) {
+          result = CheckStatus::MISSING_DEPENDENCY;
+          break;
+        }
+        auto& x = search->second->reference_to;
         merged_config->reference_to.insert(x.cbegin(), x.cend());
       }
-    } else {
-      if (result == CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG) {
+    }
+
+    if (result != CheckStatus::OK) {
+      if (result == CheckStatus::REF_GRAPH_IS_NOT_DAG) {
         merged_config->status = MergedConfigStatus::REF_GRAPH_IS_NOT_DAG;
-      } else if (result == CheckDependenciesStatus::MISSING_DEPENDENCY) {
+      } else if (result == CheckStatus::MISSING_DEPENDENCY) {
         merged_config->status = MergedConfigStatus::INVALID_VERSION;
-      } else if (result == CheckDependenciesStatus::INVALID_VERSION) {
+      } else if (result == CheckStatus::INVALID_VERSION) {
         merged_config->status = MergedConfigStatus::INVALID_VERSION;
       }
 
@@ -272,13 +279,13 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
     for (size_t i = 0, l = to_build.size(); i < l; ++i) {
       decrease_pending_elements(ctx, to_build[i].get());
     }
-  } else if (result == CheckDependenciesStatus::OK) {
+  } else if (result == CheckStatus::OK) {
     merged_config->mutex.ReaderLock();
 
     if (merged_config->status == MergedConfigStatus::REF_GRAPH_IS_NOT_DAG) {
-      result = CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG;
+      result = CheckStatus::REF_GRAPH_IS_NOT_DAG;
     } else if (merged_config->status == MergedConfigStatus::INVALID_VERSION) {
-      result = CheckDependenciesStatus::INVALID_VERSION;
+      result = CheckStatus::INVALID_VERSION;
     }
 
     merged_config->mutex.ReaderUnlock();
@@ -288,17 +295,17 @@ BuildCommand::CheckDependenciesStatus BuildCommand::finish_build_elements_rec(
 }
 
 std::optional<GetConfigTask::Status> BuildCommand::get_error_status(
-  CheckDependenciesStatus status
+  CheckStatus status
 ) {
   switch (status) {
-    case CheckDependenciesStatus::OK:
+    case CheckStatus::OK:
       return std::optional<GetConfigTask::Status>();
-    case CheckDependenciesStatus::REF_GRAPH_IS_NOT_DAG:
+    case CheckStatus::REF_GRAPH_IS_NOT_DAG:
       return std::optional<GetConfigTask::Status>(
         GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG
       );
-    case CheckDependenciesStatus::MISSING_DEPENDENCY: // Fallback
-    case CheckDependenciesStatus::INVALID_VERSION:
+    case CheckStatus::MISSING_DEPENDENCY: // Fallback
+    case CheckStatus::INVALID_VERSION:
       return std::optional<GetConfigTask::Status>(
         GetConfigTask::Status::INVALID_VERSION
       );

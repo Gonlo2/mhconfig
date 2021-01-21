@@ -35,7 +35,7 @@ public:
   ) override;
 
 private:
-  enum class CheckDependenciesStatus {
+  enum class CheckStatus {
     OK,
     REF_GRAPH_IS_NOT_DAG,
     MISSING_DEPENDENCY,
@@ -45,9 +45,9 @@ private:
   std::shared_ptr<config_namespace_t> cn_;
   std::shared_ptr<pending_build_t> pending_build_;
 
-  CheckDependenciesStatus check_dependencies();
+  CheckStatus check_step_1();
 
-  CheckDependenciesStatus check_dependencies_rec(
+  CheckStatus check_step_1_rec(
     build_element_t* build_element,
     absl::flat_hash_set<std::string>& dfs_document_names,
     absl::flat_hash_set<std::string>& all_document_names,
@@ -60,14 +60,14 @@ private:
     pending_build_t* pending_build
   );
 
-  CheckDependenciesStatus finish_build_elements_rec(
+  CheckStatus check_step_2(
     context_t* ctx,
     build_element_t* build_element,
     absl::flat_hash_map<std::string, merged_config_t*>& merged_config_by_document_name
   );
 
   std::optional<GetConfigTask::Status> get_error_status(
-    CheckDependenciesStatus status
+    CheckStatus status
   );
 
   void build(
