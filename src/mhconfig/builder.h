@@ -240,14 +240,16 @@ std::pair<bool, Element> apply_tags(
   jmutils::string::Pool* pool,
   Element element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 );
 
 Element apply_tag_format(
   jmutils::string::Pool* pool,
   const Element& element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 );
 
 Element apply_tag_ref(
@@ -256,8 +258,11 @@ Element apply_tag_ref(
 );
 
 Element apply_tag_sref(
-  const Element& child,
-  Element root
+  jmutils::string::Pool* pool,
+  const Element& element,
+  const Element& root,
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 );
 
 /*

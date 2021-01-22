@@ -460,8 +460,19 @@ std::pair<bool, Element> apply_tags(
   jmutils::string::Pool* pool,
   Element element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 ) {
+  if (depth >= 500) {
+    spdlog::error(
+      "The apply tags function has reached a depth of {} so probably exists some circular dependency with the '{}' /'{}' tags",
+      depth,
+      TAG_SREF,
+      TAG_FORMAT
+    );
+    return std::make_pair(true, Element());
+  }
+
   bool any_changed = false;
 
   switch (element.type()) {
@@ -478,7 +489,8 @@ std::pair<bool, Element> apply_tags(
             pool,
             it.second,
             root,
-            element_by_document_name
+            element_by_document_name,
+            depth+1
           );
           if (r.first) {
             to_modify.emplace_back(it.first, r.second);
@@ -518,7 +530,8 @@ std::pair<bool, Element> apply_tags(
             pool,
             (*current_sequence)[i],
             root,
-            element_by_document_name
+            element_by_document_name,
+            depth+1
           );
           any_changed |= r.first;
           new_sequence.push_back(r.second);
@@ -541,12 +554,12 @@ std::pair<bool, Element> apply_tags(
   }
 
   if (element.type() == NodeType::SREF) {
-    element = apply_tag_sref(element, root);
+    element = apply_tag_sref(pool, element, root, element_by_document_name, depth);
     any_changed = true;
   }
 
   if (element.type() == NodeType::FORMAT) {
-    element = apply_tag_format(pool, element, root, element_by_document_name);
+    element = apply_tag_format(pool, element, root, element_by_document_name, depth);
     any_changed = true;
   }
 
@@ -557,12 +570,13 @@ Element apply_tag_format(
   jmutils::string::Pool* pool,
   const Element& element,
   const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 ) {
   std::stringstream ss;
   auto slices = element.as_sequence();
   for (size_t i = 0, l = slices->size(); i < l; ++i) {
-    auto v = apply_tags(pool, (*slices)[i], root, element_by_document_name);
+    auto v = apply_tags(pool, (*slices)[i], root, element_by_document_name, depth+1);
     if (auto r = v.second.try_as<std::string>(); r) {
       ss << *r;
     } else {
@@ -597,15 +611,27 @@ Element apply_tag_ref(
 }
 
 Element apply_tag_sref(
+  jmutils::string::Pool* pool,
   const Element& element,
-  Element root
+  const Element& root,
+  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
+  uint32_t depth
 ) {
+  Element new_element = root;
   const auto path = element.as_sequence();
   for (size_t i = 0, l = path->size(); i < l; ++i) {
-    root = root.get((*path)[i].as<jmutils::string::String>());
+    new_element = new_element.get((*path)[i].as<jmutils::string::String>());
   }
 
-  if (!root.is_scalar()) {
+  new_element = apply_tags(
+    pool,
+    new_element,
+    root,
+    element_by_document_name,
+    depth+1
+  ).second;
+
+  if (!new_element.is_scalar()) {
     spdlog::error(
       "The element referenced by '{}' must be a scalar",
       TAG_SREF
@@ -613,7 +639,7 @@ Element apply_tag_sref(
     return Element();
   }
 
-  return root;
+  return new_element;
 }
 
 /*

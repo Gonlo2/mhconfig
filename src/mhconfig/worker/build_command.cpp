@@ -350,7 +350,8 @@ void BuildCommand::build(
         cn_->pool.get(),
         config,
         config,
-        element_by_document_name
+        element_by_document_name,
+        0
       ).second;
     }
 
