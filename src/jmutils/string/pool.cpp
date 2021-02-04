@@ -202,7 +202,7 @@ Pool::~Pool() {
   }
 }
 
-const String Pool::add(const std::string& str) {
+String Pool::add(const std::string& str) {
   InternalString internal_string;
   String s = make_string(str, &internal_string);
   if (!s.is_small()) {

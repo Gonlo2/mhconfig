@@ -10,6 +10,8 @@
 #include "mhconfig/builder.h"
 #include "mhconfig/config_namespace.h"
 #include "mhconfig/context.h"
+#include "mhconfig/provider.h"
+#include "mhconfig/element_merger.h"
 
 namespace mhconfig
 {
@@ -45,14 +47,14 @@ private:
   std::shared_ptr<config_namespace_t> cn_;
   std::shared_ptr<pending_build_t> pending_build_;
 
-  CheckStatus check_step_1();
+  void prepare_pending_build();
 
-  CheckStatus check_step_1_rec(
-    build_element_t* build_element,
-    absl::flat_hash_set<std::string>& dfs_document_names,
-    absl::flat_hash_set<std::string>& all_document_names,
-    const Element& cfg,
-    bool is_root
+  void prepare_pending_build_rec(
+    build_element_t& build_element,
+    std::vector<std::string>& dfs_doc_names,
+    absl::flat_hash_set<std::string>& dfs_doc_names_set,
+    absl::flat_hash_set<std::string>& all_doc_names_set,
+    const Element& cfg
   );
 
   void decrease_pending_elements(
@@ -60,21 +62,18 @@ private:
     pending_build_t* pending_build
   );
 
-  CheckStatus check_step_2(
-    context_t* ctx,
-    build_element_t* build_element,
-    absl::flat_hash_map<std::string, merged_config_t*>& merged_config_by_document_name
-  );
-
-  std::optional<GetConfigTask::Status> get_error_status(
-    CheckStatus status
-  );
-
   void build(
     context_t* ctx,
-    build_element_t* build_element,
-    absl::flat_hash_map<std::string, Element>& element_by_document_name
+    pending_build_t* pending_build
   );
+
+  void log_cycle(
+    build_element_t& cycle_end_be,
+    const std::string& cycle_start_doc_name,
+    const std::vector<std::string>& dfs_doc_names,
+    const absl::flat_hash_set<std::string>& dfs_doc_names_set
+  );
+
 };
 
 } /* worker */

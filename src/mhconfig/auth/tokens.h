@@ -36,7 +36,7 @@ public:
   bool init(
     const Element& element
   ) {
-    auto tokens_seq = element.get("tokens").as_sequence();
+    auto tokens_seq = element.get("tokens").as_seq();
     if (tokens_seq == nullptr) {
       spdlog::error("The tokens must be a sequence");
       return false;

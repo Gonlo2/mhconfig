@@ -12,7 +12,7 @@ class Cow final
 {
 public:
   template <typename... Args>
-  Cow(Args&&... args) noexcept {
+  explicit Cow(Args&&... args) noexcept {
     payload_ = new payload_t(std::forward<Args>(args)...);
     assert(payload_ != nullptr);
   }
@@ -40,6 +40,14 @@ public:
   Cow& operator=(Cow&& o) noexcept {
     std::swap(payload_, o.payload_);
     return *this;
+  }
+
+  template <typename V>
+  inline bool set(V&& v) {
+    T* value = get_mut();
+    if (value == nullptr) return false;
+    *value = std::forward<V>(v);
+    return true;
   }
 
   inline const T* get() const {

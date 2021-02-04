@@ -25,35 +25,7 @@ void WatchOutputMessageImpl::set_uid(uint32_t uid) {
 }
 
 void WatchOutputMessageImpl::set_status(WatchStatus status) {
-  switch (status) {
-    case WatchStatus::OK:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_OK);
-      break;
-    case WatchStatus::ERROR:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_ERROR);
-      break;
-    case WatchStatus::INVALID_VERSION:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_VERSION);
-      break;
-    case WatchStatus::REF_GRAPH_IS_NOT_DAG:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REF_GRAPH_IS_NOT_DAG);
-      break;
-    case WatchStatus::UID_IN_USE:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UID_IN_USE);
-      break;
-    case WatchStatus::UNKNOWN_UID:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID);
-      break;
-    case WatchStatus::REMOVED:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_REMOVED);
-      break;
-    case WatchStatus::PERMISSION_DENIED:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_PERMISSION_DENIED);
-      break;
-    case WatchStatus::INVALID_ARGUMENT:
-      response_->set_status(::mhconfig::proto::WatchResponse_Status::WatchResponse_Status_INVALID_ARGUMENT);
-      break;
-  }
+  response_->set_status(to_proto(status));
 }
 
 void WatchOutputMessageImpl::set_namespace_id(uint64_t namespace_id) {
@@ -66,7 +38,69 @@ void WatchOutputMessageImpl::set_version(uint32_t version) {
 
 void WatchOutputMessageImpl::set_element(const mhconfig::Element& element) {
   response_->clear_elements();
-  mhconfig::api::config::fill_elements(element, response_, response_->add_elements());
+  SourceIds source_ids;
+  fill_elements(
+    element,
+    response_,
+    response_->add_elements(),
+    false,
+    source_ids
+  );
+}
+
+SourceIds WatchOutputMessageImpl::set_element_with_position(
+  const mhconfig::Element& element
+) {
+  response_->clear_elements();
+  SourceIds source_ids;
+  fill_elements(
+    element,
+    response_,
+    response_->add_elements(),
+    true,
+    source_ids
+  );
+  return source_ids;
+}
+
+void WatchOutputMessageImpl::add_log(
+  LogLevel level,
+  const std::string_view& message
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+}
+
+void WatchOutputMessageImpl::add_log(
+  LogLevel level,
+  const std::string_view& message,
+  const position_t& position
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+  fill_position(position, log->mutable_position());
+}
+
+void WatchOutputMessageImpl::add_log(
+  LogLevel level,
+  const std::string_view& message,
+  const position_t& position,
+  const position_t& source
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+  fill_position(position, log->mutable_position());
+  fill_position(source, log->mutable_origin());
+}
+
+void WatchOutputMessageImpl::set_sources(
+  const std::vector<source_t>& sources
+) {
+  response_->clear_sources();
+  fill_sources(sources, response_);
 }
 
 void WatchOutputMessageImpl::set_checksum(const uint8_t* data, size_t len) {
@@ -80,6 +114,28 @@ bool WatchOutputMessageImpl::send(bool finish) {
   return false;
 }
 
+inline WatchResponse_Status WatchOutputMessageImpl::to_proto(
+  WatchStatus status
+) {
+  switch (status) {
+    case WatchStatus::OK:
+      return WatchResponse_Status::WatchResponse_Status_OK;
+    case WatchStatus::ERROR:
+      return WatchResponse_Status::WatchResponse_Status_ERROR;
+    case WatchStatus::UID_IN_USE:
+      return WatchResponse_Status::WatchResponse_Status_UID_IN_USE;
+    case WatchStatus::UNKNOWN_UID:
+      return WatchResponse_Status::WatchResponse_Status_UNKNOWN_UID;
+    case WatchStatus::REMOVED:
+      return WatchResponse_Status::WatchResponse_Status_REMOVED;
+    case WatchStatus::PERMISSION_DENIED:
+      return WatchResponse_Status::WatchResponse_Status_PERMISSION_DENIED;
+    case WatchStatus::INVALID_ARGUMENT:
+      return WatchResponse_Status::WatchResponse_Status_INVALID_ARGUMENT;
+  }
+  assert(false);
+  return WatchResponse_Status::WatchResponse_Status_ERROR;
+}
 
 WatchInputMessageImpl::WatchInputMessageImpl(
   std::unique_ptr<mhconfig::proto::WatchRequest>&& request,
@@ -112,6 +168,22 @@ const Labels& WatchInputMessageImpl::labels() const {
 
 const std::string& WatchInputMessageImpl::document() const {
   return request_->document();
+}
+
+LogLevel WatchInputMessageImpl::log_level() const {
+  switch (request_->log_level()) {
+    case proto::LogLevel::ERROR:
+      return LogLevel::ERROR;
+    case proto::LogLevel::WARN:
+      return LogLevel::WARN;
+    case proto::LogLevel::INFO:
+      return LogLevel::INFO;
+    case proto::LogLevel::DEBUG:
+      return LogLevel::DEBUG;
+    case proto::LogLevel::TRACE:
+      return LogLevel::TRACE;
+  }
+  return LogLevel::ERROR;
 }
 
 std::optional<std::optional<uint64_t>> WatchInputMessageImpl::unregister() {

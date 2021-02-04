@@ -29,8 +29,6 @@ using jmutils::container::Labels;
 enum class WatchStatus {
   OK,
   ERROR,
-  INVALID_VERSION,
-  REF_GRAPH_IS_NOT_DAG,
   UID_IN_USE,
   UNKNOWN_UID,
   REMOVED,
@@ -46,11 +44,34 @@ public:
   virtual ~WatchOutputMessage() {
   }
 
-  virtual void set_uid(uint32_t uid) = 0;
   virtual void set_status(WatchStatus status) = 0;
+  virtual void set_uid(uint32_t uid) = 0;
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;
+
   virtual void set_element(const mhconfig::Element& element) = 0;
+  virtual SourceIds set_element_with_position(
+    const mhconfig::Element& element
+  ) = 0;
+
+  virtual void add_log(
+    LogLevel level,
+    const std::string_view& message
+  ) = 0;
+  virtual void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position
+  ) = 0;
+  virtual void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position,
+    const position_t& source
+  ) = 0;
+
+  virtual void set_sources(const std::vector<source_t>& sources) = 0;
+
   virtual void set_checksum(const uint8_t* data, size_t len) = 0;
 };
 
@@ -67,6 +88,7 @@ public:
   virtual const std::string& root_path() const = 0;
   virtual const Labels& labels() const = 0;
   virtual const std::string& document() const = 0;
+  virtual LogLevel log_level() const = 0;
 
   virtual std::optional<std::optional<uint64_t>> unregister() = 0;
 
@@ -88,11 +110,33 @@ public:
   uint32_t version() const override;
   const Labels& labels() const override;
   const std::string& document() const override;
+  LogLevel log_level() const override;
 
-  void set_status(::mhconfig::api::request::GetRequest::Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
+
   void set_element(const mhconfig::Element& element) override;
+  SourceIds set_element_with_position(
+    const mhconfig::Element& element
+  ) override;
+
+  void add_log(
+    LogLevel level,
+    const std::string_view& message
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position,
+    const position_t& source
+  ) override;
+
+  void set_sources(const std::vector<source_t>& sources) override;
   void set_checksum(const uint8_t* data, size_t len) override;
 
   bool commit() override;

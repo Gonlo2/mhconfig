@@ -20,12 +20,18 @@
 #include "mhconfig/worker/optimize_command.h"
 #include "mhconfig/worker/setup_command.h"
 #include "mhconfig/worker/update_command.h"
+#include "mhconfig/logger/spdlog_logger.h"
+#include "mhconfig/logger/counter_logger.h"
+#include "mhconfig/logger/bi_logger.h"
+#include "mhconfig/logger/api_logger.h"
+#include "mhconfig/logger/sources_logger.h"
 
 namespace mhconfig
 {
 
 using jmutils::container::label_t;
 using mhconfig::api::request::GetRequest;
+using logger::Logger;
 
 class ApiGetConfigTask final : public GetConfigTask
 {
@@ -33,9 +39,10 @@ public:
   template <typename T>
   ApiGetConfigTask(
     T&& request
-  ) : request_(std::forward<T>(request)) {
+  ) : request_(std::forward<T>(request)),
+    api_logger_(request_.get())
+  {
   };
-  ~ApiGetConfigTask();
 
   const std::string& root_path() const override;
   uint32_t version() const override;
@@ -43,7 +50,6 @@ public:
   const std::string& document() const override;
 
   void on_complete(
-    Status status,
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
@@ -51,16 +57,60 @@ public:
     void* payload
   ) override;
 
+  Logger& logger() override;
+
+  ReplayLogger::Level log_level() const override;
+
 private:
   std::shared_ptr<GetRequest> request_;
-
-  GetRequest::Status to_api_status(Status status);
+  logger::SourcesLogger sources_logger_;
+  logger::ApiLogger<GetRequest*> api_logger_;
+  logger::BiLogger<Logger*> logger_{&sources_logger_, &api_logger_};
 };
+
+inline void finish_successfully(
+  GetConfigTask* task,
+  std::shared_ptr<config_namespace_t>& cn,
+  VersionId version,
+  merged_config_t* merged_config
+) {
+  // It's neccesary a lock for this?
+  merged_config->logger.replay(task->logger(), task->log_level());
+
+  task->on_complete(
+    cn,
+    version,
+    merged_config->value,
+    merged_config->checksum,
+    merged_config->payload
+  );
+}
+
+inline void finish_with_error(
+  GetConfigTask* task,
+  std::shared_ptr<config_namespace_t>& cn,
+  VersionId version
+) {
+  task->on_complete(
+    cn,
+    version,
+    UNDEFINED_ELEMENT,
+    UNDEFINED_ELEMENT_CHECKSUM,
+    nullptr
+  );
+}
 
 bool process_get_config_task(
   std::shared_ptr<config_namespace_t>&& cn,
   std::shared_ptr<GetConfigTask>&& task,
   context_t* ctx
+);
+
+bool is_a_valid_document(
+  VersionId version,
+  document_t* cfg_document,
+  document_t* document,
+  GetConfigTask* task
 );
 
 bool process_update_request(
@@ -105,7 +155,6 @@ public:
   const std::string& document() const override;
 
   void on_complete(
-    Status status,
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
@@ -113,7 +162,13 @@ public:
     void* payload
   ) override;
 
+  Logger& logger() override;
+
+  ReplayLogger::Level log_level() const override;
+
 private:
+  logger::CounterLogger logger_;
+
   VersionId version_;
   Labels labels_;
   std::string root_path_;
@@ -137,7 +192,6 @@ public:
   const std::string& document() const override;
 
   void on_complete(
-    Status status,
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
@@ -145,7 +199,13 @@ public:
     void* payload
   ) override;
 
+  Logger& logger() override;
+
+  ReplayLogger::Level log_level() const override;
+
 private:
+  logger::CounterLogger logger_;
+
   std::string root_path_;
   std::string token_;
   std::shared_ptr<PolicyCheck> pc_;

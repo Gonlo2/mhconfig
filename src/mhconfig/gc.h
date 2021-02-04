@@ -90,9 +90,10 @@ inline MCGeneration obtain_mc_generation(
   bool has_next
 ) {
   if(
-    ((mc->status == MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED)
-      || (mc->status == MergedConfigStatus::OK_CONFIG_OPTIMIZING)
-      || (mc->status == MergedConfigStatus::OK_CONFIG_OPTIMIZED))
+    ((mc->status == MergedConfigStatus::NO_OPTIMIZED)
+      || (mc->status == MergedConfigStatus::OPTIMIZING)
+      || (mc->status == MergedConfigStatus::OPTIMIZED)
+      || (mc->status == MergedConfigStatus::OPTIMIZATION_FAIL))
     && (mc->creation_timestamp <= timelimit_s)
   ) {
     if (mc->last_access_timestamp <= timelimit_s) {

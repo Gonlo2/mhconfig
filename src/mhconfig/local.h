@@ -5,6 +5,7 @@
 #include "mhconfig/element.h"
 #include "mhconfig/config_namespace.h"
 #include "mhconfig/provider.h"
+#include "mhconfig/logger/spdlog_logger.h"
 
 namespace mhconfig
 {
@@ -46,30 +47,12 @@ public:
   }
 
   void on_complete(
-    Status status,
     std::shared_ptr<mhconfig::config_namespace_t>& cn,
     mhconfig::VersionId version,
     const mhconfig::Element& element,
     const std::array<uint8_t, 32>& checksum,
     void* payload
   ) override {
-    switch (status) {
-      case Status::OK:
-        break;
-      case Status::ERROR:
-        spdlog::error("Some error take place making the config");
-        break;
-      case Status::INVALID_VERSION:
-        spdlog::error("The provided version don't exists or it has been deleted");
-        break;
-      case Status::REF_GRAPH_IS_NOT_DAG:
-        spdlog::error("The ref graph is not a dag");
-        break;
-      case Status::DONT_EXISTS:
-        spdlog::error("The asked config don't exists");
-        break;
-    }
-
     if (auto y = element.to_yaml()) {
       std::cout << *y;
     } else {
@@ -79,7 +62,16 @@ public:
     }
   }
 
+  Logger& logger() override {
+    return logger_;
+  }
+
+  ReplayLogger::Level log_level() const override {
+    return ReplayLogger::Level::warn;
+  }
+
 private:
+  logger::SpdlogLogger logger_;
   std::string root_path_;
   Labels labels_;
   std::string document_;

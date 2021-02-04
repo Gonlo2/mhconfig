@@ -414,7 +414,21 @@ bool UpdateCommand::update_documents(
         );
 
         it.second.raw_config->id = document->next_raw_config_id++;
+        if (it.second.raw_config->logger != nullptr) {
+          it.second.raw_config->logger->change_all(
+            document->id,
+            it.second.raw_config->id
+          );
+        }
+        it.second.raw_config->value.walk_mut(
+          [document_id=document->id, raw_config_id=it.second.raw_config->id](auto* e) {
+            e->set_document_id(document_id);
+            e->set_raw_config_id(raw_config_id);
+          }
+        );
+        it.second.raw_config->value.freeze();
 
+        document->raw_config_by_id[it.second.raw_config->id] = it.second.raw_config;
         override_->raw_config_by_version[cn_->current_version+1] = std::move(it.second.raw_config);
       }
     }

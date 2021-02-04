@@ -38,6 +38,21 @@ bool init_config_namespace(
       if (document == nullptr) return false;
 
       result.raw_config->id = document->next_raw_config_id++;
+      if (result.raw_config->logger != nullptr) {
+        result.raw_config->logger->change_all(
+          document->id,
+          result.raw_config->id
+        );
+      }
+      result.raw_config->value.walk_mut(
+        [document_id=document->id, raw_config_id=result.raw_config->id](auto* e) {
+          e->set_document_id(document_id);
+          e->set_raw_config_id(raw_config_id);
+        }
+      );
+      result.raw_config->value.freeze();
+
+      document->raw_config_by_id[result.raw_config->id] = result.raw_config;
       auto override_ = document->lbl_set.get_or_build(labels);
       override_->raw_config_by_version[1] = std::move(result.raw_config);
       document->mutex.Unlock();
@@ -128,17 +143,21 @@ load_raw_config_result_t index_file(
 
     if (split_result.kind == "_bin") {
       load_raw_config(
+        root_path,
         path,
-        [pool](const std::string& data, load_raw_config_result_t& result) {
-          result.raw_config->value = Element(pool->add(data), NodeType::BIN);
+        [pool](auto& logger, const std::string& data, auto& result) {
+          result.raw_config->value = Element(pool->add(data), Element::Type::BIN);
+          logger.trace("Created binary value", result.raw_config->value);
         },
         result
       );
     } else if (split_result.kind == "_text") {
       load_raw_config(
+        root_path,
         path,
-        [pool](const std::string& data, load_raw_config_result_t& result) {
+        [pool](auto& logger, const std::string& data, auto& result) {
           result.raw_config->value = Element(pool->add(data));
+          logger.trace("Created text value", result.raw_config->value);
         },
         result
       );
@@ -149,16 +168,31 @@ load_raw_config_result_t index_file(
     result.document = split_result.name;
 
     load_raw_config(
+      root_path,
       path,
-      [pool, &reference_to](const std::string& data, load_raw_config_result_t& result) {
-        YAML::Node node = YAML::Load(data);
+      [pool, &reference_to](auto& logger, const std::string& data, auto& result) {
+        YAML::Node node;
+        try {
+          node = YAML::Load(data);
+        } catch(const YAML::Exception &e) {
+          Element position;
+          position.set_position(e.mark.line, e.mark.column);
 
-        result.raw_config->value = make_and_check_element(
+          auto msg = fmt::format("Error parsing the YAML: {}", e.msg);
+          logger.error(pool->add(msg), position);
+
+          result.raw_config->value = UNDEFINED_ELEMENT;
+          return;
+        }
+
+        ElementBuilder element_builder(
+          logger,
           pool,
-          node,
           result.document,
           reference_to
         );
+
+        result.raw_config->value = element_builder.make_and_check(node);
       },
       result
     );
@@ -284,7 +318,21 @@ bool touch_affected_documents(
           );
 
           new_raw_config->id = document->next_raw_config_id++;
+          if (new_raw_config->logger != nullptr) {
+            new_raw_config->logger->change_all(
+              document->id,
+              new_raw_config->id
+            );
+          }
+          new_raw_config->value.walk_mut(
+            [document_id=document->id, raw_config_id=new_raw_config->id](auto* e) {
+              e->set_document_id(document_id);
+              e->set_raw_config_id(raw_config_id);
+            }
+          );
+          new_raw_config->value.freeze();
 
+          document->raw_config_by_id[new_raw_config->id] = new_raw_config;
           override_->raw_config_by_version[version] = std::move(new_raw_config);
         }
       }
@@ -328,640 +376,6 @@ void fill_affected_documents(
     to_check.pop_back();
   }
   cn->mutex.ReaderUnlock();
-}
-
-Element override_with(
-  const Element& a,
-  const Element& b,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
-) {
-  if (b.is_override()) {
-    return b.clone_without_virtual();
-  }
-
-  bool is_first_a_ref = a.type() == NodeType::REF;
-  if (is_first_a_ref || (b.type() == NodeType::REF)) {
-    auto referenced_element = apply_tag_ref(
-      is_first_a_ref ? a : b,
-      element_by_document_name
-    );
-
-    return override_with(
-      is_first_a_ref ? referenced_element : a,
-      is_first_a_ref ? b : referenced_element,
-      element_by_document_name
-    );
-  }
-
-  switch (get_virtual_node_type(b)) {
-    case VirtualNode::LITERAL: {
-      VirtualNode type = get_virtual_node_type(a);
-      if (type != VirtualNode::LITERAL) {
-        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
-        return a;
-      }
-
-      return b;
-    }
-
-    case VirtualNode::MAP: {
-      if (!a.is_map()) {
-        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
-        return a;
-      }
-
-      Element result(a);
-      auto map_a = result.as_map_mut();
-      auto map_b = b.as_map();
-      map_a->reserve(map_a->size() + map_b->size());
-
-      for (const auto& x : *map_b) {
-        const auto& search = map_a->find(x.first);
-        if (search == map_a->end()) {
-          if (x.second.type() != NodeType::DELETE) {
-            (*map_a)[x.first] = x.second;
-          }
-        } else if (x.second.type() == NodeType::DELETE) {
-          map_a->erase(search);
-        } else if (search->second.type() == NodeType::DELETE) {
-          (*map_a)[x.first] = x.second;
-        } else {
-          (*map_a)[x.first] = override_with(
-            search->second,
-            x.second,
-            element_by_document_name
-          );
-        }
-      }
-
-      return result;
-    }
-
-    case VirtualNode::SEQUENCE: {
-      if (!a.is_sequence()) {
-        spdlog::warn("Can't override {} with {} without the '{}' tag", a, b, TAG_OVERRIDE);
-        return a;
-      }
-
-      Element result(a);
-      auto seq_a = result.as_sequence_mut();
-      auto seq_b = b.as_sequence();
-      seq_a->reserve(seq_a->size() + seq_b->size());
-
-      for (size_t i = 0, l = seq_b->size(); i < l; ++i) {
-        seq_a->push_back((*seq_b)[i]);
-      }
-
-      return result;
-    }
-    case VirtualNode::REF:
-      assert(false);
-      break;
-    case VirtualNode::UNDEFINED:
-      break;
-  }
-
-  spdlog::warn("Can't override {} with {}", a, b);
-  return a;
-}
-
-VirtualNode get_virtual_node_type(
-  const Element& element
-) {
-  auto type = element.type();
-  switch (type) {
-    case NodeType::DELETE: // Fallback
-    case NodeType::UNDEFINED:
-      return VirtualNode::UNDEFINED;
-    case NodeType::OVERRIDE_MAP: // Fallback
-    case NodeType::MAP:
-      return VirtualNode::MAP;
-    case NodeType::OVERRIDE_SEQUENCE: // Fallback
-    case NodeType::SEQUENCE:
-      return VirtualNode::SEQUENCE;
-    case NodeType::REF:
-      return VirtualNode::REF;
-    case NodeType::FORMAT: // Fallback
-    case NodeType::SREF: // Fallback
-    case NodeType::OVERRIDE_NONE: // Fallback
-    case NodeType::NONE: // Fallback
-    case NodeType::OVERRIDE_STR: // Fallback
-    case NodeType::STR: // Fallback
-    case NodeType::BIN: // Fallback
-    case NodeType::INT64: // Fallback
-    case NodeType::DOUBLE: // Fallback
-    case NodeType::BOOL:
-      return VirtualNode::LITERAL;
-  }
-  assert(false);
-}
-
-std::pair<bool, Element> apply_tags(
-  jmutils::string::Pool* pool,
-  Element element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-) {
-  if (depth >= 500) {
-    spdlog::error(
-      "The apply tags function has reached a depth of {} so probably exists some circular dependency with the '{}' /'{}' tags",
-      depth,
-      TAG_SREF,
-      TAG_FORMAT
-    );
-    return std::make_pair(true, Element());
-  }
-
-  bool any_changed = false;
-
-  switch (element.type()) {
-    case NodeType::MAP: // Fallback
-    case NodeType::OVERRIDE_MAP: {
-      std::vector<jmutils::string::String> to_remove;
-      std::vector<std::pair<jmutils::string::String, Element>> to_modify;
-
-      for (const auto& it : *element.as_map()) {
-        if (it.second.type() == NodeType::DELETE) {
-          to_remove.push_back(it.first);
-        } else {
-          auto r = apply_tags(
-            pool,
-            it.second,
-            root,
-            element_by_document_name,
-            depth+1
-          );
-          if (r.first) {
-            to_modify.emplace_back(it.first, r.second);
-          }
-        }
-      }
-
-      any_changed = !(to_remove.empty() && to_modify.empty());
-      if (any_changed) {
-        auto map = element.as_map_mut();
-
-        for (size_t i = 0, l = to_remove.size(); i < l; ++i) {
-          map->erase(to_remove[i]);
-        }
-
-        for (size_t i = 0, l = to_modify.size(); i < l; ++i) {
-          (*map)[to_modify[i].first] = std::move(to_modify[i].second);
-        }
-      }
-      break;
-    }
-
-    case NodeType::SEQUENCE: // Fallback
-    case NodeType::FORMAT: // Fallback
-    case NodeType::SREF: // Fallback
-    case NodeType::REF: // Fallback
-    case NodeType::OVERRIDE_SEQUENCE: {
-      std::vector<Element> new_sequence;
-      auto current_sequence = element.as_sequence();
-      new_sequence.reserve(current_sequence->size());
-
-      for (size_t i = 0, l = current_sequence->size(); i < l; ++i) {
-        if ((*current_sequence)[i].type() == NodeType::DELETE) {
-          any_changed = true;
-        } else {
-          auto r = apply_tags(
-            pool,
-            (*current_sequence)[i],
-            root,
-            element_by_document_name,
-            depth+1
-          );
-          any_changed |= r.first;
-          new_sequence.push_back(r.second);
-        }
-      }
-
-      if (any_changed) {
-        auto sequence = element.as_sequence_mut();
-        std::swap(*sequence, new_sequence);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  if (element.type() == NodeType::REF) {
-    element = apply_tag_ref(element, element_by_document_name);
-    any_changed = true;
-  }
-
-  if (element.type() == NodeType::SREF) {
-    element = apply_tag_sref(pool, element, root, element_by_document_name, depth);
-    any_changed = true;
-  }
-
-  if (element.type() == NodeType::FORMAT) {
-    element = apply_tag_format(pool, element, root, element_by_document_name, depth);
-    any_changed = true;
-  }
-
-  return std::make_pair(any_changed, element);
-}
-
-Element apply_tag_format(
-  jmutils::string::Pool* pool,
-  const Element& element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-) {
-  std::stringstream ss;
-  auto slices = element.as_sequence();
-  for (size_t i = 0, l = slices->size(); i < l; ++i) {
-    auto v = apply_tags(pool, (*slices)[i], root, element_by_document_name, depth+1);
-    if (auto r = v.second.try_as<std::string>(); r) {
-      ss << *r;
-    } else {
-      spdlog::error("The '{}' tag references must be scalars", TAG_FORMAT);
-      return Element();
-    }
-  }
-  return Element(pool->add(ss.str()));
-}
-
-Element apply_tag_ref(
-  const Element& element,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
-) {
-  const auto path = element.as_sequence();
-
-  std::string key = (*path)[0].as<std::string>();
-  auto search = element_by_document_name.find(key);
-  if (search == element_by_document_name.end()) {
-    spdlog::error("Can't ref to the document '{}'", key);
-    return Element();
-  }
-
-  auto referenced_element = search->second;
-  for (size_t i = 1, l = path->size(); i < l; ++i) {
-    referenced_element = referenced_element.get(
-      (*path)[i].as<jmutils::string::String>()
-    );
-  }
-
-  return referenced_element;
-}
-
-Element apply_tag_sref(
-  jmutils::string::Pool* pool,
-  const Element& element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-) {
-  Element new_element = root;
-  const auto path = element.as_sequence();
-  for (size_t i = 0, l = path->size(); i < l; ++i) {
-    new_element = new_element.get((*path)[i].as<jmutils::string::String>());
-  }
-
-  new_element = apply_tags(
-    pool,
-    new_element,
-    root,
-    element_by_document_name,
-    depth+1
-  ).second;
-
-  if (!new_element.is_scalar()) {
-    spdlog::error(
-      "The element referenced by '{}' must be a scalar",
-      TAG_SREF
-    );
-    return Element();
-  }
-
-  return new_element;
-}
-
-/*
- * All the structure checks must be done here
- */
-Element make_and_check_element(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  auto element = make_element(pool, node, document, reference_to);
-
-  if (element.type() == NodeType::REF) {
-    const auto path = element.as_sequence();
-    if (!is_a_valid_path(path, TAG_REF)) return Element();
-    auto ref_document = path->front().as<std::string>();
-    if (document == ref_document) {
-      spdlog::error("A reference can't use the same document");
-      return Element();
-    } else {
-      reference_to.insert(ref_document);
-    }
-  } else if (element.type() == NodeType::SREF) {
-    if (!is_a_valid_path(element.as_sequence(), TAG_SREF)) return Element();
-  }
-
-  return element;
-}
-
-bool is_a_valid_path(
-  const Sequence* path,
-  const std::string& tag
-) {
-  if (path->empty()) {
-    spdlog::error(
-      "The key 'path' in a '{}' must be a sequence with at least one element",
-      tag
-    );
-    return false;
-  }
-
-  for (size_t i = 0, l = path->size(); i < l; ++i) {
-    if (!(*path)[i].is_string()) {
-      spdlog::error(
-        "All the elements of the key 'path' in a '{}' must be strings",
-        tag
-      );
-      return false;
-    }
-  }
-
-  return true;
-}
-
-Element make_element(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  switch (node.Type()) {
-    case YAML::NodeType::Null:
-      if ((node.Tag() == "") || (node.Tag() == TAG_NONE)) {
-        return Element(NodeType::NONE);
-      } else if (node.Tag() == TAG_OVERRIDE) {
-        return Element(NodeType::OVERRIDE_NONE);
-      }
-      spdlog::error("Unknown tag '{}' for a null value", node.Tag());
-      return Element();
-    case YAML::NodeType::Scalar:
-      return make_element_from_scalar(pool, node, document, reference_to);
-    case YAML::NodeType::Sequence:
-      return make_element_from_sequence(pool, node, document, reference_to);
-    case YAML::NodeType::Map:
-      return make_element_from_map(pool, node, document, reference_to);
-    case YAML::NodeType::Undefined:
-      return Element();
-  }
-
-  return Element();
-}
-
-Element make_element_from_scalar(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  if ((node.Tag() == TAG_NON_PLAIN_SCALAR) || (node.Tag() == TAG_STR)) {
-    return Element(pool->add(node.as<std::string>()));
-  } else if (node.Tag() == TAG_PLAIN_SCALAR) {
-    return make_element_from_plain_scalar(pool, node);
-  } else if (node.Tag() == TAG_FORMAT) {
-    return make_element_from_format(pool, node, document, reference_to);
-  } else if (node.Tag() == TAG_BIN) {
-    std::string encoded_value = node.as<std::string>();
-
-    if (!jmutils::base64_sanitize(encoded_value)) {
-      spdlog::warn("The base64 '{}' don't have a valid structure", encoded_value);
-      return Element();
-    }
-
-    std::string binary_value;
-    jmutils::base64_decode(encoded_value, binary_value);
-    return Element(pool->add(binary_value), NodeType::BIN);
-  } else if (node.Tag() == TAG_INT) {
-    Element result = make_element_from_int64(node);
-    if (result.is_undefined()) {
-      spdlog::warn("Can't parse '{}' as a int64", node.as<std::string>());
-    }
-    return result;
-  } else if (node.Tag() == TAG_DOUBLE) {
-    Element result = make_element_from_double(node);
-    if (result.is_undefined()) {
-      spdlog::warn("Can't parse '{}' as a double", node.as<std::string>());
-    }
-    return result;
-  } else if (node.Tag() == TAG_BOOL) {
-    Element result = make_element_from_bool(node);
-    if (result.is_undefined()) {
-      spdlog::warn("Can't parse '{}' as a bool", node.as<std::string>());
-    }
-    return result;
-  } else if (node.Tag() == TAG_DELETE) {
-    return Element(NodeType::DELETE);
-  } else if (node.Tag() == TAG_OVERRIDE) {
-    return Element(pool->add(node.as<std::string>()), NodeType::OVERRIDE_STR);
-  }
-  spdlog::error(
-    "Unknown tag '{}' for the scalar value {}",
-    node.Tag(),
-    node.as<std::string>()
-  );
-  return Element();
-}
-
-Element make_element_from_plain_scalar(
-  jmutils::string::Pool* pool,
-  YAML::Node &node
-) {
-  Element e = make_element_from_bool(node);
-  if (!e.is_undefined()) return e;
-
-  e = make_element_from_int64(node);
-  if (!e.is_undefined()) return e;
-
-  e = make_element_from_double(node);
-  if (!e.is_undefined()) return e;
-
-  return Element(pool->add(node.as<std::string>()));
-}
-
-Element make_element_from_format(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  SequenceCow tmpl_seq_cow;
-  auto tmpl_seq = tmpl_seq_cow.get_mut();
-
-  auto tmpl = node.as<std::string>();
-  for (size_t i = 0, l = tmpl.size(); i < l; ++i) {
-    std::stringstream ss;
-    for (;i < l; ++i) {
-      if (tmpl[i] == '{') {
-        if (++i >= l) {
-          spdlog::warn("The template '{}' has a unmatched '{' at position '{}'", tmpl, i);
-          return Element();
-        }
-        if (tmpl[i] != '{') break;
-      } else if (tmpl[i] == '}') {
-        if ((++i >= l) || (tmpl[i] != '}')) {
-          spdlog::warn("The template '{}' has a unmatched '}' at position '{}'", tmpl, i);
-          return Element();
-        }
-      }
-      ss << tmpl[i];
-    }
-
-    if (auto x = ss.str(); !x.empty()) {
-      tmpl_seq->push_back(Element(pool->add(x)));
-    }
-
-    if (i < l) {
-      SequenceCow arg_seq_cow;
-      auto arg_seq = arg_seq_cow.get_mut();
-      NodeType type = NodeType::UNDEFINED;
-      if (auto slice = parse_format_slice(tmpl, i)) {
-        if (document == *slice) {
-          type = NodeType::SREF;
-        } else {
-          type = NodeType::REF;
-          arg_seq->push_back(Element(pool->add(*slice)));
-          reference_to.insert(*slice);
-        }
-      } else {
-        return Element();
-      }
-
-      while ((i < l) && (tmpl[i] != '}')) {
-        if (auto slice = parse_format_slice(tmpl, ++i)) {
-          arg_seq->push_back(Element(pool->add(*slice)));
-        } else {
-          return Element();
-        }
-      }
-
-      tmpl_seq->push_back(Element(std::move(arg_seq_cow), type));
-    }
-  }
-
-  return Element(std::move(tmpl_seq_cow), NodeType::FORMAT);
-}
-
-std::optional<std::string> parse_format_slice(
-  const std::string& tmpl,
-  size_t& idx
-) {
-  size_t start = idx;
-  for (size_t l = tmpl.size(); idx < l; ++idx) {
-    switch (tmpl[idx]) {
-      case '}': // Fallback
-      case '/':
-        return std::optional<std::string>(std::string(&tmpl[start], idx-start));
-      case '{':
-        spdlog::error("The template '{}' has a unmatched '{' at position {}", tmpl, idx);
-        return std::optional<std::string>();
-      default:
-        break;
-    }
-  }
-  spdlog::error("The template '{}' has a unmatched '{'", tmpl);
-  return std::optional<std::string>();
-}
-
-Element make_element_from_int64(
-  YAML::Node &node
-) {
-  auto str(node.as<std::string>());
-  char *end;
-  errno = 0;
-  int64_t value = std::strtoll(str.c_str(), &end, 10);
-  return (errno || (str.c_str() == end) || (*end != 0))
-    ? Element()
-    : Element(value);
-}
-
-Element make_element_from_double(
-  YAML::Node &node
-) {
-  auto str(node.as<std::string>());
-  char *end;
-  errno = 0;
-  double value = std::strtod(str.c_str(), &end);
-  return (errno || (str.c_str() == end) || (*end != 0))
-    ? Element()
-    : Element(value);
-}
-
-Element make_element_from_bool(
-  YAML::Node &node
-) {
-  auto str(node.as<std::string>());
-  if (str == "true") {
-    return Element(true);
-  } else if (str == "false") {
-    return Element(false);
-  }
-  return Element();
-}
-
-Element make_element_from_map(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  MapCow map_cow;
-  auto map = map_cow.get_mut();
-  map->reserve(node.size());
-  for (auto it : node) {
-    if (!it.first.IsScalar()) {
-      spdlog::error("The key of a map must be a scalar");
-      return Element();
-    }
-    jmutils::string::String key(pool->add(it.first.as<std::string>()));
-    (*map)[key] = make_and_check_element(pool, it.second, document, reference_to);
-  }
-  if (node.Tag() == TAG_PLAIN_SCALAR) {
-    return Element(std::move(map_cow));
-  } else if (node.Tag() == TAG_OVERRIDE) {
-    return Element(std::move(map_cow), NodeType::OVERRIDE_MAP);
-  }
-  spdlog::error("Unknown tag '{}' for a map value", node.Tag());
-  return Element();
-}
-
-Element make_element_from_sequence(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-) {
-  SequenceCow seq_cow;
-  auto seq = seq_cow.get_mut();
-  seq->reserve(node.size());
-  for (auto it : node) {
-    seq->push_back(make_and_check_element(pool, it, document, reference_to));
-  }
-  if (node.Tag() == TAG_PLAIN_SCALAR) {
-    return Element(std::move(seq_cow));
-  } else if (node.Tag() == TAG_SREF) {
-    return Element(std::move(seq_cow), NodeType::SREF);
-  } else if (node.Tag() == TAG_REF) {
-    return Element(std::move(seq_cow), NodeType::REF);
-  } else if (node.Tag() == TAG_OVERRIDE) {
-    return Element(std::move(seq_cow), NodeType::OVERRIDE_SEQUENCE);
-  }
-  spdlog::error("Unknown tag '{}' for a sequence value", node.Tag());
-  return Element();
 }
 
 // Get logic
@@ -1046,21 +460,18 @@ std::shared_ptr<config_namespace_t> get_or_build_cn(
   return result;
 }
 
-GetConfigTask::Status alloc_payload_locked(
+bool alloc_payload_locked(
   merged_config_t* merged_config
 ) {
   merged_config->payload = nullptr;
   if (merged_config->payload_fun.alloc(merged_config->value, merged_config->payload)) {
-    merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZED;
-    return GetConfigTask::Status::OK;
+    return true;
   }
-  spdlog::error("Some error take place allocating the payload");
   if (merged_config->payload != nullptr) {
     merged_config->payload_fun.dealloc(merged_config->payload);
     merged_config->payload = nullptr;
   }
-  merged_config->status = MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED;
-  return GetConfigTask::Status::ERROR;
+  return false;
 }
 
 std::shared_ptr<document_t> get_document_locked(
@@ -1088,7 +499,7 @@ std::optional<DocumentId> next_document_id_locked(
 ) {
   DocumentId document_id = cn->next_document_id;
   do {
-    if (!cn->document_ids_in_use.contains(document_id)) {
+    if (!cn->document_by_id.contains(document_id)) {
       cn->next_document_id = document_id+1;
       return std::optional<DocumentId>(document_id);
     }
@@ -1108,7 +519,7 @@ bool try_insert_document_locked(
     document->name = name;
 
     get_or_build_document_versions_locked(cn, name)->document_by_version[version] = document;
-    cn->document_ids_in_use.insert(*document_id);
+    cn->document_by_id[*document_id] = document;
 
     return true;
   }
@@ -1159,6 +570,7 @@ std::shared_ptr<document_t> try_migrate_document_locked(
 
         auto new_raw_config = last_version->clone();
         new_raw_config->id = new_document->next_raw_config_id++;
+        new_document->raw_config_by_id[new_raw_config->id] = new_raw_config;
         auto new_override = new_document->lbl_set.get_or_build(labels);
         new_override->raw_config_by_version[version] = std::move(new_raw_config);
       }
@@ -1179,6 +591,31 @@ std::shared_ptr<document_t> try_migrate_document_locked(
   }
   document->mutex.Unlock();
   cn->mutex.Unlock();
+
+  if (new_document != nullptr) {
+    new_document->lbl_set.for_each(
+      [document_id=new_document->id](const auto&, auto* override_) -> bool {
+        if (auto raw_config = get_last_raw_config_locked(override_)) {
+          if (raw_config->logger != nullptr) {
+            // This change the document_id & raw_config_id of the old documents,
+            // but since they both have the same data it shouldn't be a problem
+            raw_config->logger->change_all(
+              document_id,
+              raw_config->id
+            );
+          }
+          raw_config->value.walk_mut(
+            [document_id, raw_config_id=raw_config->id](auto* e) {
+              e->set_document_id(document_id);
+              e->set_raw_config_id(raw_config_id);
+            }
+          );
+          raw_config->value.freeze();
+        }
+        return true;
+      }
+    );
+  }
 
   return new_document;
 }
@@ -1312,6 +749,49 @@ split_filename_result_t split_filename(
   return result;
 }
 
+std::vector<api::source_t> make_sources(
+  const api::SourceIds& source_ids,
+  config_namespace_t* cn
+) {
+  absl::flat_hash_map<DocumentId, absl::flat_hash_set<RawConfigId>> rc_by_doc_id;
+  for (const auto& it : source_ids) {
+    rc_by_doc_id[it.first].insert(it.second);
+  }
+
+  std::vector<api::source_t> sources;
+
+  cn->mutex.ReaderLock();
+  for (const auto& doc_it : rc_by_doc_id) {
+    spdlog::trace("Finding the document with id {}", doc_it.first);
+    auto doc_search = cn->document_by_id.find(doc_it.first);
+    if (doc_search != cn->document_by_id.end()) {
+      auto doc = doc_search->second;
+      doc->mutex.ReaderLock();
+      for (auto rc_id : doc_it.second) {
+        spdlog::trace("Finding the raw config with id {}", rc_id);
+        auto rc_search = doc->raw_config_by_id.find(rc_id);
+        if (rc_search != doc->raw_config_by_id.end()) {
+          api::source_t source{
+            .document_id = doc_it.first,
+            .raw_config_id = rc_id,
+            .checksum = rc_search->second->file_checksum,
+            .path = rc_search->second->path
+          };
+          sources.push_back(std::move(source));
+        } else {
+          spdlog::warn("Don't found the raw config with id {}", rc_id);
+        }
+      }
+      doc->mutex.ReaderUnlock();
+    } else {
+      spdlog::warn("Don't found the document with id {}", doc_it.first);
+    }
+  }
+  cn->mutex.ReaderUnlock();
+
+  return sources;
+}
+
 CheckMergedConfigResult check_merged_config(
   merged_config_t* merged_config,
   std::shared_ptr<GetConfigTask>& task,
@@ -1327,43 +807,37 @@ CheckMergedConfigResult check_merged_config(
       return CheckMergedConfigResult::BUILD_CONFIG;
 
     case MergedConfigStatus::BUILDING: // Fallback
-    case MergedConfigStatus::OK_CONFIG_OPTIMIZING:
+    case MergedConfigStatus::OPTIMIZING:
       if (!has_exclusive_lock) {
         return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
       }
       merged_config->waiting.push_back(std::move(task));
       return CheckMergedConfigResult::IN_PROGRESS;
 
-    case MergedConfigStatus::OK_CONFIG_NO_OPTIMIZED:
+    case MergedConfigStatus::NO_OPTIMIZED:
       if (!has_exclusive_lock) {
         return CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK;
       }
-      merged_config->status = MergedConfigStatus::OK_CONFIG_OPTIMIZING;
+      merged_config->status = MergedConfigStatus::OPTIMIZING;
       merged_config->waiting.push_back(std::move(task));
       return CheckMergedConfigResult::OPTIMIZE_CONFIG;
 
-    case MergedConfigStatus::OK_CONFIG_OPTIMIZED:
+    case MergedConfigStatus::OPTIMIZED:
       spdlog::debug(
         "The built document '{}' has been found",
         task->document()
       );
       return CheckMergedConfigResult::OK;
 
-    case MergedConfigStatus::REF_GRAPH_IS_NOT_DAG:
+    case MergedConfigStatus::OPTIMIZATION_FAIL:
       spdlog::debug(
-        "The built document '{}' has been found but it isn't a DAG",
+        "The built document '{}' has been found although optimization is wrong",
         task->document()
       );
-      return CheckMergedConfigResult::REF_GRAPH_IS_NOT_DAG;
-
-    case MergedConfigStatus::INVALID_VERSION:
-      spdlog::debug(
-        "The built document '{}' use a deleted version",
-        task->document()
-      );
-      return CheckMergedConfigResult::ERROR;
+      return CheckMergedConfigResult::OK;
   }
 
+  task->logger().error("Some error take place");
   return CheckMergedConfigResult::ERROR;
 }
 
@@ -1387,8 +861,10 @@ void delete_cn_locked(
   }
 
   for (size_t i = 0, l = cn->get_config_tasks_waiting.size(); i < l; ++i) {
+    cn->get_config_tasks_waiting[i]->logger().error(
+      "The config namespace has been deleted"
+    );
     cn->get_config_tasks_waiting[i]->on_complete(
-      GetConfigTask::Status::ERROR,
       cn,
       0,
       UNDEFINED_ELEMENT,

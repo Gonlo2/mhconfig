@@ -20,7 +20,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "jmutils/container/label_set.h"
-#include "mhconfig/api/config/common.h"
+#include "mhconfig/api/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/session.h"
 #include "mhconfig/api/stream/stream.h"
@@ -46,6 +46,8 @@ namespace stream
 class WatchInputMessageImpl;
 class WatchStreamImpl;
 
+using mhconfig::proto::WatchResponse_Status;
+
 class WatchOutputMessageImpl final
   : public WatchOutputMessage,
   public std::enable_shared_from_this<WatchOutputMessageImpl>
@@ -56,11 +58,33 @@ public:
   );
   ~WatchOutputMessageImpl();
 
-  void set_uid(uint32_t uid) override;
   void set_status(WatchStatus status) override;
+  void set_uid(uint32_t uid) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
+
   void set_element(const mhconfig::Element& element) override;
+  SourceIds set_element_with_position(
+    const mhconfig::Element& element
+  ) override;
+
+  void add_log(
+    LogLevel level,
+    const std::string_view& message
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position,
+    const position_t& source
+  ) override;
+
+  void set_sources(const std::vector<source_t>& sources) override;
   void set_checksum(const uint8_t* data, size_t len) override;
 
   bool send(bool finish = false) override;
@@ -78,6 +102,8 @@ private:
   std::weak_ptr<WatchStreamImpl> stream_;
 
   grpc::Slice slice_;
+
+  inline WatchResponse_Status to_proto(WatchStatus status);
 };
 
 class WatchInputMessageImpl final
@@ -97,6 +123,7 @@ public:
   const std::string& root_path() const override;
   const Labels& labels() const override;
   const std::string& document() const override;
+  LogLevel log_level() const override;
 
   std::optional<std::optional<uint64_t>> unregister() override;
 
@@ -116,7 +143,6 @@ private:
   Labels labels_;
 
   bool check_auth(auth::AuthResult auth_result);
-
 };
 
 class WatchStreamImpl final
@@ -176,7 +202,6 @@ private:
     config_namespace_t* cn,
     const WatchInputMessage* request
   );
-
 };
 
 

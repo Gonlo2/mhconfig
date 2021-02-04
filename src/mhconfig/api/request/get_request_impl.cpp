@@ -27,21 +27,20 @@ const std::string& GetRequestImpl::document() const {
   return request_->document();
 }
 
-void GetRequestImpl::set_status(Status status) {
-  switch (status) {
-    case Status::OK:
-      response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_OK);
-      break;
-    case Status::ERROR:
-      response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_ERROR);
-      break;
-    case Status::INVALID_VERSION:
-      response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_INVALID_VERSION);
-      break;
-    case Status::REF_GRAPH_IS_NOT_DAG:
-      response_->set_status(::mhconfig::proto::GetResponse_Status::GetResponse_Status_REF_GRAPH_IS_NOT_DAG);
-      break;
+LogLevel GetRequestImpl::log_level() const {
+  switch (request_->log_level()) {
+    case proto::LogLevel::ERROR:
+      return LogLevel::ERROR;
+    case proto::LogLevel::WARN:
+      return LogLevel::WARN;
+    case proto::LogLevel::INFO:
+      return LogLevel::INFO;
+    case proto::LogLevel::DEBUG:
+      return LogLevel::DEBUG;
+    case proto::LogLevel::TRACE:
+      return LogLevel::TRACE;
   }
+  return LogLevel::ERROR;
 }
 
 void GetRequestImpl::set_namespace_id(uint64_t namespace_id) {
@@ -54,7 +53,69 @@ void GetRequestImpl::set_version(uint32_t version) {
 
 void GetRequestImpl::set_element(const mhconfig::Element& element) {
   response_->clear_elements();
-  config::fill_elements(element, response_, response_->add_elements());
+  SourceIds source_ids;
+  fill_elements(
+    element,
+    response_,
+    response_->add_elements(),
+    false,
+    source_ids
+  );
+}
+
+SourceIds GetRequestImpl::set_element_with_position(
+  const mhconfig::Element& element
+) {
+  response_->clear_elements();
+  SourceIds source_ids;
+  fill_elements(
+    element,
+    response_,
+    response_->add_elements(),
+    true,
+    source_ids
+  );
+  return source_ids;
+}
+
+void GetRequestImpl::add_log(
+  LogLevel level,
+  const std::string_view& message
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+}
+
+void GetRequestImpl::add_log(
+  LogLevel level,
+  const std::string_view& message,
+  const position_t& position
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+  fill_position(position, log->mutable_position());
+}
+
+void GetRequestImpl::add_log(
+  LogLevel level,
+  const std::string_view& message,
+  const position_t& position,
+  const position_t& source
+) {
+  auto log = response_->add_logs();
+  log->set_level(level_to_proto(level));
+  log->set_message(message.data(), message.size());
+  fill_position(position, log->mutable_position());
+  fill_position(source, log->mutable_origin());
+}
+
+void GetRequestImpl::set_sources(
+  const std::vector<source_t>& sources
+) {
+  response_->clear_sources();
+  fill_sources(sources, response_);
 }
 
 void GetRequestImpl::set_checksum(const uint8_t* data, size_t len) {

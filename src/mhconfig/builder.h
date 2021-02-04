@@ -2,14 +2,10 @@
 #define MHCONFIG__BUILDER_H
 
 #include <absl/container/flat_hash_set.h>
-#include <bits/exception.h>
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
 #include <spdlog/fmt/fmt.h>
 #include <stddef.h>
 #include <algorithm>
 #include <array>
-#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -20,6 +16,7 @@
 #include <system_error>
 #include <utility>
 #include <vector>
+#include <openssl/sha.h>
 
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
@@ -30,7 +27,7 @@
 #include "jmutils/container/weak_multimap.h"
 #include "jmutils/cow.h"
 #include "jmutils/time.h"
-#include "mhconfig/api/config/common.h"
+#include "mhconfig/api/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/stream/trace_stream.h"
 #include "mhconfig/auth/policy.h"
@@ -42,28 +39,15 @@
 #include "mhconfig/validator.h"
 #include "spdlog/spdlog.h"
 #include "yaml-cpp/exceptions.h"
+#include "mhconfig/logger/spdlog_logger.h"
+#include "mhconfig/logger/bi_logger.h"
+#include "mhconfig/element_builder.h"
 
 namespace mhconfig
 {
 
 using jmutils::container::Labels;
 using jmutils::container::label_t;
-
-const static std::string TAG_NON_PLAIN_SCALAR{"!"};
-const static std::string TAG_PLAIN_SCALAR{"?"};
-const static std::string TAG_NONE{"tag:yaml.org,2002:null"};
-const static std::string TAG_STR{"tag:yaml.org,2002:str"};
-const static std::string TAG_BIN{"tag:yaml.org,2002:binary"};
-const static std::string TAG_INT{"tag:yaml.org,2002:int"};
-const static std::string TAG_DOUBLE{"tag:yaml.org,2002:float"};
-const static std::string TAG_BOOL{"tag:yaml.org,2002:bool"};
-
-
-const static std::string TAG_FORMAT{"!format"};
-const static std::string TAG_SREF{"!sref"};
-const static std::string TAG_REF{"!ref"};
-const static std::string TAG_DELETE{"!delete"};
-const static std::string TAG_OVERRIDE{"!override"};
 
 enum class LoadRawConfigStatus {
   OK,
@@ -78,14 +62,6 @@ struct load_raw_config_result_t {
   std::shared_ptr<raw_config_t> raw_config{nullptr};
 };
 
-enum class VirtualNode {
-  UNDEFINED,
-  MAP,
-  SEQUENCE,
-  LITERAL,
-  REF
-};
-
 bool init_config_namespace(
   config_namespace_t* cn
 );
@@ -96,6 +72,7 @@ std::optional<std::string> read_file(
 
 template <typename T>
 void load_raw_config(
+  const std::filesystem::path& root_path,
   const std::filesystem::path& path,
   T lambda,
   load_raw_config_result_t& result
@@ -112,16 +89,36 @@ void load_raw_config(
 
     result.raw_config = std::make_shared<raw_config_t>();
     result.raw_config->has_content = true;
+    result.raw_config->logger = std::make_shared<PersistentLogger>();
+    result.raw_config->path = std::filesystem::relative(path, root_path).string();
 
-    lambda(*data, result);
+    auto& logger = *result.raw_config->logger;
 
-    result.raw_config->value.freeze();
+    lambda(logger, *data, result);
 
-    auto full_checksum = result.raw_config->value.make_checksum();
-    result.raw_config->checksum = 0;
-    for (size_t i = 0; i < 8; ++i) {
-      result.raw_config->checksum <<= 8;
-      result.raw_config->checksum |= full_checksum[i];
+    {
+      std::array<uint8_t, 32> checksum;
+
+      SHA256_CTX sha256;
+      SHA256_Init(&sha256);
+      SHA256_Update(&sha256, data->data(), data->size());
+      SHA256_Final(checksum.data(), &sha256);
+
+      result.raw_config->file_checksum = 0;
+      for (size_t i = 0; i < 4; ++i) {
+        result.raw_config->file_checksum <<= 8;
+        result.raw_config->file_checksum |= checksum[i];
+      }
+    }
+
+    {
+      auto checksum = result.raw_config->value.make_checksum();
+
+      result.raw_config->checksum = 0;
+      for (size_t i = 0; i < 8; ++i) {
+        result.raw_config->checksum <<= 8;
+        result.raw_config->checksum |= checksum[i];
+      }
     }
   } catch(const std::exception &e) {
     spdlog::error(
@@ -224,117 +221,6 @@ bool touch_affected_documents(
   VersionId version,
   const absl::flat_hash_map<std::string, absl::flat_hash_map<Labels, AffectedDocumentStatus>>& dep_by_doc,
   bool only_nonexistent
-);
-
-Element override_with(
-  const Element& a,
-  const Element& b,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
-);
-
-VirtualNode get_virtual_node_type(
-  const Element& element
-);
-
-std::pair<bool, Element> apply_tags(
-  jmutils::string::Pool* pool,
-  Element element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-);
-
-Element apply_tag_format(
-  jmutils::string::Pool* pool,
-  const Element& element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-);
-
-Element apply_tag_ref(
-  const Element& element,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name
-);
-
-Element apply_tag_sref(
-  jmutils::string::Pool* pool,
-  const Element& element,
-  const Element& root,
-  const absl::flat_hash_map<std::string, Element> &element_by_document_name,
-  uint32_t depth
-);
-
-/*
- * All the structure checks must be done here
- */
-Element make_and_check_element(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-);
-
-bool is_a_valid_path(
-  const Sequence* path,
-  const std::string& tag
-);
-
-Element make_element(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-);
-
-Element make_element_from_scalar(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-);
-
-Element make_element_from_plain_scalar(
-  jmutils::string::Pool* pool,
-  YAML::Node &node
-);
-
-Element make_element_from_format(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-);
-
-std::optional<std::string> parse_format_slice(
-  const std::string& tmpl,
-  size_t& idx
-);
-
-Element make_element_from_int64(
-  YAML::Node &node
-);
-
-Element make_element_from_double(
-  YAML::Node &node
-);
-
-Element make_element_from_bool(
-  YAML::Node &node
-);
-
-Element make_element_from_map(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
-);
-
-Element make_element_from_sequence(
-  jmutils::string::Pool* pool,
-  YAML::Node &node,
-  const std::string& document,
-  absl::flat_hash_set<std::string> &reference_to
 );
 
 // Get logic
@@ -485,7 +371,7 @@ bool for_each_document_override(
   return is_a_valid_version;
 }
 
-GetConfigTask::Status alloc_payload_locked(
+bool alloc_payload_locked(
   merged_config_t* merged_config
 );
 
@@ -605,8 +491,6 @@ split_filename_result_t split_filename(
   std::string_view stem
 );
 
-std::array<uint8_t, 32> make_checksum(const Element& element);
-
 namespace {
   struct trace_variables_counter_t {
     bool document : 1;
@@ -698,13 +582,17 @@ inline VersionId get_version(
     : version;
 }
 
+std::vector<api::source_t> make_sources(
+  const api::SourceIds& source_ids,
+  config_namespace_t* cn
+);
+
 enum CheckMergedConfigResult {
   IN_PROGRESS,
   NEED_EXCLUSIVE_LOCK,
   BUILD_CONFIG,
   OPTIMIZE_CONFIG,
   OK,
-  REF_GRAPH_IS_NOT_DAG,
   ERROR
 };
 

@@ -1,149 +1,113 @@
 #include "mhconfig/element.h"
 
 namespace mhconfig {
-  std::string to_string(NodeType type) {
+  std::string to_string(Element::Type type) {
     switch (type) {
-      case NodeType::UNDEFINED:
+      case Element::Type::UNDEFINED:
         return "UNDEFINED";
-      case NodeType::MAP:
+      case Element::Type::MAP:
         return "MAP";
-      case NodeType::SEQUENCE:
+      case Element::Type::SEQUENCE:
         return "SEQUENCE";
-      case NodeType::NONE:
+      case Element::Type::NONE:
         return "NONE";
-      case NodeType::STR:
+      case Element::Type::STR:
         return "STR";
-      case NodeType::BIN:
+      case Element::Type::BIN:
         return "BIN";
-      case NodeType::INT64:
+      case Element::Type::INT64:
         return "INT64";
-      case NodeType::DOUBLE:
+      case Element::Type::DOUBLE:
         return "DOUBLE";
-      case NodeType::BOOL:
+      case Element::Type::BOOL:
         return "BOOLEAN";
-
-      case NodeType::FORMAT:
-        return "FORMAT";
-      case NodeType::SREF:
-        return "SREF";
-      case NodeType::REF:
-        return "REF";
-      case NodeType::DELETE:
-        return "DELETE";
-      case NodeType::OVERRIDE_MAP:
-        return "OVERRIDE_MAP";
-      case NodeType::OVERRIDE_SEQUENCE:
-        return "OVERRIDE_SEQUENCE";
-      case NodeType::OVERRIDE_NONE:
-        return "OVERRIDE_NONE";
-      case NodeType::OVERRIDE_STR:
-        return "OVERRIDE_STR";
     }
 
     return "unknown";
   }
 
   Element::Element() noexcept {
-    init_data(NodeType::UNDEFINED);
+    init(Type::UNDEFINED);
   }
 
-  Element::Element(NodeType type) noexcept {
-    init_data(type);
+  Element::Element(Type type) noexcept {
+    init(type);
   }
 
   Element::Element(int64_t value) noexcept {
-    type_ = NodeType::INT64;
+    init(Type::INT64);
     data_.int64_value = value;
   }
 
   Element::Element(double value) noexcept {
-    type_ = NodeType::DOUBLE;
+    init(Type::DOUBLE);
     data_.double_value = value;
   }
 
   Element::Element(bool value) noexcept {
-    type_ = NodeType::BOOL;
+    init(Type::BOOL);
     data_.bool_value = value;
   }
 
-  Element::Element(const Literal& value, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::LITERAL);
-    type_ = type;
-    new (&data_.literal) Literal();
+  Element::Element(const Literal& value, Type type) noexcept {
+    assert((type == Type::BIN) || (type == Type::STR));
+    init(type);
     data_.literal = value;
   }
 
-  Element::Element(Literal&& value, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::LITERAL);
-    type_ = type;
-    new (&data_.literal) Literal();
-    data_.literal = value;
+  Element::Element(Literal&& value, Type type) noexcept {
+    assert((type == Type::BIN) || (type == Type::STR));
+    init(type);
+    data_.literal = std::move(value);
   }
 
-  Element::Element(const MapCow& map, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::MAP);
-    type_ = type;
-    new (&data_.map) MapCow();
-    data_.map = map;
+  Element::Element(const Map& map) noexcept {
+    init(Type::MAP);
+    assert(data_.map.set(map));
   }
 
-  Element::Element(MapCow&& map, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::MAP);
-    type_ = type;
-    new (&data_.map) MapCow();
-    data_.map = map;
+  Element::Element(Map&& map) noexcept {
+    init(Type::MAP);
+    assert(data_.map.set(std::move(map)));
   }
 
-  Element::Element(const SequenceCow& sequence, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
-    type_ = type;
-    new (&data_.seq) SequenceCow();
-    data_.seq = sequence;
+  Element::Element(const Seq& seq) noexcept {
+    init(Type::SEQUENCE);
+    assert(data_.seq.set(seq));
   }
 
-  Element::Element(SequenceCow&& sequence, NodeType type) noexcept {
-    assert(get_internal_data_type(type) == InternalDataType::SEQUENCE);
-    type_ = type;
-    new (&data_.seq) SequenceCow();
-    data_.seq = sequence;
+  Element::Element(Seq&& seq) noexcept {
+    init(Type::SEQUENCE);
+    assert(data_.seq.set(std::move(seq)));
   }
 
   Element::Element(const Element& rhs) noexcept {
-    init_data(rhs.type_);
-    copy_data(rhs);
+    init(rhs.type_);
+    copy(rhs);
   }
 
   Element::Element(Element&& rhs) noexcept {
-    init_data(rhs.type_);
-    swap_data(rhs);
+    init(rhs.type_);
+    swap(rhs);
   }
 
   Element& Element::operator=(const Element& o) noexcept {
     if (this != &o) {
-      if (get_internal_data_type(type_) != get_internal_data_type(o.type_)) {
+      if (type_ != o.type_) {
         destroy_data();
         init_data(o.type_);
       }
-      copy_data(o);
+      copy(o);
     }
     return *this;
   }
 
   Element& Element::operator=(Element&& o) noexcept {
-    if (get_internal_data_type(type_) == get_internal_data_type(o.type_)) {
-      swap_data(o);
-    } else {
-      Element tmp(type_);
-      swap_data(tmp);
-
+    if (type_ != o.type_) {
       destroy_data();
       init_data(o.type_);
-      swap_data(o);
-
-      o.destroy_data();
-      o.init_data(tmp.type_);
-      o.swap_data(tmp);
     }
+    swap(o);
     return *this;
   }
 
@@ -151,28 +115,20 @@ namespace mhconfig {
     destroy_data();
   }
 
-  const Sequence* Element::as_sequence() const {
-    return get_internal_data_type(type_) == InternalDataType::SEQUENCE
-      ? data_.seq.get()
-      : nullptr;
+  const Seq* Element::as_seq() const {
+    return type_ == Type::SEQUENCE ? data_.seq.get() : nullptr;
   }
 
   const Map* Element::as_map() const {
-    return get_internal_data_type(type_) == InternalDataType::MAP
-      ? data_.map.get()
-      : nullptr;
+    return type_ == Type::MAP ? data_.map.get() : nullptr;
   }
 
-  Sequence* Element::as_sequence_mut() {
-    return get_internal_data_type(type_) == InternalDataType::SEQUENCE
-      ? data_.seq.get_mut()
-      : nullptr;
+  Seq* Element::as_seq_mut() {
+    return type_ == Type::SEQUENCE ? data_.seq.get_mut() : nullptr;
   }
 
   Map* Element::as_map_mut() {
-    return get_internal_data_type(type_) == InternalDataType::MAP
-      ? data_.map.get_mut()
-      : nullptr;
+    return type_ == Type::MAP ? data_.map.get_mut() : nullptr;
   }
 
   Element Element::get(const std::string& key) const {
@@ -193,7 +149,7 @@ namespace mhconfig {
   }
 
   Element Element::get(size_t index) const {
-    auto seq = as_sequence();
+    auto seq = as_seq();
     if (seq == nullptr) {
       spdlog::debug("The element {} isn't a sequence", *this);
       return Element();
@@ -209,12 +165,11 @@ namespace mhconfig {
 
   bool Element::is_scalar() const {
     switch (type()) {
-      case NodeType::STR: // Fallback
-      case NodeType::BIN: // Fallback
-      case NodeType::INT64: // Fallback
-      case NodeType::DOUBLE: // Fallback
-      case NodeType::BOOL: // Fallback
-      case NodeType::OVERRIDE_STR:
+      case Type::STR: // Fallback
+      case Type::BIN: // Fallback
+      case Type::INT64: // Fallback
+      case Type::DOUBLE: // Fallback
+      case Type::BOOL:
         return true;
       default:
         break;
@@ -223,93 +178,38 @@ namespace mhconfig {
   }
 
   bool Element::is_string() const {
-    switch (type()) {
-      case NodeType::STR: // Fallback
-      case NodeType::OVERRIDE_STR:
-        return true;
-      default:
-        break;
-    }
-    return false;
+    return type() == Type::STR;
   }
 
   bool Element::is_map() const {
     return as_map() != nullptr;
   }
 
-  bool Element::is_sequence() const {
-    return as_sequence() != nullptr;
+  bool Element::is_seq() const {
+    return as_seq() != nullptr;
   }
 
   bool Element::is_null() const {
-    switch (type()) {
-      case NodeType::NONE: // Fallback
-      case NodeType::OVERRIDE_NONE:
-        return true;
-      default:
-        break;
-    }
-    return false;
+    return type() == Type::NONE;
   }
 
   bool Element::is_undefined() const {
-    return type() == NodeType::UNDEFINED;
+    return type() == Type::UNDEFINED;
   }
 
   bool Element::is_override() const {
-    switch (type()) {
-      case NodeType::OVERRIDE_MAP: // Fallback
-      case NodeType::OVERRIDE_SEQUENCE: // Fallback
-      case NodeType::OVERRIDE_NONE: // Fallback
-      case NodeType::OVERRIDE_STR:
-        return true;
-      default:
-        break;
-    }
-    return false;
-  }
-
-  Element Element::clone_without_virtual() const {
-    switch (type_) {
-      case NodeType::UNDEFINED: // Fallback
-      case NodeType::DELETE:
-        return Element();
-      case NodeType::MAP: // Fallback
-      case NodeType::OVERRIDE_MAP:
-        return Element(data_.map);
-      case NodeType::SEQUENCE: // Fallback
-      case NodeType::OVERRIDE_SEQUENCE: // Fallback
-      case NodeType::FORMAT: // Fallback
-      case NodeType::SREF: // Fallback
-      case NodeType::REF:
-        return Element(data_.seq);
-      case NodeType::NONE: // Fallback
-      case NodeType::OVERRIDE_NONE:
-        return Element(NodeType::NONE);
-      case NodeType::STR: // Fallback
-      case NodeType::OVERRIDE_STR:
-        return Element(data_.literal);
-      case NodeType::BIN:
-        return Element(data_.literal, NodeType::BIN);
-      case NodeType::INT64:
-        return Element(data_.int64_value);
-      case NodeType::DOUBLE:
-        return Element(data_.double_value);
-      case NodeType::BOOL:
-        return Element(data_.bool_value);
-    }
-    assert(false);
+    return tag_ == Tag::OVERRIDE;
   }
 
   void Element::freeze() {
-    switch (get_internal_data_type(type_)) {
-      case InternalDataType::MAP:
+    switch (type_) {
+      case Type::MAP:
         data_.map.freeze([](auto* map) {
           map->rehash(0);
           for (auto& it: *map) it.second.freeze();
         });
         break;
-      case InternalDataType::SEQUENCE:
+      case Type::SEQUENCE:
         data_.seq.freeze([](auto* seq) {
           seq->shrink_to_fit();
           for (size_t i = 0, l = seq->size(); i < l; ++i) {
@@ -324,7 +224,7 @@ namespace mhconfig {
 
   std::array<uint8_t, 32> Element::make_checksum() const {
     std::string fingerprint;
-    jmutils::push_varint(fingerprint, 0); // fingerprint & checksum version
+    jmutils::push_varint(fingerprint, 1); // fingerprint & checksum version
     add_fingerprint(fingerprint);
 
     std::array<uint8_t, 32> checksum;
@@ -339,9 +239,10 @@ namespace mhconfig {
 
   void Element::add_fingerprint(std::string& output) const {
     output.push_back((uint8_t) type_);
+    output.push_back((uint8_t) tag_);
 
-    switch (get_internal_data_type(type_)) {
-      case InternalDataType::MAP: {
+    switch (type_) {
+      case Type::MAP: {
         auto map = data_.map.get();
         std::vector<std::pair<std::string, Element>> sorted_values;
         sorted_values.reserve(map->size());
@@ -362,7 +263,7 @@ namespace mhconfig {
         break;
       }
 
-      case InternalDataType::SEQUENCE: {
+      case Type::SEQUENCE: {
         auto seq = data_.seq.get();
         jmutils::push_varint(output, seq->size());
         for (const auto& x: *seq) {
@@ -371,23 +272,21 @@ namespace mhconfig {
         break;
       }
 
-      case InternalDataType::LITERAL:
+      case Type::BIN: // Fallback
+      case Type::STR:
         jmutils::push_str(output, data_.literal.str());
         break;
 
-      case InternalDataType::INT64:
+      case Type::INT64:
         jmutils::push_uint64(output, data_.uint64_value);
         break;
 
-      case InternalDataType::DOUBLE:
+      case Type::DOUBLE:
         jmutils::push_double(output, data_.double_value);
         break;
 
-      case InternalDataType::BOOL:
+      case Type::BOOL:
         output.push_back(data_.bool_value ? 0 : 1);
-        break;
-
-      case InternalDataType::EMPTY:
         break;
     }
   }
@@ -406,29 +305,31 @@ namespace mhconfig {
   }
 
   bool Element::to_yaml_base(YAML::Emitter& out) const {
-    switch (type_) {
-      case NodeType::OVERRIDE_MAP: // Fallback
-      case NodeType::OVERRIDE_SEQUENCE: // Fallback
-      case NodeType::OVERRIDE_NONE: // Fallback
-      case NodeType::OVERRIDE_STR:
-        out << YAML::LocalTag("override");
+    switch (tag()) {
+      case Tag::NONE:
         break;
-      case NodeType::FORMAT:
+      case Tag::FORMAT:
         out << YAML::LocalTag("format");
         break;
-      case NodeType::SREF:
+      case Tag::SREF:
         out << YAML::LocalTag("sref");
         break;
-      case NodeType::REF:
+      case Tag::REF:
         out << YAML::LocalTag("ref");
         break;
+      case Tag::DELETE:
+        out << YAML::LocalTag("delete");
+        break;
+      case Tag::OVERRIDE:
+        out << YAML::LocalTag("override");
+        break;
       default:
+        out << YAML::LocalTag("unknown"); //TODO
         break;
     }
 
-    switch (type_) {
-      case NodeType::OVERRIDE_MAP: // Fallback
-      case NodeType::MAP: {
+    switch (type()) {
+      case Type::MAP: {
         out << YAML::BeginMap;
         for (const auto& it : *as_map()) {
           out << YAML::Key << it.first.str();
@@ -438,52 +339,43 @@ namespace mhconfig {
         out << YAML::EndMap;
         return true;
       }
-      case NodeType::SREF: // Fallback
-      case NodeType::REF: // Fallback
-      case NodeType::OVERRIDE_SEQUENCE: // Fallback
-      case NodeType::SEQUENCE: {
+      case Type::SEQUENCE: {
         out << YAML::BeginSeq;
-        for (const auto& e : *as_sequence()) {
+        for (const auto& e : *as_seq()) {
           if (!e.to_yaml_base(out)) return false;
         }
         out << YAML::EndSeq;
         return true;
       }
-      case NodeType::OVERRIDE_NONE: // Fallback
-      case NodeType::NONE: {
+      case Type::NONE: {
         out << YAML::Null;
         return true;
       }
-      case NodeType::FORMAT: // Fallback
-      case NodeType::OVERRIDE_STR: // Fallback
-      case NodeType::STR: {
+      case Type::STR: {
         out << YAML::DoubleQuoted << data_.literal.str();
         return true;
       }
-      case NodeType::BIN: {
+      case Type::BIN: {
         auto x = data_.literal.str();
         out << YAML::Binary((const unsigned char*)x.data(), x.size());
         return true;
       }
-      case NodeType::INT64: {
+      case Type::INT64: {
         out << data_.int64_value;
         return true;
       }
-      case NodeType::DOUBLE: {
+      case Type::DOUBLE: {
         out << data_.double_value;
         return true;
       }
-      case NodeType::BOOL: {
+      case Type::BOOL: {
         out << data_.bool_value;
         return true;
       }
-      case NodeType::UNDEFINED: {
-        out << YAML::LocalTag("undefined");
-        out << YAML::Null;
-        return true;
-      }
-      case NodeType::DELETE: {
-        out << YAML::LocalTag("delete");
+      case Type::UNDEFINED: {
+        if (tag() == Tag::NONE) {
+          out << YAML::LocalTag("undefined");
+        }
         out << YAML::Null;
         return true;
       }
@@ -491,16 +383,27 @@ namespace mhconfig {
     return false;
   }
 
-  void Element::init_data(NodeType type) noexcept {
+  void Element::init(Type type) noexcept {
+    tag_ = Tag::NONE;
+    col_ = 0;
+    line_ = 0;
+    document_id_ = 0xffff;
+    raw_config_id_ = 0xffff;
+
+    init_data(type);
+  }
+
+  void Element::init_data(Type type) noexcept {
     type_ = type;
-    switch (get_internal_data_type(type_)) {
-      case InternalDataType::MAP:
-        new (&data_.map) MapCow();
+    switch (type_) {
+      case Type::MAP:
+        new (&data_.map) MapData();
         break;
-      case InternalDataType::SEQUENCE:
-        new (&data_.seq) SequenceCow();
+      case Type::SEQUENCE:
+        new (&data_.seq) SeqData();
         break;
-      case InternalDataType::LITERAL:
+      case Type::BIN: // Fallback
+      case Type::STR:
         new (&data_.literal) Literal();
         break;
       default:
@@ -509,97 +412,107 @@ namespace mhconfig {
   }
 
   void Element::destroy_data() noexcept {
-    switch (get_internal_data_type(type_)) {
-      case InternalDataType::MAP:
-        data_.map.~MapCow();
+    switch (type_) {
+      case Type::MAP:
+        data_.map.~MapData();
         break;
-      case InternalDataType::SEQUENCE:
-        data_.seq.~SequenceCow();
+      case Type::SEQUENCE:
+        data_.seq.~SeqData();
         break;
-      case InternalDataType::LITERAL:
+      case Type::BIN: // Fallback
+      case Type::STR:
         data_.literal.~Literal();
         break;
       default:
         break;
     }
 
-    type_ = NodeType::UNDEFINED;
+    type_ = Type::UNDEFINED;
   }
 
-  void Element::copy_data(const Element& o) noexcept {
-    switch (get_internal_data_type(o.type_)) {
-      case InternalDataType::MAP:
+  void Element::copy(const Element& o) noexcept {
+    switch (o.type_) {
+      case Type::MAP:
         data_.map = o.data_.map;
         break;
-      case InternalDataType::SEQUENCE:
+      case Type::SEQUENCE:
         data_.seq = o.data_.seq;
         break;
-      case InternalDataType::LITERAL:
+      case Type::BIN: // Fallback
+      case Type::STR:
         data_.literal = o.data_.literal;
         break;
-      case InternalDataType::INT64:
+      case Type::INT64:
         data_.int64_value = o.data_.int64_value;
         break;
-      case InternalDataType::DOUBLE:
+      case Type::DOUBLE:
         data_.double_value = o.data_.double_value;
         break;
-      case InternalDataType::BOOL:
+      case Type::BOOL:
         data_.bool_value = o.data_.bool_value;
-        break;
-      case InternalDataType::EMPTY:
         break;
     }
 
     type_ = o.type_;
+    tag_ = o.tag_;
+    col_ = o.col_;
+    line_ = o.line_;
+    document_id_ = o.document_id_;
+    raw_config_id_ = o.raw_config_id_;
   }
 
-  void Element::swap_data(Element& o) noexcept {
-    switch (get_internal_data_type(o.type_)) {
-      case InternalDataType::MAP:
+  void Element::swap(Element& o) noexcept {
+    switch (o.type_) {
+      case Type::MAP:
         std::swap(data_.map, o.data_.map);
         break;
-      case InternalDataType::SEQUENCE:
+      case Type::SEQUENCE:
         std::swap(data_.seq, o.data_.seq);
         break;
-      case InternalDataType::LITERAL:
+      case Type::BIN: // Fallback
+      case Type::STR:
         std::swap(data_.literal, o.data_.literal);
         break;
-      case InternalDataType::INT64:
+      case Type::INT64:
         std::swap(data_.int64_value, o.data_.int64_value);
         break;
-      case InternalDataType::DOUBLE:
+      case Type::DOUBLE:
         std::swap(data_.double_value, o.data_.double_value);
         break;
-      case InternalDataType::BOOL:
+      case Type::BOOL:
         std::swap(data_.bool_value, o.data_.bool_value);
-        break;
-      case InternalDataType::EMPTY:
         break;
     }
 
-    std::swap(type_, o.type_);
+    bitf_swap(type_, o.type_);
+    bitf_swap(tag_, o.tag_);
+    std::swap(col_, o.col_);
+    std::swap(line_, o.line_);
+    std::swap(document_id_, o.document_id_);
+    std::swap(raw_config_id_, o.raw_config_id_);
   }
 
   namespace conversion
   {
     template <>
-    std::optional<jmutils::string::String> as<jmutils::string::String>(NodeType type, const data_t& data) {
-      return get_internal_data_type(type) == InternalDataType::LITERAL
-        ? std::optional<jmutils::string::String>(data.literal)
+    std::optional<jmutils::string::String> as<jmutils::string::String>(const Element& e) {
+      return (e.type() == Element::Type::STR) || (e.type() == Element::Type::BIN)
+        ? std::optional<jmutils::string::String>(e.data_.literal)
         : std::optional<jmutils::string::String>();
     }
 
     template <>
-    std::optional<std::string> as<std::string>(NodeType type, const data_t& data) {
-      switch (get_internal_data_type(type)) {
-        case InternalDataType::LITERAL:
-          return std::optional<std::string>(data.literal.str());
-        case InternalDataType::BOOL:
-          return std::optional<std::string>(data.bool_value ? "true" : "false");
-        case InternalDataType::INT64:
-          return std::optional<std::string>(std::to_string(data.int64_value));
-        case InternalDataType::DOUBLE:
-          return std::optional<std::string>(std::to_string(data.double_value));
+    std::optional<std::string> as<std::string>(const Element& e) {
+      switch (e.type()) {
+        case Element::Type::BIN: // Fallback
+        case Element::Type::STR:
+          return std::optional<std::string>(e.data_.literal.str());
+        case Element::Type::BOOL:
+          return std::optional<std::string>(e.data_.bool_value ? "true" : "false");
+        case Element::Type::INT64:
+          return std::optional<std::string>(std::to_string(e.data_.int64_value));
+        case Element::Type::DOUBLE:
+          return std::optional<std::string>(std::to_string(e.data_.double_value));
         default:
           break;
       }
@@ -607,23 +520,23 @@ namespace mhconfig {
     }
 
     template <>
-    std::optional<bool> as<bool>(NodeType type, const data_t& data) {
-      return get_internal_data_type(type) == InternalDataType::BOOL
-        ? std::optional<bool>(data.bool_value)
+    std::optional<bool> as<bool>(const Element& e) {
+      return e.type() == Element::Type::BOOL
+        ? std::optional<bool>(e.data_.bool_value)
         : std::optional<bool>();
     }
 
     template <>
-    std::optional<int64_t> as<int64_t>(NodeType type, const data_t& data) {
-      return get_internal_data_type(type) == InternalDataType::INT64
-        ? std::optional<int64_t>(data.int64_value)
+    std::optional<int64_t> as<int64_t>(const Element& e) {
+      return e.type() == Element::Type::INT64
+        ? std::optional<int64_t>(e.data_.int64_value)
         : std::optional<int64_t>();
     }
 
     template <>
-    std::optional<double> as<double>(NodeType type, const data_t& data) {
-      return get_internal_data_type(type) == InternalDataType::DOUBLE
-        ? std::optional<double>(data.double_value)
+    std::optional<double> as<double>(const Element& e) {
+      return e.type() == Element::Type::DOUBLE
+        ? std::optional<double>(e.data_.double_value)
         : std::optional<double>();
     }
 

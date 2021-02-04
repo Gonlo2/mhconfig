@@ -219,7 +219,7 @@ public:
   Pool& operator=(const Pool& o) = delete;
   Pool& operator=(Pool&& o) = delete;
 
-  const String add(const std::string& str);
+  String add(const std::string& str);
   const stats_t& stats() const;
   void compact();
 

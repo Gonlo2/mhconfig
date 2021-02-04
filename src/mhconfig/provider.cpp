@@ -1,35 +1,7 @@
 #include "mhconfig/provider.h"
 
-#include <bits/exception.h>
-#include <fmt/format.h>
-#include <spdlog/spdlog.h>
-#include <stddef.h>
-#include <algorithm>
-#include <deque>
-#include <vector>
-
-#include "absl/container/flat_hash_map.h"
-#include "absl/hash/hash.h"
-#include "absl/synchronization/mutex.h"
-#include "jmutils/common.h"
-#include "jmutils/container/weak_container.h"
-#include "jmutils/container/weak_multimap.h"
-#include "jmutils/time.h"
-#include "mhconfig/api/request/update_request.h"
-#include "mhconfig/api/stream/trace_stream.h"
-#include "mhconfig/api/stream/watch_stream.h"
-#include "mhconfig/api/stream/watch_stream_impl.h"
-#include "mhconfig/builder.h"
-#include "mhconfig/worker/build_command.h"
-#include "mhconfig/worker/optimize_command.h"
-#include "mhconfig/worker/setup_command.h"
-#include "mhconfig/worker/update_command.h"
-
 namespace mhconfig
 {
-
-ApiGetConfigTask::~ApiGetConfigTask() {
-}
 
 const std::string& ApiGetConfigTask::root_path() const {
   return request_->root_path();
@@ -48,7 +20,6 @@ const std::string& ApiGetConfigTask::document() const {
 }
 
 void ApiGetConfigTask::on_complete(
-  Status status,
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
@@ -59,26 +30,43 @@ void ApiGetConfigTask::on_complete(
     request_->set_namespace_id(cn->id);
   }
   request_->set_version(version);
-  request_->set_status(to_api_status(status));
-  request_->set_element(element);
   request_->set_checksum(checksum.data(), checksum.size());
+
+  api::SourceIds source_ids = sources_logger_.sources();
+
+  if (log_level() >= ReplayLogger::Level::info) {
+    auto element_sids = request_->set_element_with_position(element);
+    source_ids.merge(element_sids);
+  } else {
+    request_->set_element(element);
+  }
+
+  if (!source_ids.empty()) {
+    auto sources = make_sources(source_ids, cn.get());
+    request_->set_sources(sources);
+  }
+
   request_->commit();
 }
 
-GetRequest::Status ApiGetConfigTask::to_api_status(Status status) {
-  switch (status) {
-    case Status::OK:
-      return GetRequest::Status::OK;
-    case Status::ERROR:
-      return GetRequest::Status::ERROR;
-    case Status::INVALID_VERSION:
-      return GetRequest::Status::INVALID_VERSION;
-    case Status::REF_GRAPH_IS_NOT_DAG:
-      return GetRequest::Status::REF_GRAPH_IS_NOT_DAG;
-    case Status::DONT_EXISTS:
-      return GetRequest::Status::ERROR;
+Logger& ApiGetConfigTask::logger() {
+  return logger_;
+}
+
+ReplayLogger::Level ApiGetConfigTask::log_level() const {
+  switch (request_->log_level()) {
+    case api::LogLevel::ERROR:
+      return ReplayLogger::Level::error;
+    case api::LogLevel::WARN:
+      return ReplayLogger::Level::warn;
+    case api::LogLevel::INFO:
+      return ReplayLogger::Level::info;
+    case api::LogLevel::DEBUG:
+      return ReplayLogger::Level::debug;
+    case api::LogLevel::TRACE:
+      return ReplayLogger::Level::trace;
   }
-  return GetRequest::Status::ERROR;
+  return ReplayLogger::Level::error;
 }
 
 AuthPolicyGetConfigTask::AuthPolicyGetConfigTask(
@@ -113,19 +101,26 @@ const std::string& AuthPolicyGetConfigTask::document() const {
 }
 
 void AuthPolicyGetConfigTask::on_complete(
-  Status status,
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
   const std::array<uint8_t, 32>& checksum,
   void* payload
 ) {
-  if (status == Status::OK) {
+  if (logger_.num_error_logs() == 0) {
     auto policy = static_cast<auth::Policy*>(payload);
     pc_->on_check_policy(auth::AuthResult::AUTHENTICATED, policy);
   } else {
     pc_->on_check_policy_error();
   }
+}
+
+Logger& AuthPolicyGetConfigTask::logger() {
+  return logger_;
+}
+
+ReplayLogger::Level AuthPolicyGetConfigTask::log_level() const {
+  return ReplayLogger::Level::error;
 }
 
 AuthTokenGetConfigTask::AuthTokenGetConfigTask(
@@ -160,14 +155,13 @@ const std::string& AuthTokenGetConfigTask::document() const {
 }
 
 void AuthTokenGetConfigTask::on_complete(
-  Status status,
   std::shared_ptr<config_namespace_t>& cn,
   VersionId version,
   const Element& element,
   const std::array<uint8_t, 32>& checksum,
   void* payload
 ) {
-  if (status == Status::OK) {
+  if (logger_.num_error_logs() == 0) {
     auto tokens = static_cast<auth::Tokens*>(payload);
     Labels token_labels;
     auto auth_result = tokens->find(token_, token_labels);
@@ -188,6 +182,14 @@ void AuthTokenGetConfigTask::on_complete(
   } else {
     pc_->on_check_policy_error();
   }
+}
+
+Logger& AuthTokenGetConfigTask::logger() {
+  return logger_;
+}
+
+ReplayLogger::Level AuthTokenGetConfigTask::log_level() const {
+  return ReplayLogger::Level::error;
 }
 
 void send_existing_watcher_traces(
@@ -233,7 +235,7 @@ bool process_get_config_task(
   std::shared_ptr<document_t> cfg_document;
   std::shared_ptr<document_t> document;
 
-  bool error = true;
+  bool ok = false;
   bool require_exclusive_lock = false;
 
   cn->mutex.ReaderLock();
@@ -249,7 +251,7 @@ bool process_get_config_task(
         cfg_document = get_document_locked(cn.get(), "mhconfig", version);
         document = get_document_locked(cn.get(), task->document(), version);
       }
-      error = false;
+      ok = true;
       break;
     case ConfigNamespaceStatus::DELETED:
       break;
@@ -289,7 +291,7 @@ bool process_get_config_task(
           cfg_document = get_document_locked(cn.get(), "mhconfig", version);
           document = get_document_locked(cn.get(), task->document(), version);
         }
-        error = false;
+        ok = true;
         break;
       case ConfigNamespaceStatus::DELETED:
         break;
@@ -297,63 +299,15 @@ bool process_get_config_task(
     cn->mutex.Unlock();
   }
 
-  if (error) {
-    spdlog::debug("Some error take place with the config namespace '{}'", cn->root_path);
-    task->on_complete(
-      GetConfigTask::Status::ERROR,
-      cn,
-      version,
-      UNDEFINED_ELEMENT,
-      UNDEFINED_ELEMENT_CHECKSUM,
-      nullptr
-    );
+  if (!ok) {
+    task->logger().error("Some error take place with the config namespace");
+    finish_with_error(task.get(), cn, version);
     return false;
   }
 
-  if (version == 0) {
-    spdlog::error("The asked version {} don't exists", task->version());
-    task->on_complete(
-      GetConfigTask::Status::INVALID_VERSION,
-      cn,
-      version,
-      UNDEFINED_ELEMENT,
-      UNDEFINED_ELEMENT_CHECKSUM,
-      nullptr
-    );
-    return true;
-  }
-
-  if (document == nullptr) {
-    spdlog::error(
-      "The asked document '{}' with the version {} don't exists",
-      task->document(),
-      version
-    );
-    task->on_complete(
-      GetConfigTask::Status::DONT_EXISTS,
-      cn,
-      version,
-      UNDEFINED_ELEMENT,
-      UNDEFINED_ELEMENT_CHECKSUM,
-      nullptr
-    );
-    return true;
-  }
-
-  if (cfg_document == nullptr) {
-    spdlog::error(
-      "The mhconfig document with the version {} don't exists",
-      version
-    );
-    task->on_complete(
-      GetConfigTask::Status::DONT_EXISTS,
-      cn,
-      version,
-      UNDEFINED_ELEMENT,
-      UNDEFINED_ELEMENT_CHECKSUM,
-      nullptr
-    );
-    return true;
+  if (!is_a_valid_document(version, cfg_document.get(), document.get(), task.get())) {
+    finish_with_error(task.get(), cn, version);
+    return false;
   }
 
   auto cfg = get_element(cfg_document.get(), Labels(), version);
@@ -370,15 +324,8 @@ bool process_get_config_task(
     }
   );
   if (!is_a_valid_version) {
-    spdlog::error("The asked version {} don't exists", task->version());
-    task->on_complete(
-      GetConfigTask::Status::INVALID_VERSION,
-      cn,
-      version,
-      UNDEFINED_ELEMENT,
-      UNDEFINED_ELEMENT_CHECKSUM,
-      nullptr
-    );
+    task->logger().error("The asked version don't exists");
+    finish_with_error(task.get(), cn, version);
     return true;
   }
 
@@ -418,38 +365,13 @@ bool process_get_config_task(
 
   switch (check_merged_config_result) {
     case CheckMergedConfigResult::NEED_EXCLUSIVE_LOCK:
-      spdlog::trace("The operation need a exclusive lock");
+      spdlog::debug("The operation need a exclusive lock");
       break;
     case CheckMergedConfigResult::OK:
-      task->on_complete(
-        GetConfigTask::Status::OK,
-        cn,
-        version,
-        merged_config->value,
-        merged_config->checksum,
-        merged_config->payload
-      );
-      return true;
-    case CheckMergedConfigResult::REF_GRAPH_IS_NOT_DAG:
-      task->on_complete(
-        GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG,
-        cn,
-        version,
-        UNDEFINED_ELEMENT,
-        UNDEFINED_ELEMENT_CHECKSUM,
-        merged_config->payload
-      );
+      finish_successfully(task.get(), cn, version, merged_config.get());
       return true;
     default:
-      spdlog::trace("Some error take place");
-      task->on_complete(
-        GetConfigTask::Status::ERROR,
-        cn,
-        version,
-        UNDEFINED_ELEMENT,
-        UNDEFINED_ELEMENT_CHECKSUM,
-        nullptr
-      );
+      finish_with_error(task.get(), cn, version);
       return false;
   }
 
@@ -466,17 +388,19 @@ bool process_get_config_task(
       assert(false);
       break;
     case CheckMergedConfigResult::IN_PROGRESS:
-      spdlog::trace("The operation is in progress");
+      spdlog::debug("The operation is in progress");
       return true;
     case CheckMergedConfigResult::BUILD_CONFIG: {
-      spdlog::trace("The operation need build the config");
+      spdlog::debug("The operation need build the config");
 
       auto pending_build = std::make_shared<pending_build_t>();
       pending_build->version = version;
       pending_build->task = std::move(task);
-      pending_build->element = std::make_unique<build_element_t>();
-      pending_build->element->document = std::move(document);
-      pending_build->element->merged_config = std::move(merged_config);
+      build_element_t be{
+        .document = std::move(document),
+        .merged_config = std::move(merged_config)
+      };
+      pending_build->elements.push_back(std::move(be));
 
       execute_command_in_worker_thread(
         std::make_unique<worker::BuildCommand>(
@@ -489,7 +413,7 @@ bool process_get_config_task(
       return true;
     }
     case CheckMergedConfigResult::OPTIMIZE_CONFIG: {
-      spdlog::trace("Optimizing and commiting the message");
+      spdlog::debug("Optimizing and commiting the message");
 
       execute_command_in_worker_thread(
         std::make_unique<worker::OptimizeCommand>(
@@ -502,39 +426,40 @@ bool process_get_config_task(
       return true;
     }
     case CheckMergedConfigResult::OK:
-      task->on_complete(
-        GetConfigTask::Status::OK,
-        cn,
-        version,
-        merged_config->value,
-        merged_config->checksum,
-        merged_config->payload
-      );
-      return true;
-    case CheckMergedConfigResult::REF_GRAPH_IS_NOT_DAG:
-      task->on_complete(
-        GetConfigTask::Status::REF_GRAPH_IS_NOT_DAG,
-        cn,
-        version,
-        UNDEFINED_ELEMENT,
-        UNDEFINED_ELEMENT_CHECKSUM,
-        merged_config->payload
-      );
+      finish_successfully(task.get(), cn, version, merged_config.get());
       return true;
     case CheckMergedConfigResult::ERROR:
-      break;
+      finish_with_error(task.get(), cn, version);
+      return false;
   }
 
-  spdlog::trace("Some error take place");
-  task->on_complete(
-    GetConfigTask::Status::ERROR,
-    cn,
-    version,
-    UNDEFINED_ELEMENT,
-    UNDEFINED_ELEMENT_CHECKSUM,
-    nullptr
-  );
+  task->logger().error("Some error take place");
+  finish_with_error(task.get(), cn, version);
   return false;
+}
+
+bool is_a_valid_document(
+  VersionId version,
+  document_t* cfg_document,
+  document_t* document,
+  GetConfigTask* task
+) {
+  if (version == 0) {
+    task->logger().error("The asked version don't exists");
+    return false;
+  }
+
+  if (document == nullptr) {
+    task->logger().error("The asked document version don't exists");
+    return false;
+  }
+
+  if (cfg_document == nullptr) {
+    task->logger().error("The mhconfig document version don't exists");
+    return false;
+  }
+
+  return true;
 }
 
 bool process_update_request(

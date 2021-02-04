@@ -34,15 +34,17 @@ bool OptimizeCommand::execute(
 
   merged_config_->mutex.Lock();
   merged_config_->checksum = std::move(checksum);
-  auto status = alloc_payload_locked(merged_config_.get());
+  bool ok = alloc_payload_locked(merged_config_.get());
   std::swap(merged_config_->waiting, waiting);
   merged_config_->mutex.Unlock();
 
   for (size_t i = 0, l = waiting.size(); i < l; ++i) {
+    if (!ok) {
+      waiting[i]->logger().error("Some error take place allocating the payload");
+    }
     waiting[i]->on_complete(
-      status,
       cn_,
-      0,
+      0, //FIXME
       merged_config_->value,
       merged_config_->checksum,
       merged_config_->payload

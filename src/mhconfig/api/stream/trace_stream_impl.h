@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "jmutils/container/label_set.h"
-#include "mhconfig/api/config/common.h"
+#include "mhconfig/api/common.h"
 #include "mhconfig/api/session.h"
 #include "mhconfig/api/stream/stream.h"
 #include "mhconfig/api/stream/trace_stream.h"

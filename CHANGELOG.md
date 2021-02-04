@@ -1,6 +1,9 @@
 ## Changelog
 
 ### Next
+- Refactor of the elements class to store the position of the config elements in the source files
+- Send logs about the contruction/merge operations
+- Changed sorted paths with labels
 - Added a time worker with a better control of the trigger times
 - Add trace function to the api
 - Fix memory leak if some request/stream finish without any event in the completion queue

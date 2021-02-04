@@ -15,7 +15,7 @@
 #include <utility>
 
 #include "jmutils/container/label_set.h"
-#include "mhconfig/api/config/common.h"
+#include "mhconfig/api/common.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/request.h"
 #include "mhconfig/api/session.h"
@@ -57,11 +57,33 @@ public:
   uint32_t version() const override;
   const Labels& labels() const override;
   const std::string& document() const override;
+  LogLevel log_level() const override;
 
-  void set_status(Status status) override;
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;
+
   void set_element(const mhconfig::Element& element) override;
+  SourceIds set_element_with_position(
+    const mhconfig::Element& element
+  ) override;
+
+  void add_log(
+    LogLevel level,
+    const std::string_view& message
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position
+  ) override;
+  void add_log(
+    LogLevel level,
+    const std::string_view& message,
+    const position_t& position,
+    const position_t& source
+  ) override;
+
+  void set_sources(const std::vector<source_t>& sources) override;
   void set_checksum(const uint8_t* data, size_t len) override;
 
   bool commit() override;
@@ -94,7 +116,6 @@ protected:
     grpc::ServerCompletionQueue* cq
   ) override;
   std::shared_ptr<PolicyCheck> parse_message() override;
-
 };
 
 } /* request */

@@ -53,7 +53,7 @@ public:
     }
 
     spdlog::trace("Parsing root_paths capabilities");
-    auto root_paths_seq = element.get("root_paths").as_sequence();
+    auto root_paths_seq = element.get("root_paths").as_seq();
     if (root_paths_seq == nullptr) {
       spdlog::error("A policy must have a root_paths sequence");
       return false;
@@ -81,7 +81,7 @@ public:
     }
 
     spdlog::trace("Parsing labels capabilities");
-    auto labels_seq = element.get("labels").as_sequence();
+    auto labels_seq = element.get("labels").as_seq();
     if (labels_seq == nullptr) {
       spdlog::error("A policy must have a labels sequence");
       return false;
@@ -205,7 +205,7 @@ private:
   std::optional<uint8_t> parse_capabilities(
     const Element& element
   ) {
-    auto seq = element.as_sequence();
+    auto seq = element.as_seq();
     if (seq == nullptr) {
       spdlog::error("The capabilities must be a sequence");
       return std::optional<uint8_t>();

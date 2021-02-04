@@ -4,10 +4,7 @@
 #include <absl/container/btree_map.h>
 #include <absl/container/flat_hash_map.h>
 #include <absl/synchronization/mutex.h>
-#include <bits/stdint-uintn.h>
-#include <boost/functional/hash.hpp>
 #include <atomic>
-#include <cstdint>
 #include <deque>
 #include <map>
 #include <memory>
@@ -22,6 +19,7 @@
 #include "jmutils/container/queue.h"
 #include "jmutils/container/weak_container.h"
 #include "jmutils/container/weak_multimap.h"
+#include "jmutils/container/linked_list.h"
 #include "jmutils/string/pool.h"
 #include "mhconfig/api/request/get_request.h"
 #include "mhconfig/api/request/update_request.h"
@@ -31,6 +29,10 @@
 #include "mhconfig/auth/tokens.h"
 #include "mhconfig/element.h"
 #include "mhconfig/metrics.h"
+#include "mhconfig/logger/logger.h"
+#include "mhconfig/logger/persistent_logger.h"
+#include "mhconfig/logger/multi_persistent_logger.h"
+#include "mhconfig/constants.h"
 
 namespace mhconfig
 {
@@ -41,32 +43,34 @@ using jmutils::container::LabelSet;
 using jmutils::container::label_t;
 using jmutils::container::WeakContainer;
 using jmutils::container::WeakMultimap;
+using jmutils::container::LinkedList;
+using logger::Logger;
+using logger::ReplayLogger;
+using logger::PersistentLogger;
+using logger::MultiPersistentLogger;
 
 //TODO Review the names
-
-typedef uint16_t DocumentId;
-typedef uint16_t RawConfigId;
-typedef uint16_t VersionId;
-
-const static uint8_t NUMBER_OF_MC_GENERATIONS{3};
-
-const static std::string DOCUMENT_NAME_TOKENS{"tokens"};
-const static std::string DOCUMENT_NAME_POLICY{"policy"};
 
 struct raw_config_t {
   bool has_content{false};
   RawConfigId id;
-  uint64_t checksum;
+  uint32_t file_checksum{0};
   Element value;
+  std::shared_ptr<PersistentLogger> logger;
   std::vector<std::string> reference_to;
+  uint64_t checksum{0};
+  std::string path;
 
   std::shared_ptr<raw_config_t> clone() {
     auto result = std::make_shared<raw_config_t>();
     result->has_content = has_content;
     result->id = id;
-    result->checksum = checksum;
+    result->file_checksum = file_checksum;
     result->value = value;
+    result->logger = logger;
     result->reference_to = reference_to;
+    result->checksum = checksum;
+    result->path = path;
     return result;
   }
 };
@@ -74,14 +78,6 @@ struct raw_config_t {
 class GetConfigTask
 {
 public:
-  enum class Status {
-    OK,
-    ERROR,
-    INVALID_VERSION,
-    REF_GRAPH_IS_NOT_DAG,
-    DONT_EXISTS,
-  };
-
   GetConfigTask() {};
   virtual ~GetConfigTask() {};
 
@@ -91,13 +87,16 @@ public:
   virtual const std::string& document() const = 0;
 
   virtual void on_complete(
-    Status status,
     std::shared_ptr<config_namespace_t>& cn,
     VersionId version,
     const Element& element,
     const std::array<uint8_t, 32>& checksum,
     void* payload
   ) = 0;
+
+  virtual Logger& logger() = 0;
+
+  virtual ReplayLogger::Level log_level() const = 0;
 };
 
 class PolicyCheck
@@ -114,14 +113,13 @@ public:
   virtual void on_check_policy_error() = 0;
 };
 
-enum class MergedConfigStatus {
+enum class MergedConfigStatus : uint8_t {
   UNDEFINED,
   BUILDING,
-  OK_CONFIG_NO_OPTIMIZED,
-  OK_CONFIG_OPTIMIZING,
-  OK_CONFIG_OPTIMIZED,
-  REF_GRAPH_IS_NOT_DAG,
-  INVALID_VERSION
+  NO_OPTIMIZED,
+  OPTIMIZING,
+  OPTIMIZED,
+  OPTIMIZATION_FAIL
 };
 
 struct document_t;
@@ -132,15 +130,14 @@ struct build_element_t {
   mhconfig::Element config;
   std::shared_ptr<document_t> document;
   std::shared_ptr<merged_config_t> merged_config;
-  std::vector<std::shared_ptr<raw_config_t>> raw_configs_to_merge;
-  std::vector<std::unique_ptr<build_element_t>> children;
+  LinkedList<std::shared_ptr<raw_config_t>> raw_configs_to_merge;
 };
 
 struct pending_build_t {
   std::atomic<uint32_t> num_pending;
   VersionId version;
   std::shared_ptr<GetConfigTask> task;
-  std::unique_ptr<build_element_t> element;
+  LinkedList<build_element_t> elements;
 };
 
 struct merged_config_payload_fun_t {
@@ -155,6 +152,8 @@ struct merged_config_t {
   uint64_t last_access_timestamp;
   Element value;
   std::array<uint8_t, 32> checksum;
+
+  MultiPersistentLogger logger;
 
   void* payload;
   merged_config_payload_fun_t payload_fun;
@@ -198,6 +197,7 @@ struct document_t {
   VersionId oldest_version;
 
   LabelSet<override_t> lbl_set;
+  absl::flat_hash_map<RawConfigId, std::shared_ptr<raw_config_t>> raw_config_by_id;
 
   absl::flat_hash_map<
     std::string,
@@ -251,7 +251,7 @@ struct config_namespace_t {
   std::shared_ptr<jmutils::string::Pool> pool;
 
   absl::flat_hash_map<std::string, merged_config_payload_fun_t> mc_payload_fun_by_document;
-  absl::flat_hash_set<DocumentId> document_ids_in_use;
+  absl::flat_hash_map<DocumentId, std::shared_ptr<document_t>> document_by_id;
 
   std::deque<std::pair<VersionId, uint64_t>> stored_versions;
 

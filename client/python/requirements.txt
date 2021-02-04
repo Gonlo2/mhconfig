@@ -1,2 +1,2 @@
-frozendict
 grpcio-tools
+colorama

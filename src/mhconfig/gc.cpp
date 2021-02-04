@@ -173,7 +173,7 @@ void gc_cn_raw_config_versions(
       cn->mutex.Lock();
 
       for (size_t i = 0, l = document_ids_to_remove.size(); i < l; ++i) {
-        cn->document_ids_in_use.erase(document_ids_to_remove[i]);
+        cn->document_by_id.erase(document_ids_to_remove[i]);
       }
 
       for (size_t i = 0, l = documents_to_remove.size(); i < l; ++i) {
@@ -286,6 +286,10 @@ bool gc_document_raw_config_versions(
             document->name,
             to_check[i]
           );
+
+          for (auto it3 = override_->raw_config_by_version.begin(); it3 != it2; ++it3) {
+            document->raw_config_by_id.erase(it3->second->id);
+          }
 
           override_->raw_config_by_version.erase(
             override_->raw_config_by_version.begin(),
