@@ -740,11 +740,7 @@ split_filename_result_t split_filename(
     stem.remove_prefix(pos+1);
   }
 
-  auto pos = stem.rfind('.');
-  result.name = pos == std::string::npos
-    ? stem
-    : std::string_view(stem.data(), pos);
-
+  result.name = stem;
   result.ok = true;
   return result;
 }
