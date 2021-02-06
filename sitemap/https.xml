@@ -2,16 +2,16 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://gonlo2.github.io/mhconfig/en/doc/</loc>
+    <loc>https://gonlo2.github.io/mhconfig/</loc>
     <priority>0.2</priority>
-    <lastmod>2021-02-05</lastmod>
+    <lastmod>2021-02-06</lastmod>
     <changefreq>monthly</changefreq>
   </url>
   
   <url>
-    <loc>https://gonlo2.github.io/mhconfig/</loc>
+    <loc>https://gonlo2.github.io/mhconfig/en/doc/</loc>
     <priority>0.2</priority>
-    <lastmod>2021-02-05</lastmod>
+    <lastmod>2021-02-06</lastmod>
     <changefreq>monthly</changefreq>
   </url>
   
