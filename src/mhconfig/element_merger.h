@@ -20,7 +20,7 @@ enum class VirtualNode {
   MAP,
   SEQUENCE,
   LITERAL,
-  REF
+  SPECIAL
 };
 
 class ElementMerger final
@@ -53,14 +53,21 @@ private:
     const Element& b
   );
 
+  VirtualNode get_virtual_node_type(
+    const Element& element
+  );
+
   std::pair<bool, Element> apply_tags(
+    bool apply_references,
     Element element,
     const Element& root,
     uint32_t depth
   );
 
-  VirtualNode get_virtual_node_type(
-    const Element& element
+  std::pair<bool, Element> post_apply_tags(
+    Element element,
+    const Element& root,
+    uint32_t depth
   );
 
   Element apply_tag_format(
@@ -77,6 +84,15 @@ private:
     const Element& element,
     const Element& root,
     uint32_t depth
+  );
+
+  Element apply_tag_merge(
+    Element initial,
+    const Element& merge_element
+  );
+
+  Element apply_tag_merge(
+    const Element& merge_element
   );
 
   inline Element without_override_error(

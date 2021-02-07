@@ -197,10 +197,6 @@ namespace mhconfig {
     return type() == Type::UNDEFINED;
   }
 
-  bool Element::is_override() const {
-    return tag_ == Tag::OVERRIDE;
-  }
-
   void Element::freeze() {
     switch (type_) {
       case Type::MAP:
@@ -322,6 +318,9 @@ namespace mhconfig {
         break;
       case Tag::OVERRIDE:
         out << YAML::LocalTag("override");
+        break;
+      case Tag::MERGE:
+        out << YAML::LocalTag("merge");
         break;
       default:
         out << YAML::LocalTag("unknown"); //TODO

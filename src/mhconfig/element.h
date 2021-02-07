@@ -60,12 +60,13 @@ namespace mhconfig {
     };
 
     enum class Tag: uint8_t {
-      NONE       = 0,
-      FORMAT     = 1,
-      SREF       = 2,
-      REF        = 3,
-      DELETE     = 4,
-      OVERRIDE   = 5,
+      NONE     = 0,
+      FORMAT   = 1,
+      SREF     = 2,
+      REF      = 3,
+      DELETE   = 4,
+      OVERRIDE = 5,
+      MERGE    = 6,
     };
 
     Element() noexcept;
@@ -178,7 +179,6 @@ namespace mhconfig {
     bool is_seq() const;
     bool is_null() const;
     bool is_undefined() const;
-    bool is_override() const;
 
     void freeze();
 
@@ -284,6 +284,9 @@ template <> struct fmt::formatter<mhconfig::Element>: formatter<string_view> {
         break;
       case mhconfig::Element::Tag::OVERRIDE:
         oit = format_to(oit, ", tag: !override");
+        break;
+      case mhconfig::Element::Tag::MERGE:
+        oit = format_to(oit, ", tag: !merge");
         break;
     }
 

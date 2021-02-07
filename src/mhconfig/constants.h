@@ -20,6 +20,7 @@ const static std::string TAG_SREF{"!sref"};
 const static std::string TAG_REF{"!ref"};
 const static std::string TAG_DELETE{"!delete"};
 const static std::string TAG_OVERRIDE{"!override"};
+const static std::string TAG_MERGE{"!merge"};
 
 const static uint8_t NUMBER_OF_MC_GENERATIONS{3};
 

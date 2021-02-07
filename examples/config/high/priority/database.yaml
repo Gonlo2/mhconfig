@@ -1,7 +1,4 @@
-mysql_variables:
-  threads: !!int 4
-  max_connections: !!int 2048
-  default_query_delay: !!int 0
-  default_query_timeout: !!int 36000000
-  have_compress: !!bool true
-  default_tx_isolation: SERIALIZABLE
+mysql_variables: !merge
+- !delete
+- !ref [parameters, default_mysql_variables]
+- threads: !!int 8

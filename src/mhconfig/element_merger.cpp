@@ -27,10 +27,22 @@ void ElementMerger::add(
 
 Element ElementMerger::finish() {
   if (empty_) return Element();
-  if (!root_.is_undefined()) {
-    auto r = apply_tags(root_, root_, 0);
-    if (r.first) root_ = r.second;
+
+  // In this phase the merge and delete tags are handled
+  if (auto r = apply_tags(false, root_, root_, 0); r.first) {
+    root_ = std::move(r.second);
   }
+
+  // In this phase only remains references
+  if (auto r = apply_tags(true, root_, root_, 0); r.first) {
+    root_ = std::move(r.second);
+  }
+
+  // If the delete is the root we need to mark the element as undefined
+  if (root_.tag() == Element::Tag::DELETE) {
+    root_ = Element().set_origin(root_);
+  }
+
   root_.freeze();
   empty_ = true;
   return root_;
@@ -44,21 +56,39 @@ Element ElementMerger::override_with(
   const Element& a,
   const Element& b
 ) {
-  if (b.is_override()) {
-    logger_.debug("Overriding element", a, b);
-    return b;
+  switch (b.tag()) {
+    case Element::Tag::OVERRIDE:
+      logger_.debug("Overriding element", a, b);
+      return b;
+    case Element::Tag::DELETE:
+      logger_.debug("Deleting element", a, b);
+      return b;
+    case Element::Tag::MERGE:
+      logger_.debug("Applying merge in the second element", a, b);
+      return apply_tag_merge(a, b);
+    case Element::Tag::REF: {
+      auto r = apply_tag_ref(b);
+      return override_with(a, r);
+    }
+    default:
+      break;
   }
 
-  bool is_first_a_ref = a.tag() == Element::Tag::REF;
-  if (is_first_a_ref || (b.tag() == Element::Tag::REF)) {
-    auto referenced_element = apply_tag_ref(
-      is_first_a_ref ? a : b
-    );
-
-    return override_with(
-      is_first_a_ref ? referenced_element : a,
-      is_first_a_ref ? b : referenced_element
-    );
+  switch (a.tag()) {
+    case Element::Tag::DELETE:
+      logger_.debug("Overriding delete element", a, b);
+      return b;
+    case Element::Tag::MERGE: {
+      logger_.debug("Applying merge in the first element", a, b);
+      auto initial = apply_tag_merge(a);
+      return override_with(initial, b);
+    }
+    case Element::Tag::REF: {
+      auto r = apply_tag_ref(a);
+      return override_with(r, b);
+    }
+    default:
+      break;
   }
 
   switch (get_virtual_node_type(b)) {
@@ -67,7 +97,6 @@ Element ElementMerger::override_with(
       if (type != VirtualNode::LITERAL) {
         return without_override_error(a, b);
       }
-
       logger_.debug("Overriding element", a, b);
       return b;
     }
@@ -88,27 +117,20 @@ Element ElementMerger::override_with(
         const auto& search = map_a->find(x.first);
         if (search == map_a->end()) {
           if (x.second.tag() != Element::Tag::DELETE) {
-            logger_.debug("Adding new map key", a, x.second);
+            logger_.debug("Adding map key", a, x.second);
             (*map_a)[x.first] = x.second;
           } else {
             logger_.warn("Trying to remove a non-existent key", a, x.second);
           }
-        } else if (x.second.tag() == Element::Tag::DELETE) {
-          logger_.debug("Removed a map key", search->second, x.second);
-          map_a->erase(search);
-        } else if (search->second.tag() == Element::Tag::DELETE) {
-          logger_.debug(
-            "Replacing map value marked to remove",
-            search->second,
-            x.second
-          );
-          (*map_a)[x.first] = x.second;
         } else {
           logger_.debug("Merging map value", search->second, x.second);
-          (*map_a)[x.first] = override_with(
-            search->second,
-            x.second
-          );
+          auto r = override_with(search->second, x.second);
+          if (r.tag() == Element::Tag::DELETE) {
+            logger_.debug("Removed map key", search->second, x.second);
+            map_a->erase(search);
+          } else {
+            search->second = std::move(r);
+          }
         }
       }
 
@@ -133,7 +155,7 @@ Element ElementMerger::override_with(
 
       return result;
     }
-    case VirtualNode::REF:
+    case VirtualNode::SPECIAL:
       assert(false);
       break;
     case VirtualNode::UNDEFINED:
@@ -147,11 +169,17 @@ Element ElementMerger::override_with(
 VirtualNode ElementMerger::get_virtual_node_type(
   const Element& element
 ) {
-  if (element.tag() == Element::Tag::REF) {
-    return VirtualNode::REF;
-  }
-  if (element.tag() == Element::Tag::SREF) {
-    return VirtualNode::LITERAL;
+  switch (element.tag()) {
+    case Element::Tag::NONE:
+      break;
+    case Element::Tag::FORMAT: // Fallback
+    case Element::Tag::SREF:
+      return VirtualNode::LITERAL;
+    case Element::Tag::REF: // Fallback
+    case Element::Tag::DELETE: // Fallback
+    case Element::Tag::OVERRIDE: // Fallback
+    case Element::Tag::MERGE:
+      return VirtualNode::SPECIAL;
   }
 
   switch (element.type()) {
@@ -175,6 +203,78 @@ VirtualNode ElementMerger::get_virtual_node_type(
 }
 
 std::pair<bool, Element> ElementMerger::apply_tags(
+  bool apply_references,
+  Element element,
+  const Element& root,
+  uint32_t depth
+) {
+  bool any_changed = false;
+
+  if (element.tag() == Element::Tag::MERGE) {
+    logger_.debug("Applying merge element", element);
+    element = apply_tag_merge(element);
+    any_changed = true;
+  }
+
+  if (element.type() == Element::Type::MAP) {
+    std::vector<jmutils::string::String> to_remove;
+    std::vector<std::pair<jmutils::string::String, Element>> to_modify;
+
+    for (const auto& it : *element.as_map()) {
+      auto r = apply_tags(apply_references, it.second, root, depth+1);
+      if (r.second.tag() == Element::Tag::DELETE) {
+        logger_.warn("Removing an unused deletion node", r.second);
+        to_remove.push_back(it.first);
+      } else if (r.first) {
+        to_modify.emplace_back(it.first, std::move(r.second));
+      }
+    }
+
+    any_changed = !(to_remove.empty() && to_modify.empty());
+    if (any_changed) {
+      auto map = element.as_map_mut();
+      for (size_t i = 0, l = to_remove.size(); i < l; ++i) {
+        map->erase(to_remove[i]);
+      }
+      for (size_t i = 0, l = to_modify.size(); i < l; ++i) {
+        (*map)[to_modify[i].first] = std::move(to_modify[i].second);
+      }
+    }
+  } else if (element.type() == Element::Type::SEQUENCE) {
+    std::vector<Element> new_seq;
+    auto seq = element.as_seq();
+    new_seq.reserve(seq->size());
+
+    for (size_t i = 0, l = seq->size(); i < l; ++i) {
+      auto r = apply_tags(apply_references, (*seq)[i], root, depth+1);
+      if (r.second.tag() == Element::Tag::DELETE) {
+        logger_.warn(
+          "A deletion node don't makes sense inside a sequence, removing it",
+          (*seq)[i]
+        );
+        any_changed = true;
+      } else if (r.first) {
+        new_seq.push_back(std::move(r.second));
+        any_changed = true;
+      }
+    }
+
+    if (any_changed) {
+      auto seq_mut = element.as_seq_mut();
+      std::swap(*seq_mut, new_seq);
+    }
+  }
+
+  if (apply_references) {
+    auto r = post_apply_tags(element, root, depth);
+    any_changed |= r.first;
+    element = std::move(r.second);
+  }
+
+  return std::make_pair(any_changed, std::move(element));
+}
+
+std::pair<bool, Element> ElementMerger::post_apply_tags(
   Element element,
   const Element& root,
   uint32_t depth
@@ -188,75 +288,6 @@ std::pair<bool, Element> ElementMerger::apply_tags(
   }
 
   bool any_changed = false;
-
-  switch (element.type()) {
-    case Element::Type::MAP: {
-      std::vector<jmutils::string::String> to_remove;
-      std::vector<std::pair<jmutils::string::String, Element>> to_modify;
-
-      for (const auto& it : *element.as_map()) {
-        if (it.second.tag() == Element::Tag::DELETE) {
-          logger_.warn("Removing an unused deletion node", it.second);
-          to_remove.push_back(it.first);
-        } else {
-          auto r = apply_tags(
-            it.second,
-            root,
-            depth+1
-          );
-          if (r.first) {
-            to_modify.emplace_back(it.first, r.second);
-          }
-        }
-      }
-
-      any_changed = !(to_remove.empty() && to_modify.empty());
-      if (any_changed) {
-        auto map = element.as_map_mut();
-
-        for (size_t i = 0, l = to_remove.size(); i < l; ++i) {
-          map->erase(to_remove[i]);
-        }
-
-        for (size_t i = 0, l = to_modify.size(); i < l; ++i) {
-          (*map)[to_modify[i].first] = std::move(to_modify[i].second);
-        }
-      }
-      break;
-    }
-
-    case Element::Type::SEQUENCE: {
-      std::vector<Element> new_sequence;
-      auto current_sequence = element.as_seq();
-      new_sequence.reserve(current_sequence->size());
-
-      for (size_t i = 0, l = current_sequence->size(); i < l; ++i) {
-        if ((*current_sequence)[i].tag() == Element::Tag::DELETE) {
-          logger_.warn(
-            "A deletion node don't makes sense inside a sequence, removing it",
-            (*current_sequence)[i]
-          );
-          any_changed = true;
-        } else {
-          auto r = apply_tags(
-            (*current_sequence)[i],
-            root,
-            depth+1
-          );
-          any_changed |= r.first;
-          new_sequence.push_back(r.second);
-        }
-      }
-
-      if (any_changed) {
-        auto sequence = element.as_seq_mut();
-        std::swap(*sequence, new_sequence);
-      }
-      break;
-    }
-    default:
-      break;
-  }
 
   if (element.tag() == Element::Tag::REF) {
     element = apply_tag_ref(element);
@@ -273,7 +304,7 @@ std::pair<bool, Element> ElementMerger::apply_tags(
     any_changed = true;
   }
 
-  return std::make_pair(any_changed, element);
+  return std::make_pair(any_changed, std::move(element));
 }
 
 Element ElementMerger::apply_tag_format(
@@ -284,7 +315,7 @@ Element ElementMerger::apply_tag_format(
   std::stringstream ss;
   auto slices = element.as_seq();
   for (size_t i = 0, l = slices->size(); i < l; ++i) {
-    auto v = apply_tags((*slices)[i], root, depth+1);
+    auto v = post_apply_tags((*slices)[i], root, depth+1);
     if (
       v.first
       || (element.document_id() != v.second.document_id())
@@ -312,7 +343,7 @@ Element ElementMerger::apply_tag_ref(
 
   auto key_result = (*path)[0].try_as<std::string>();
   if (!key_result) {
-    logger_.error("The first sequence value must be a strings", element);
+    logger_.error("The first sequence value must be a string", element);
     return Element().set_origin(element);
   }
   auto search = element_by_document_name_.find(*key_result);
@@ -351,11 +382,7 @@ Element ElementMerger::apply_tag_sref(
     new_element = new_element.get(*k);
   }
 
-  new_element = apply_tags(
-    new_element,
-    root,
-    depth+1
-  ).second;
+  new_element = post_apply_tags(new_element, root, depth+1).second;
 
   if (!new_element.is_scalar()) {
     logger_.error("The element referenced must be a scalar", element);
@@ -364,6 +391,30 @@ Element ElementMerger::apply_tag_sref(
 
   logger_.debug("Applied sref", element, new_element);
   return new_element;
+}
+
+Element ElementMerger::apply_tag_merge(
+  Element initial,
+  const Element& merge_element
+) {
+  auto seq = merge_element.as_seq();
+  for (size_t i = 0, l = seq->size(); i < l; ++i) {
+    logger_.debug("Doing merge", initial, (*seq)[i]);
+    initial = override_with(initial, (*seq)[i]);
+  }
+  return initial;
+}
+
+Element ElementMerger::apply_tag_merge(
+  const Element& merge_element
+) {
+  auto seq = merge_element.as_seq();
+  Element initial = (*seq)[0];
+  for (size_t i = 1, l = seq->size(); i < l; ++i) {
+    logger_.debug("Doing merge", initial, (*seq)[i]);
+    initial = override_with(initial, (*seq)[i]);
+  }
+  return initial;
 }
 
 } /* mhconfig */

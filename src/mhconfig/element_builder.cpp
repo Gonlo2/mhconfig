@@ -35,6 +35,17 @@ Element ElementBuilder::make_and_check(YAML::Node &node) {
     if (!is_a_valid_path(element)) {
       return make_element(node);
     }
+  } else if (element.tag() == Element::Tag::MERGE) {
+    auto size = element.as_seq()->size();
+    if (size == 0) {
+      logger_.error("A merge should have at least one element", element);
+      return make_element(node);
+    } else if (size == 1) {
+      logger_.warn(
+        "A merge with only one element don't make sense, better check it",
+        element
+      );
+    }
   }
 
   return element;
@@ -335,6 +346,14 @@ Element ElementBuilder::make_from_seq(YAML::Node &node) {
       std::move(seq)
     );
     element.set_tag(Element::Tag::OVERRIDE);
+    return element;
+  } else if (node.Tag() == TAG_MERGE) {
+    Element element = make_element_and_trace(
+      "Created sequence value with a merge tag",
+      node,
+      std::move(seq)
+    );
+    element.set_tag(Element::Tag::MERGE);
     return element;
   }
 
