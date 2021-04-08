@@ -176,14 +176,16 @@ LogLevel WatchInputMessageImpl::log_level() const {
       return LogLevel::ERROR;
     case proto::LogLevel::WARN:
       return LogLevel::WARN;
-    case proto::LogLevel::INFO:
-      return LogLevel::INFO;
     case proto::LogLevel::DEBUG:
       return LogLevel::DEBUG;
     case proto::LogLevel::TRACE:
       return LogLevel::TRACE;
   }
   return LogLevel::ERROR;
+}
+
+bool WatchInputMessageImpl::with_position() const {
+    return request_->with_position();
 }
 
 std::optional<std::optional<uint64_t>> WatchInputMessageImpl::unregister() {

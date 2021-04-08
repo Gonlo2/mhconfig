@@ -40,14 +40,12 @@ class CounterLogger final : public Logger
 public:
   define_counter_logger_method(error)
   define_counter_logger_method(warn)
-  define_counter_logger_method(info)
   define_counter_logger_method(debug)
   define_counter_logger_method(trace)
 
 private:
   uint32_t error_counter_{0};
   uint32_t warn_counter_{0};
-  uint32_t info_counter_{0};
   uint32_t debug_counter_{0};
   uint32_t trace_counter_{0};
 };

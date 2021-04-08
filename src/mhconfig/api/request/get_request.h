@@ -28,6 +28,7 @@ public:
   virtual const Labels& labels() const = 0;
   virtual const std::string& document() const = 0;
   virtual LogLevel log_level() const = 0;
+  virtual bool with_position() const = 0;
 
   virtual void set_namespace_id(uint64_t namespace_id) = 0;
   virtual void set_version(uint32_t version) = 0;

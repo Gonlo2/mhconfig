@@ -16,7 +16,7 @@ void ElementMerger::add(
   const std::shared_ptr<PersistentLogger>& logger,
   const Element& element
 ) {
-  logger_.push_back(logger);
+  logger_.push_back_frozen(logger);
   if (empty_) {
     root_ = element;
     empty_ = false;
@@ -316,15 +316,6 @@ Element ElementMerger::apply_tag_format(
   auto slices = element.as_seq();
   for (size_t i = 0, l = slices->size(); i < l; ++i) {
     auto v = post_apply_tags((*slices)[i], root, depth+1);
-    if (
-      v.first
-      || (element.document_id() != v.second.document_id())
-      || (element.raw_config_id() != v.second.raw_config_id())
-      || (element.line() != v.second.line())
-      || (element.col() != v.second.col())
-    ) {
-      logger_.debug("Obtained template parameter", element, v.second);
-    }
     if (auto r = v.second.try_as<std::string>(); r) {
       ss << *r;
     } else {

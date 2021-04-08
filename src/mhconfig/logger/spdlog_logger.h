@@ -54,7 +54,6 @@ class SpdlogLogger final : public Logger
 public:
   define_spdlog_logger_method(error)
   define_spdlog_logger_method(warn)
-  define_spdlog_logger_method(info)
   define_spdlog_logger_method(debug)
   define_spdlog_logger_method(trace)
 };

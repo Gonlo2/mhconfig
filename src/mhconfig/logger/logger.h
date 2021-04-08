@@ -33,7 +33,6 @@ public:
 
   define_logger_method(error)
   define_logger_method(warn)
-  define_logger_method(info)
   define_logger_method(debug)
   define_logger_method(trace)
 };

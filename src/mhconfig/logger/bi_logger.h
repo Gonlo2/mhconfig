@@ -47,7 +47,6 @@ public:
 
   define_multi_logger_method(error)
   define_multi_logger_method(warn)
-  define_multi_logger_method(info)
   define_multi_logger_method(debug)
   define_multi_logger_method(trace)
 

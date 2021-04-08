@@ -28,6 +28,7 @@ message GetRequest {
   uint32 version = 3;
   string document = 4;
   LogLevel log_level = 5;
+  bool with_position = 6;
 }
 
 message GetResponse {
@@ -94,6 +95,7 @@ message WatchRequest {
   // document to watch.
   string document = 5;
   LogLevel log_level = 6;
+  bool with_position = 7;
 }
 
 message WatchResponse {
@@ -174,7 +176,6 @@ message Position {
 enum LogLevel {
   ERROR = 0;
   WARN = 1;
-  INFO = 2;
   DEBUG = 3;
   TRACE = 4;
 }

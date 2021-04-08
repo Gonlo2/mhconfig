@@ -40,6 +40,10 @@ LogLevel WatchGetRequest::log_level() const {
   return input_message_->log_level();
 }
 
+bool WatchGetRequest::with_position() const {
+    return input_message_->with_position();
+}
+
 void WatchGetRequest::set_namespace_id(uint64_t namespace_id) {
   output_message_->set_namespace_id(namespace_id);
 }

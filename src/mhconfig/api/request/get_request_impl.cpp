@@ -33,14 +33,16 @@ LogLevel GetRequestImpl::log_level() const {
       return LogLevel::ERROR;
     case proto::LogLevel::WARN:
       return LogLevel::WARN;
-    case proto::LogLevel::INFO:
-      return LogLevel::INFO;
     case proto::LogLevel::DEBUG:
       return LogLevel::DEBUG;
     case proto::LogLevel::TRACE:
       return LogLevel::TRACE;
   }
   return LogLevel::ERROR;
+}
+
+bool GetRequestImpl::with_position() const {
+    return request_->with_position();
 }
 
 void GetRequestImpl::set_namespace_id(uint64_t namespace_id) {

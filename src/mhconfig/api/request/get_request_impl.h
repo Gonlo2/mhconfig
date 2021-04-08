@@ -58,6 +58,7 @@ public:
   const Labels& labels() const override;
   const std::string& document() const override;
   LogLevel log_level() const override;
+  bool with_position() const override;
 
   void set_namespace_id(uint64_t namespace_id) override;
   void set_version(uint32_t version) override;

@@ -36,7 +36,6 @@ class SourcesLogger final : public Logger
 public:
   define_sources_logger_method(error)
   define_sources_logger_method(warn)
-  define_sources_logger_method(info)
   define_sources_logger_method(debug)
   define_sources_logger_method(trace)
 

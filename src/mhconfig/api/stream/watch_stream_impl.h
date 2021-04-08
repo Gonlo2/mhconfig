@@ -124,6 +124,7 @@ public:
   const Labels& labels() const override;
   const std::string& document() const override;
   LogLevel log_level() const override;
+  bool with_position() const override;
 
   std::optional<std::optional<uint64_t>> unregister() override;
 

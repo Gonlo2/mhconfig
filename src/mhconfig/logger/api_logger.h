@@ -59,7 +59,6 @@ public:
 
   define_api_logger_method(error, ERROR)
   define_api_logger_method(warn, WARN)
-  define_api_logger_method(info, INFO)
   define_api_logger_method(debug, DEBUG)
   define_api_logger_method(trace, TRACE)
 

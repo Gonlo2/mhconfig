@@ -111,7 +111,6 @@ def decode_position(position):
 class LogLevel(Enum):
     ERROR = 0
     WARN = 1
-    INFO = 2
     DEBUG = 3
     TRACE = 4
 
@@ -183,7 +182,8 @@ class Client:
             labels=proto_labels,
             document=document,
             version=0 if version is None else version,
-            log_level=log_level.to_proto()
+            log_level=log_level.to_proto(),
+            with_position=with_position,
         )
         r = self._stub.Get(request, metadata=self._metadata)
 

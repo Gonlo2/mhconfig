@@ -34,7 +34,7 @@ void ApiGetConfigTask::on_complete(
 
   api::SourceIds source_ids = sources_logger_.sources();
 
-  if (log_level() >= ReplayLogger::Level::info) {
+  if (request_->with_position()) {
     auto element_sids = request_->set_element_with_position(element);
     source_ids.merge(element_sids);
   } else {
@@ -59,8 +59,6 @@ ReplayLogger::Level ApiGetConfigTask::log_level() const {
       return ReplayLogger::Level::error;
     case api::LogLevel::WARN:
       return ReplayLogger::Level::warn;
-    case api::LogLevel::INFO:
-      return ReplayLogger::Level::info;
     case api::LogLevel::DEBUG:
       return ReplayLogger::Level::debug;
     case api::LogLevel::TRACE:

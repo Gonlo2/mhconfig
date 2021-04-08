@@ -15,7 +15,6 @@ from mhconfig.proto import mhconfig_pb2_grpc
 _LOG_LEVEL_STR_TO_VALUE = {
     'error': LogLevel.ERROR,
     'warn': LogLevel.WARN,
-    'info': LogLevel.INFO,
     'debug': LogLevel.DEBUG,
     'trace': LogLevel.TRACE,
 }
@@ -44,9 +43,11 @@ def create_arg_parser():
     parser.add_argument('--log-level', default='error', type=cmd_log_level,
                         choices=list(_LOG_LEVEL_STR_TO_VALUE.values()),
                         help='min log level to ask')
-    parser.add_argument('document', help='document to ask')
     parser.add_argument('--version', default=0, type=int,
                         help='version to ask, latest by default')
+    parser.add_argument('--with-position', action='store_true',
+                        help='return the elements with his file position')
+    parser.add_argument('document', help='document to ask')
     parser.add_argument('labels', nargs='*', type=cmd_label,
                         help='the labels to ask with the format <key>/<value>')
     return parser
@@ -71,10 +72,10 @@ def main():
         dict(args.labels),
         args.document,
         log_level=args.log_level,
-        with_position=True,
+        with_position=args.with_position,
     )
 
-    if args.log_level.value >= LogLevel.INFO.value:
+    if args.with_position:
         cli_blamer = CliBlamer(sources)
         cli_blamer.print(element)
         print()
@@ -129,8 +130,6 @@ class CliLogger:
             return Fore.LIGHTRED_EX
         elif level == LogLevel.WARN:
             return Fore.LIGHTMAGENTA_EX
-        elif level == LogLevel.INFO:
-            return Fore.LIGHTGREEN_EX
         elif level == LogLevel.DEBUG:
             return Fore.LIGHTCYAN_EX
         elif level == LogLevel.TRACE:

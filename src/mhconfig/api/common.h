@@ -18,9 +18,8 @@ typedef absl::flat_hash_set<std::pair<DocumentId, VersionId>> SourceIds;
 enum class LogLevel {
   ERROR = 0,
   WARN = 1,
-  INFO = 2,
-  DEBUG = 3,
-  TRACE = 4
+  DEBUG = 2,
+  TRACE = 3
 };
 
 struct position_t {
@@ -205,8 +204,6 @@ inline mhconfig::proto::LogLevel level_to_proto(LogLevel level) {
       return mhconfig::proto::LogLevel::ERROR;
     case LogLevel::WARN:
       return mhconfig::proto::LogLevel::WARN;
-    case LogLevel::INFO:
-      return mhconfig::proto::LogLevel::INFO;
     case LogLevel::DEBUG:
       return mhconfig::proto::LogLevel::DEBUG;
     case LogLevel::TRACE:
