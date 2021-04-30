@@ -1,6 +1,8 @@
 ## Changelog
 
 ### Next
+- Fix that a sequence could discard elements if some element changed
+- Reduce the size of the logs, remove some logs and improve the map logging
 - Refactor of the elements class to store the position of the config elements in the source files
 - Send logs about the contruction/merge operations
 - Changed sorted paths with labels
