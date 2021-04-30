@@ -67,7 +67,7 @@ def main():
         metadata=(('mhconfig-auth-token', auth_token),)
     )
 
-    element, logs, sources = client.get(
+    response = client.get(
         args.root_path,
         dict(args.labels),
         args.document,
@@ -76,12 +76,12 @@ def main():
     )
 
     if args.with_position:
-        cli_blamer = CliBlamer(sources)
-        cli_blamer.print(element)
+        cli_blamer = CliBlamer(response.sources)
+        cli_blamer.print(response.element)
         print()
 
-    cli_logger = CliLogger(args.root_path, sources)
-    for log in logs:
+    cli_logger = CliLogger(args.root_path, response.sources)
+    for log in response.logs:
         cli_logger.print(log)
 
 class CliLogger:

@@ -154,47 +154,168 @@ def decode_source(source):
     )
 
 
-class Client:
-    def __init__(
+@dataclass
+class GetResponse:
+    namespace_id: int
+    version: int
+    checksum: bytes
+    element: Any
+    logs: List[Log]
+    sources: Dict[int, Source]
+
+
+class WatchStatus(Enum):
+    OK = 0
+    ERROR = 1
+    UID_IN_USE = 2
+    UNKNOWN_UID = 3
+    REMOVED = 4
+    PERMISSION_DENIED = 5
+    INVALID_ARGUMENT = 6
+
+
+@dataclass
+class WatchResponse:
+    status: WatchStatus
+    uid: int
+    value: GetResponse
+
+
+class WatchStream:
+    def __init__(self, input_stream, output_stream):
+        self._input_stream = input_stream
+        self._output_stream = output_stream
+
+    def watch(
             self,
-            stub,
-            metadata: Tuple[Tuple[str, str]] = None,
-    ):
+            uid: int,
+            root_path: str,
+            labels: Dict[str, str],
+            document: str,
+            log_level=LogLevel.ERROR,
+            with_position=False,
+    ) -> bool:
+        r = mhconfig_pb2.WatchRequest(
+            uid=uid,
+            root_path=root_path,
+            labels=_make_proto_labels(labels),
+            document=document,
+            log_level=log_level.to_proto(),
+            with_position=with_position,
+        )
+        self._input_stream.put((False, r))
+        return True
+
+    def __iter__(self):
+        for r in self._output_stream:
+            get_response = _make_get_response(r, False)  # TODO
+            yield WatchResponse(
+                status=WatchStatus(r.status),
+                uid=r.uid,
+                value=get_response,
+            )
+
+    def close(self):
+        self._input_stream.put((True, None))
+
+
+class TraceStatus(Enum):
+    RETURNED_ELEMENTS = 0
+    ERROR = 1
+    ADDED_WATCHER = 2
+    EXISTING_WATCHER = 3
+    REMOVED_WATCHER = 4
+
+
+@dataclass
+class TraceResponse:
+    status: TraceStatus
+    namespace_id: int
+    version: int
+    labels: Dict[str, str]
+    document: str
+
+
+class TraceStream:
+    def __init__(self, output_stream):
+        self._output_stream = output_stream
+
+    def __iter__(self):
+        for r in self._output_stream:
+            yield TraceResponse(
+                status=TraceStatus(r.status),
+                namespace_id=r.namespace_id,
+                version=r.version,
+                labels={x.key: x.value for x in r.labels},
+                document=r.document,
+            )
+
+
+class Client:
+    def __init__(self, stub, metadata: Tuple[Tuple[str, str]] = None):
         super().__init__()
         self._stub = stub
         self._metadata = metadata
 
-    def get(
-            self,
-            root_path: str,
-            labels: Dict[str, str],
-            document: str,
-            version=None,
-            log_level=LogLevel.ERROR,
-            with_position=False,
-    ):
-        proto_labels = [
-            mhconfig_pb2.Label(key=k, value=v)
-            for k, v in labels.items()
-        ]
+    def get(self, root_path: str, labels: Dict[str, str], document: str,
+            version: Optional[int] = None, log_level: LogLevel = LogLevel.ERROR,
+            with_position: bool = False):
         request = mhconfig_pb2.GetRequest(
             root_path=root_path,
-            labels=proto_labels,
+            labels=_make_proto_labels(labels),
             document=document,
             version=0 if version is None else version,
             log_level=log_level.to_proto(),
             with_position=with_position,
         )
         r = self._stub.Get(request, metadata=self._metadata)
+        return _make_get_response(r, with_position)
 
-        value = decode_element(
-            r.elements,
-            with_position=with_position,
+    def update(self, root_path: str, relative_paths: Optional[List[str]] = None):
+        request = mhconfig_pb2.UpdateRequest(
+            root_path=root_path,
+            relative_paths=relative_paths or [],
+            reload=relative_paths is None,
         )
-        logs = [decode_log(x) for x in r.logs]
-        sources = {x.id: decode_source(x) for x in r.sources}
+        return self._stub.Update(request, metadata=self._metadata)
 
-        return (value, logs, sources)
+    def watch(self):
+        input_stream = Queue()
+
+        def grpc_iter():
+            while True:
+                exit, r = input_stream.get()
+                if exit:
+                    break
+                yield r
+
+        output_stream = self._stub.Watch(grpc_iter(), metadata=self._metadata)
+        return WatchStream(input_stream, output_stream)
+
+    def trace(self, root_path: str, labels: Dict[str, str], document: str):
+        request = mhconfig_pb2.TraceRequest(
+            root_path=root_path,
+            labels=_make_proto_labels(labels),
+            document=document,
+        )
+        output_stream = self._stub.Trace(request, metadata=self._metadata)
+        return TraceStream(output_stream)
 
 
+def _make_proto_labels(labels: Dict[str, str]) -> List[mhconfig_pb2.Label]:
+    return [mhconfig_pb2.Label(key=k, value=v) for k, v in labels.items()]
 
+
+def _make_get_response(r, with_position):
+    element = decode_element(r.elements, with_position=with_position)
+    logs = [decode_log(x) for x in r.logs]
+    sources = {x.id: decode_source(x) for x in r.sources}
+
+    return GetResponse(
+        namespace_id=r.namespace_id,
+        version=r.version,
+        checksum=r.checksum,
+        element=element,
+        logs=logs,
+        sources=sources
+    )

@@ -4,67 +4,15 @@ import os
 import shutil
 import sys
 import tempfile
-from collections import defaultdict
 from dataclasses import dataclass
-from queue import Queue
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from collections import defaultdict
 
 import grpc
-from mhconfig.client import decode
+from mhconfig.client import Client, TraceStatus, WatchStatus
 from mhconfig.proto import mhconfig_pb2, mhconfig_pb2_grpc
 
 logger = logging.getLogger(__name__)
-
-
-def to_grpc_label(label: Tuple[str, str]) -> mhconfig_pb2.Label:
-    return mhconfig_pb2.Label(
-        key=label[0],
-        value=label[1],
-    )
-
-
-def to_py_labels(labels: List[mhconfig_pb2.Label]) -> List[Tuple[str, str]]:
-    return [to_py_label(x) for x in labels]
-
-
-def to_py_label(label: mhconfig_pb2.Label) -> Tuple[str, str]:
-    return (label.key, label.value)
-
-
-def are_same_labels(
-    a: List[Tuple[str, str]],
-    b: List[Tuple[str, str]],
-) -> bool:
-    if len(a) != len(b):
-        return False
-    return dict(a) == dict(b)
-
-
-class IterableQueue:
-    def __init__(self):
-        self._q = Queue()
-
-    def put(self, o: Any):
-        self._q.put((False, o))
-
-    def close(self):
-        self._q.put((True, None))
-
-    def it(self):
-        while True:
-            exit, o = self._q.get()
-            if exit:
-                break
-            yield o
-
-
-@dataclass
-class GetResponse:
-    status: mhconfig_pb2.GetResponse.Status
-    namespace_id: int
-    version: int
-    value: Any
-    checksum: bytes
 
 
 @dataclass
@@ -80,10 +28,10 @@ _CONFIG_BASE_RESULT = {
     'another': 'world',
     'hello': {
         'bye': 'bye',
-        'seq': (None,),
+        'seq': [None],
         'dog': 'golden',
         'format': 'string: How are you?\nint: 24324324\ndouble: 1234.560000\nbool: false',
-        'to_delete': ({'birth': 2},),
+        'to_delete': [{'birth': 2}],
         'some_sref': 'golden',
         'some_ref': {
             'double': 1234.56,
@@ -100,7 +48,7 @@ _CONFIG_UPDATE_RESULT = {
     'another': 'world',
     'hello': {
         'bye': 'bye',
-        'seq': (None,),
+        'seq': [None],
         'dog': 'golden',
         'some_ref': {
             'double': 666.66,
@@ -109,7 +57,7 @@ _CONFIG_UPDATE_RESULT = {
             'string': 'Fine and, how are your cat?'
         },
         'format': 'string: Fine and, how are your cat?\nint: -23\ndouble: 666.660000\nbool: true',
-        'to_delete': ({'birth': 2},),
+        'to_delete': [{'birth': 2}],
         'some_sref': 'golden',
         'text': 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.\n'
     }
@@ -117,26 +65,15 @@ _CONFIG_UPDATE_RESULT = {
 
 
 class Test:
-    def __init__(
-            self,
-            root_path: str,
-            metadata: List[Tuple[str, str]]
-    ):
+    def __init__(self, root_path: str):
         self._root_path = root_path
-        self._stub = None
-        self._metadata = metadata
+        self._client = None
 
-    def set_stub(
-            self,
-            stub: mhconfig_pb2_grpc.MHConfigStub,
-    ):
-        self._stub = stub
+    def set_client(self, client):
+        self._client = client
 
-    def labels(self) -> List[Tuple[str, str]]:
+    def labels(self) -> Dict[str, str]:
         raise NotImplementedError
-
-    def grpc_labels(self) -> List[mhconfig_pb2.Label]:
-        return [to_grpc_label(x) for x in self.labels()]
 
     def prepare(self):
         raise NotImplementedError
@@ -148,100 +85,61 @@ class Test:
         shutil.rmtree(self._root_path)
         shutil.copytree(f"./resources/config/{name}", self._root_path)
 
-    def _get_request(
-            self,
-            document: str,
-            version: Optional[int] = None,
-    ):
-        request = mhconfig_pb2.GetRequest(
+    def _get_request(self, document: str, version: Optional[int] = None):
+        return self._client.get(
             root_path=self._root_path,
-            labels=self.grpc_labels(),
+            labels=self.labels(),
             document=document,
-            version=version or 0,
-        )
-        response = self._stub.Get(request, metadata=self._metadata)
-
-        return GetResponse(
-            status=response.status,
-            namespace_id=response.namespace_id,
-            version=response.version,
-            value=decode(response.elements),
-            checksum=response.checksum,
+            version=version,
         )
 
     def _update_request(self, relative_paths: Optional[List[str]] = None):
-        request = mhconfig_pb2.UpdateRequest(
-            root_path=self._root_path,
-            relative_paths=relative_paths or [],
-            reload=relative_paths is None,
-        )
-        return self._stub.Update(request, metadata=self._metadata)
+        return self._client.update(self._root_path, relative_paths=relative_paths)
 
-    def _watch_stream(self, q):
-        for r in self._stub.Watch(q.it(), metadata=self._metadata):
-            yield WatchResponse(
-                status=r.status,
-                namespace_id=r.namespace_id,
-                version=r.version,
-                value=decode(r.elements),
-                checksum=r.checksum,
-            )
-
-    def _make_watch_request(
-            self,
-            uid: int,
-            document: str,
-    ):
-        return mhconfig_pb2.WatchRequest(
+    def _watch_stream(self, uid: int, document: str):
+        stream = self._client.watch()
+        stream.watch(
             uid=uid,
             root_path=self._root_path,
-            labels=self.grpc_labels(),
+            labels=self.labels(),
             document=document,
         )
+        return stream
 
-    def _trace_stream(
-            self,
-            document: str,
-            labels: Optional[List[Tuple[str, str]]] = None,
-    ):
-        labels = labels or self.labels()
-        request = mhconfig_pb2.TraceRequest(
-            root_path=self._root_path,
-            labels=[to_grpc_label(x) for x in labels],
-            document=document,
-        )
-        return self._stub.Trace(request, metadata=self._metadata)
+    def _trace_stream(self, document: str, labels: Optional[Dict[str, str]] = None):
+        return self._client.trace(self._root_path, labels or self.labels(), document)
+
 
 class GetTest(Test):
-    def labels(self) -> List[Tuple[str, str]]:
-        return [("low", "priority"), ("high", "priority")]
+    def labels(self) -> Dict[str, str]:
+        return {"low": "priority", "high": "priority"}
 
     def prepare(self):
         self._copy_config("base")
 
     def do(self):
         r = self._get_request('test')
-        assert r.status == mhconfig_pb2.GetResponse.Status.OK
+        assert not r.logs
         assert r.version == 1
-        assert r.checksum == b'\x1c\xbc\xdf\xb2\x04\xea)\xe6-\xbc]\x1c\x89+C\xa7\x0f\xecI\x1c>\xd9\xe3\xba\xea3E}?\x97\xf5\x7f'
-        assert r.value == _CONFIG_BASE_RESULT
+        assert r.checksum == b'K\x06\x00\xff\xa0\x1d\xbc\x11\xf4N\xa0\xb5\xed\xc8\xda\xda\x90\xe2\xd3l8-\xe5l\xe1|\\\x11_\x8e\xb6F'
+        assert r.element == _CONFIG_BASE_RESULT
 
         return r.namespace_id
 
 
 class UpdateTest(Test):
-    def labels(self) -> List[Tuple[str, str]]:
-        return [("low", "priority"), ("high", "priority")]
+    def labels(self) -> Dict[str, str]:
+        return {"low": "priority", "high": "priority"}
 
     def prepare(self):
         self._copy_config("base")
 
     def do(self):
         r1 = self._get_request("test")
-        assert r1.status == mhconfig_pb2.GetResponse.Status.OK
+        assert not r1.logs
         assert r1.version == 1
-        assert r1.checksum == b'\x1c\xbc\xdf\xb2\x04\xea)\xe6-\xbc]\x1c\x89+C\xa7\x0f\xecI\x1c>\xd9\xe3\xba\xea3E}?\x97\xf5\x7f'
-        assert r1.value == _CONFIG_BASE_RESULT
+        assert r1.checksum == b'K\x06\x00\xff\xa0\x1d\xbc\x11\xf4N\xa0\xb5\xed\xc8\xda\xda\x90\xe2\xd3l8-\xe5l\xe1|\\\x11_\x8e\xb6F'
+        assert r1.element == _CONFIG_BASE_RESULT
 
         r2 = self._update_request()
         assert r2.namespace_id == r1.namespace_id
@@ -255,64 +153,69 @@ class UpdateTest(Test):
 
         r4 = self._get_request("test")
         assert r4.namespace_id == r1.namespace_id
-        assert r4.status == mhconfig_pb2.UpdateResponse.Status.OK
+        assert not r4.logs
         assert r4.version == 2
-        assert r4.checksum == b'\x1c\xfa\xa1\xd8\xca>^\xceG!\x01\x9e\x97P\x88\xec\xa2i>\x8c\xe4\xd4SQ\x8c\x96\x02\x1bIh#\xed'
-        assert r4.value == _CONFIG_UPDATE_RESULT
+        assert r4.checksum == b'w\xdf\x81}\xfba\xe5\x93\x938\x9f\xdei\xeb\x19_]w\xbe\xb6\xc2E\xf0\xbf\x1fY\xa4\xfb\xfan\x02u'
+        assert r4.element == _CONFIG_UPDATE_RESULT
+
 
 class WatchTest(Test):
-    def labels(self) -> List[Tuple[str, str]]:
-        return [("low", "priority"), ("high", "priority")]
+    def labels(self) -> Dict[str, str]:
+        return {"low": "priority", "high": "priority"}
 
     def prepare(self):
         self._copy_config("base")
 
     def do(self):
-        q = IterableQueue()
-        it = self._watch_stream(q)
-
-        q.put(self._make_watch_request(0, "test"))
+        stream = self._watch_stream(0, "test")
+        it = iter(stream)
 
         r1 = next(it)
-        assert r1.status == mhconfig_pb2.GetResponse.Status.OK
-        assert r1.version == 1
-        assert r1.checksum == b'\x1c\xbc\xdf\xb2\x04\xea)\xe6-\xbc]\x1c\x89+C\xa7\x0f\xecI\x1c>\xd9\xe3\xba\xea3E}?\x97\xf5\x7f'
-        assert r1.value == _CONFIG_BASE_RESULT
+        assert r1.status == WatchStatus.OK
+        assert r1.uid == 0
+        assert not r1.value.logs
+        assert r1.value.version == 1
+        assert r1.value.checksum == b'K\x06\x00\xff\xa0\x1d\xbc\x11\xf4N\xa0\xb5\xed\xc8\xda\xda\x90\xe2\xd3l8-\xe5l\xe1|\\\x11_\x8e\xb6F'
+        assert r1.value.element == _CONFIG_BASE_RESULT
 
         self._copy_config("update")
 
         r2 = self._update_request()
-        assert r2.namespace_id == r1.namespace_id
+        assert r2.namespace_id == r1.value.namespace_id
         assert r2.version == 2
 
         r3 = next(it)
-        assert r3.status == mhconfig_pb2.UpdateResponse.Status.OK
-        assert r3.version == 2
-        assert r3.checksum == b'\x1c\xfa\xa1\xd8\xca>^\xceG!\x01\x9e\x97P\x88\xec\xa2i>\x8c\xe4\xd4SQ\x8c\x96\x02\x1bIh#\xed'
-        assert r3.value == _CONFIG_UPDATE_RESULT
+        assert r3.status == WatchStatus.OK
+        assert r1.uid == 0
+        assert not r1.value.logs
+        assert r3.value.version == 2
+        assert r3.value.checksum == b'w\xdf\x81}\xfba\xe5\x93\x938\x9f\xdei\xeb\x19_]w\xbe\xb6\xc2E\xf0\xbf\x1fY\xa4\xfb\xfan\x02u'
+        assert r3.value.element == _CONFIG_UPDATE_RESULT
 
-        q.close()
+        stream.close()
 
-        return r1.namespace_id
+        return r1.value.namespace_id
 
 
 class TraceGetTest(GetTest):
     def do(self):
-        it = self._trace_stream("test")
+        stream = self._trace_stream("test")
+        it = iter(stream)
 
         namespace_id = super().do()
 
         r = next(it)
-        assert r.status == mhconfig_pb2.TraceResponse.Status.RETURNED_ELEMENTS
+        assert r.status == TraceStatus.RETURNED_ELEMENTS
         assert r.namespace_id == namespace_id
         assert r.version == 1
-        assert are_same_labels(to_py_labels(r.labels), self.labels())
+        assert r.labels == self.labels()
         assert r.document == "test"
 
 
 class TraceWatchTest(WatchTest):
     def do(self):
-        it = self._trace_stream("test")
+        stream = self._trace_stream("test")
+        it = iter(stream)
 
         namespace_id = super().do()
 
@@ -322,38 +225,38 @@ class TraceWatchTest(WatchTest):
 
         for r in sorted_responses:
             assert r.namespace_id == namespace_id
-            assert are_same_labels(to_py_labels(r.labels), self.labels())
+            assert r.labels == self.labels()
             assert r.document == "test"
 
-        assert sorted_responses[0].status == mhconfig_pb2.TraceResponse.Status.ADDED_WATCHER
+        assert sorted_responses[0].status == TraceStatus.ADDED_WATCHER
 
-        assert sorted_responses[1].status == mhconfig_pb2.TraceResponse.Status.RETURNED_ELEMENTS
+        assert sorted_responses[1].status == TraceStatus.RETURNED_ELEMENTS
         assert sorted_responses[1].version == 1
 
-        assert sorted_responses[2].status == mhconfig_pb2.TraceResponse.Status.RETURNED_ELEMENTS
+        assert sorted_responses[2].status == TraceStatus.RETURNED_ELEMENTS
         assert sorted_responses[2].version == 2
 
-        assert sorted_responses[3].status == mhconfig_pb2.TraceResponse.Status.REMOVED_WATCHER
+        assert sorted_responses[3].status == TraceStatus.REMOVED_WATCHER
 
     def _sort_responses(self, traces_it):
         msgs_by_status = defaultdict(list)
         for _, m in zip(range(4), traces_it):
             msgs_by_status[m.status].append(m)
-        for m in msgs_by_status.get(mhconfig_pb2.TraceResponse.Status.ADDED_WATCHER, []):
+        for m in msgs_by_status.get(TraceStatus.ADDED_WATCHER, []):
             yield m
         it = sorted(
-            msgs_by_status.get(mhconfig_pb2.TraceResponse.Status.RETURNED_ELEMENTS, []),
+            msgs_by_status.get(TraceStatus.RETURNED_ELEMENTS, []),
             key=lambda m: m.version,
         )
         for m in it:
             yield m
-        for m in msgs_by_status.get(mhconfig_pb2.TraceResponse.Status.REMOVED_WATCHER, []):
+        for m in msgs_by_status.get(TraceStatus.REMOVED_WATCHER, []):
             yield m
 
 
 class StressTest(Test):
-    def labels(self) -> List[Tuple[str, str]]:
-        return [("low", "priority"), ("high", "priority")]
+    def labels(self) -> Dict[str, str]:
+        return {"low": "priority", "high": "priority"}
 
     def prepare(self):
         self._copy_config("base")
@@ -366,9 +269,9 @@ class StressTest(Test):
         for i in range(100000):
             r1 = self._get_request("other")
             assert r1.namespace_id == r.namespace_id
-            assert r1.status == mhconfig_pb2.GetResponse.Status.OK
+            assert not r1.logs
             assert r1.version == i*2 + 1
-            assert r1.checksum == b'\x9a\xad\xf1\xf2\xbd\x19\xa9CFj\xd4n&\xde&\xa9\x8a\xd0mm\x12\xb5\xb1#\x058\xbd\x00\xfd\xd3\x8d\xea'
+            assert r1.checksum == b'z\xe5\xa9#\xc6*kp(d\xbd\xee\\Z6X"\x90\xcdzXf$\xd7\xaf\x85\xc2SL\xa8}\xa8'
 
             self._copy_config("stress")
 
@@ -379,9 +282,9 @@ class StressTest(Test):
 
             r3 = self._get_request("other")
             assert r3.namespace_id == r.namespace_id
-            assert r3.status == mhconfig_pb2.GetResponse.Status.OK
+            assert not r3.logs
             assert r3.version == i*2 + 2
-            assert r3.checksum == b'U\xaaT:\xc1\xccW\xc5GV>\xf3R\x97\x8f\xd1\xa9\to5\xe5\xa2\x83(\x06\xcdc\xe7\xea{\xee\xf8'
+            assert r3.checksum == b'\xeb\x86~\x0f6\x04]T\xca\xc7cq\xc4\xbb[\xde\xa0\x08\xc2\xb7x\xab\xde\x1d\xc2\x9a\x8e\x05$W\x04\xbc'
 
             self._copy_config("base")
 
@@ -410,10 +313,14 @@ class Tester:
 
     def _do_test(self, test_cls):
         with tempfile.TemporaryDirectory() as config_path:
-            test = test_cls(config_path, self._metadata)
+            test = test_cls(config_path)
 
             with grpc.insecure_channel(self._address) as channel:
-                test.set_stub(mhconfig_pb2_grpc.MHConfigStub(channel))
+                client = Client(
+                    mhconfig_pb2_grpc.MHConfigStub(channel),
+                    metadata=self._metadata,
+                )
+                test.set_client(client)
                 print("Running test '{}'".format(test_cls.__name__))
                 test.prepare()
                 test.do()
